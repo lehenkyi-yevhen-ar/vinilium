@@ -49,7 +49,7 @@ npm run dev                     # http://localhost:3000
 | `NEXT_PUBLIC_CONTACT_TELEGRAM` | no | `@handle` or a `t.me` link. Invalid values are dropped. **Unset = the Telegram line is hidden.** |
 | `DISCOGS_TOKEN` | no | Personal access token (`Authorization: Discogs token=...`). Server-only. Used only if the key/secret pair below is not set. |
 | `DISCOGS_CONSUMER_KEY` / `DISCOGS_CONSUMER_SECRET` | one of the two styles | App credentials (`Authorization: Discogs key=..., secret=...`). Set both or neither. **Preferred over `DISCOGS_TOKEN` when both are set.** Server-only. |
-| `DISCOGS_CACHE_TTL_SECONDS` | no | The ONE TTL for everything cached from Discogs (cache rows and the image proxy's `Cache-Control`). Default and **maximum** `21600` (6 h): the Discogs Terms forbid showing older Content, so larger values are capped. |
+| `DISCOGS_CACHE_TTL_SECONDS` | no | The ONE TTL for everything cached from Discogs (cache rows and the image proxy's `Cache-Control`). Default `14400` (4 h); **maximum** `21600` (6 h): the Discogs Terms forbid showing older Content, so larger values are capped. |
 | `CRON_SECRET` | prod | 16+ chars. Protects `GET /api/cron/purge`; the endpoint is disabled without it. Vercel Cron sends it automatically. |
 | `RL_SEARCH_IP_PER_MIN`, `RL_SEARCH_USER_PER_MIN`, `RL_IMAGE_IP_PER_MIN`, `RL_IMAGE_USER_PER_MIN` | no | Our own request limits (defaults 30 / 60 / 300 / 600). |
 | `DISCOGS_API_BASE` | never | Tests only: points the client at the mock server. Do not set in a real environment. |
@@ -91,6 +91,21 @@ reference schema), plus `user.locale` and a database-backed `rate_limit` table.
 * **Next.js 16 notes**: `cacheComponents` is off (we cache in Postgres and read the session on most routes);
   `experimental.globalNotFound` is on, because a root layout under `/[locale]` cannot compose a normal 404.
 
+## The finder (milestone 3)
+
+Signed-in users find a pressing in four steps, all in `src/components/finder/`:
+
+| Screen | URL | What happens |
+| --- | --- | --- |
+| 1-3 Track, Artist, Album | `/<locale>/search?mode=track\|artist\|album&q=&artist=` | Search by track (or by artist / album name as a fallback), pick the artist (long lists can be filtered by typing), pick the album. A track that matches nothing offers to retry as an artist or album. |
+| 4 Pressing | `/<locale>/master/<id>` | Pressings of the album, filtered by country, year and label (Discogs' own filters and facets). |
+| Release card | `/<locale>/release/<id>` | Details, tracklist, barcodes/matrix, and **Add to Wishlist / Add to Collection** (real list API, one list per pressing; "Move" is one update). |
+
+Visitors who are not signed in see a "Sign in to search" state on these URLs (the landing page and Contact page stay public).
+Every block of Discogs data carries its own "Data provided by Discogs." link. Throttled, failed or unconfigured calls show a
+message (with a countdown and automatic retry when throttled) instead of breaking the page, and thumbnails that fail show a
+placeholder. Lists themselves (browse, search, notes, condition) are milestone 4.
+
 ## Discogs integration (milestone 2)
 
 Server code is in `src/server/discogs/`, shared pure code (types, normalisation, grouping) in `src/lib/discogs/`.
@@ -99,10 +114,11 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/discogs/search?q=&mode=track\|artist\|master&page=` | Search, grouped by artist and deduped (max 5 pages of 50). |
-| `GET /api/discogs/masters/:id/versions?page=` | Pressings of a master (max 10 pages of 50). |
+| `GET /api/discogs/search?q=&mode=track\|artist\|master&page=` | Search, grouped by artist and deduped (max 5 pages of 50). **Sign-in required** (all `/api/discogs/*`). |
+| `GET /api/discogs/masters/:id/versions?page=&country=&released=&label=` | Pressings of a master (max 10 pages of 50), with filter facets. |
 | `GET /api/discogs/releases/:id` | One release. |
 | `GET /api/discogs/image?u=` | Image proxy (exact Discogs image hosts only, streamed, never stored). |
+| `GET\|PUT\|DELETE /api/lists/items/:releaseId` | The signed-in user's wishlist / collection entry for one pressing (`PUT {"list":"wishlist"\|"collection"}` adds or moves). |
 | `GET /api/cron/purge` | Deletes expired cache rows. Needs `Authorization: Bearer $CRON_SECRET`. |
 
 * **Credentials**: `DISCOGS_CONSUMER_KEY` + `DISCOGS_CONSUMER_SECRET` win over `DISCOGS_TOKEN` when both are set.
@@ -110,7 +126,7 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
   `X-Discogs-Ratelimit*` headers (60/min was observed with a key + secret); before the first response it assumes a
   conservative 25. A 429 is retried with exponential backoff and jitter; if the wait is long the API answers
   `429 {"error":"throttled","scope":"discogs","retryAfter":N}` (plus a `Retry-After` header) so the UI can show a countdown.
-  Our own per-IP / per-user limit answers `429 {"error":"rate_limited","scope":"app",...}`.
+  Anonymous callers get `401 unauthorized`. Our own per-IP / per-user limit answers `429 {"error":"rate_limited","scope":"app",...}`.
 * **Purge cadence**: `vercel.json` runs the purge hourly. **Vercel's Hobby plan only allows daily cron jobs**, so change
   the schedule to once a day there (expired rows are never served either way, and every cache write also deletes expired rows).
 * **Client IP** for the limiter comes from `x-vercel-forwarded-for` / `x-forwarded-for` / `x-real-ip` and only valid IPs
@@ -126,7 +142,8 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
 npm test            # unit tests (Vitest): messages, auth links, Discogs normalisation/grouping, token bucket,
                     # client backoff, cache TTL + purge, limiter, image host allow-list. Uses PGlite (embedded
                     # Postgres running the real migrations): no database or secrets needed.
-npm run test:e2e    # Playwright: app shell smoke tests + the Discogs flow against a MOCKED Discogs server
+npm run test:e2e    # Playwright: shell smoke tests, the Discogs + lists APIs, and the finder UI (desktop and phone
+                    # viewport) against a MOCKED Discogs server; a verified e2e user is created and deleted automatically
                     # (FAKE credentials, no real token). The Discogs flow needs a real Postgres: it uses DATABASE_URL
                     # (from .env.local, or a throwaway Neon branch in CI) and SKIPS when none is set. It removes its rows afterwards.
 ```

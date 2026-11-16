@@ -1,4 +1,4 @@
-import type { ReleaseDetail, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
+import type { FacetValue, ReleaseDetail, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
 
 /**
  * Raw Discogs JSON -> our shapes. This is a WHITELIST: only the fields copied below survive, so price and
@@ -146,6 +146,31 @@ export function normalizeVersion(raw: unknown, image: ImageMapper): VersionSumma
   };
 }
 
+const FACET_CAP = 300;
+
+/** Discogs `filter_facets`: [{ id: "country", values: [{ value, title, count }] }, ...] -> the three we filter by. */
+export function normalizeFacets(raw: unknown): { country: FacetValue[]; released: FacetValue[]; label: FacetValue[] } {
+  const out = { country: [] as FacetValue[], released: [] as FacetValue[], label: [] as FacetValue[] };
+  if (!Array.isArray(raw)) return out;
+  for (const f of raw) {
+    if (!isObj(f)) continue;
+    const id = str(f.id);
+    if (id !== "country" && id !== "released" && id !== "label") continue;
+    const seen = new Set<string>();
+    const values: FacetValue[] = [];
+    for (const v of Array.isArray(f.values) ? f.values : []) {
+      if (!isObj(v)) continue;
+      const value = str(v.value) ?? str(v.title);
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      values.push({ value, count: Math.max(0, int(v.count) ?? 0) });
+    }
+    values.sort((a, b) => (id === "released" ? a.value.localeCompare(b.value) : a.value.localeCompare(b.value, "en", { sensitivity: "base" })));
+    out[id] = values.slice(0, FACET_CAP);
+  }
+  return out;
+}
+
 export function normalizeVersionsResponse(raw: unknown, image: ImageMapper) {
   const o = isObj(raw) ? raw : {};
   const pg = isObj(o.pagination) ? o.pagination : {};
@@ -160,6 +185,7 @@ export function normalizeVersionsResponse(raw: unknown, image: ImageMapper) {
   }
   return {
     versions,
+    facets: normalizeFacets(o.filter_facets),
     page: Math.max(1, int(pg.page) ?? 1),
     pages: Math.max(1, int(pg.pages) ?? 1),
     perPage: Math.max(1, int(pg.per_page) ?? 50),

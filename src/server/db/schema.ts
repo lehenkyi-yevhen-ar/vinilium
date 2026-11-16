@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { bigint, boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { bigint, boolean, check, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Better Auth core tables (user, session, account, verification) + its database-backed
@@ -119,6 +119,32 @@ export const discogsBucket = pgTable("discogs_bucket", {
   observedRemaining: integer("observed_remaining"),
   observedAt: timestamp("observed_at", { withTimezone: true }),
 });
+
+/**
+ * A user's wishlist and collection. Only the Discogs release ID plus the user's own fields, never Discogs content
+ * (display data always comes from the TTL cache). One list per pressing: UNIQUE (user_id, discogs_release_id).
+ */
+export const userItems = pgTable(
+  "user_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    discogsReleaseId: bigint("discogs_release_id", { mode: "number" }).notNull(),
+    list: text("list").notNull(),
+    notes: text("notes"),
+    conditionMedia: text("condition_media"),
+    conditionSleeve: text("condition_sleeve"),
+    addedAt: timestamp("added_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("user_items_user_release_uq").on(t.userId, t.discogsReleaseId),
+    check("user_items_list_check", sql`${t.list} in ('wishlist', 'collection')`),
+    index("user_items_user_list_added_idx").on(t.userId, t.list, t.addedAt.desc()),
+  ],
+);
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),

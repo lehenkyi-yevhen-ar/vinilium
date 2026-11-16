@@ -21,7 +21,12 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[lo
         <p className="x-lead">{session ? t("welcomeBack", { name: session.user.name }) : t("lead")}</p>
         <div className="x-actions">
           {session ? (
-            <ButtonLink href="/account">{t("ctaAccount")}</ButtonLink>
+            <>
+              <ButtonLink href="/search">{t("ctaSearch")}</ButtonLink>
+              <ButtonLink href="/account" variant="outline">
+                {t("ctaAccount")}
+              </ButtonLink>
+            </>
           ) : (
             <>
               <ButtonLink href="/sign-up">{t("ctaSignUp")}</ButtonLink>

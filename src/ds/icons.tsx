@@ -53,3 +53,15 @@ export const ClockIcon = (p: SVGProps<SVGSVGElement>) => (
 export const XIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M6 6l12 12M18 6 6 18" /></svg>
 );
+export const SearchIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+);
+export const DiscIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" /><path d="M12 3a9 9 0 0 1 9 9" /></svg>
+);
+export const ChevronLeftIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="m15 18-6-6 6-6" /></svg>
+);
+export const LockIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+);

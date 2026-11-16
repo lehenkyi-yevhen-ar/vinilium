@@ -4,6 +4,7 @@ import { config as loadEnv } from "dotenv";
 // Local runs pick the database up from .env.local; CI passes DATABASE_URL (a throwaway Neon branch).
 loadEnv({ path: ".env.local", quiet: true });
 
+const STORAGE_STATE = "tests/.auth/user.json";
 const PORT = 3200;
 const MOCK_PORT = 3201;
 const FAKE_DB = "postgresql://user:pass@127.0.0.1:1/none";
@@ -18,10 +19,34 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure" },
   globalTeardown: "./tests/e2e/global-teardown.ts",
   projects: [
-    { name: "desktop", testIgnore: /discogs\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", testIgnore: /discogs\.spec\.ts/, use: { ...devices["Pixel 7"] } },
-    // API-level flow against the MOCKED Discogs server; serial because the tests share one limiter and one mock.
-    { name: "discogs", testMatch: /discogs\.spec\.ts/, fullyParallel: false, workers: 1, use: { ...devices["Desktop Chrome"] } },
+    // Creates a verified e2e user and saves its session cookie (search and images need sign-in).
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    // Anonymous visitors: shell, contact page, "sign in to search".
+    { name: "desktop", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", testMatch: /shell\.spec\.ts/, use: { ...devices["Pixel 7"] } },
+    // The Discogs and lists APIs, signed in, against the MOCKED Discogs server. Serial: one limiter, one mock.
+    {
+      name: "discogs",
+      testMatch: /discogs\.spec\.ts/,
+      dependencies: ["setup"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE },
+    },
+    // The finder UI (track -> artist -> album -> pressing -> release card). Runs after the API project and one
+    // after the other, because they share the mock server and the Discogs throttle bucket.
+    {
+      name: "finder-desktop",
+      testMatch: /finder\.spec\.ts/,
+      dependencies: ["discogs"],
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.201" } },
+    },
+    {
+      name: "finder-mobile",
+      testMatch: /finder\.spec\.ts/,
+      dependencies: ["finder-desktop"],
+      use: { ...devices["Pixel 7"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.202" } },
+    },
   ],
   webServer: [
     {
@@ -54,9 +79,11 @@ export default defineConfig({
         DISCOGS_TOKEN: "",
         DISCOGS_CACHE_TTL_SECONDS: "300",
         CRON_SECRET: "e2e-cron-secret-0123456789",
-        // Small ceilings so the limiter can be exercised quickly; tests isolate themselves with X-Forwarded-For.
-        RL_SEARCH_IP_PER_MIN: "8",
-        RL_IMAGE_IP_PER_MIN: "12",
+        // Per-IP limit is exercised by one test (its own X-Forwarded-For); the per-user limit is lifted because every
+        // e2e project shares one signed-in user.
+        RL_SEARCH_IP_PER_MIN: "60",
+        RL_SEARCH_USER_PER_MIN: "1000",
+        RL_IMAGE_USER_PER_MIN: "5000",
       },
     },
   ],

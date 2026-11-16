@@ -6,11 +6,11 @@ How the app talks to Discogs, and the contract the UI builds on. Licensing quest
 ## Request path
 
 ```
-browser -> /api/discogs/*  -> guard() (refuses cross-site browser requests; our per-IP + per-user limit, rate_limit table)
+browser -> /api/discogs/*  -> guard() (refuses cross-site requests; requires sign-in; our per-IP + per-user limit, rate_limit table)
                            -> service  (cache lookup in discogs_cache; hit = no Discogs call)
                            -> client   (shared token bucket -> fetch -> read X-Discogs-Ratelimit* -> 429 backoff)
                            -> normalize (field WHITELIST) -> cache (TTL) -> JSON
-browser -> /api/discogs/image?u=  -> guard() -> allow-list check -> bucket (25% reserve) -> stream, nothing stored
+browser -> /api/discogs/image?u=  -> guard() -> allow-list check -> IMAGE bucket (own budget) -> stream, nothing stored
 ```
 
 | File | Role |
@@ -33,6 +33,7 @@ Success: `{ "data": <SearchPage | VersionsPage | ReleaseDetail>, "cached": boole
 | --- | --- | --- | --- |
 | 429 | `throttled` | `discogs` | Discogs' budget is used up. Show "busy, retrying in `retryAfter` s" and retry; the `Retry-After` header repeats it. |
 | 429 | `rate_limited` | `app` | This visitor sent too many requests. Same countdown, different wording. |
+| 401 | `unauthorized` | | Not signed in (or the session ended). Show "Sign in to search". |
 | 403 | `forbidden` | | The browser says the request came from another site. Our endpoints serve our own pages only. |
 | 400 | `bad_request` | | Invalid input (UI bug or tampering). |
 | 404 | `not_found` | | No such release / master. |
@@ -56,8 +57,20 @@ Success: `{ "data": <SearchPage | VersionsPage | ReleaseDetail>, "cached": boole
 ## What is deliberately not here
 
 * No `releases` table, no stored images, no price or marketplace data (stripped by the whitelist, asserted by tests).
-* No sign-in requirement on search/images (see compliance doc, owner decision c).
+* No anonymous access: search, versions, release and images require sign-in (owner decision, 2026-11-16).
 * No thundering-herd protection: two simultaneous cold requests for the same key both call Discogs (the bucket still caps
   the total). Add a Postgres advisory lock per key if this shows up in practice.
 * Token acquisition costs a short Postgres transaction per Discogs call (about five round trips). Negligible next to the
   Discogs call itself when the app and database share a region; it could be collapsed into one SQL statement if needed.
+
+## Versions filters and facets
+
+`GET /api/discogs/masters/:id/versions?country=&released=&label=` passes Discogs' own filters (`released` is a four-digit
+year). The response carries `facets` (options for the three dropdowns, from Discogs' `filter_facets`, for the current
+filtered result set) and `filters` (what was applied). Each filter set is cached separately.
+
+## Images have their own budget
+
+Thumbnails are fetched through `/api/discogs/image` from a separate token bucket (300 per minute shared by all users, plus
+the per-IP and per-user limits), so a page of 50 thumbnails never uses up the 60-per-minute API allowance. A 429 from the
+image host blocks images only. The image host sends no `X-Discogs-Ratelimit*` headers (observed 2026-11-16).

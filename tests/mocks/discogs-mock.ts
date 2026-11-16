@@ -44,6 +44,33 @@ function send(res: http.ServerResponse, status: number, body: unknown, headers: 
   res.end(data);
 }
 
+type V = { id: number; label?: string; country?: string; released?: string; [k: string]: unknown };
+
+/** Versions of a master after applying the same filters the real API supports, with facets for what is left. */
+function versionsFor(query: Record<string, string>) {
+  const seen = new Set<number>();
+  const all = (versionsPage.versions as V[]).filter((v) => !seen.has(v.id) && seen.add(v.id));
+  const kept = all.filter(
+    (v) =>
+      (!query.country || v.country === query.country) &&
+      (!query.label || v.label === query.label) &&
+      (!query.released || v.released === query.released),
+  );
+  const facet = (id: string, pick: (v: V) => string | undefined) => {
+    const counts = new Map<string, number>();
+    for (const v of kept) {
+      const value = pick(v);
+      if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    return { id, title: id, values: [...counts].map(([value, count]) => ({ title: value, value, count })) };
+  };
+  return {
+    pagination: { page: 1, pages: 1, per_page: 50, items: kept.length },
+    versions: kept,
+    filter_facets: [facet("country", (v) => v.country), facet("released", (v) => v.released), facet("label", (v) => v.label)],
+  };
+}
+
 const rateHeaders = () => ({
   "x-discogs-ratelimit": String(LIMIT),
   "x-discogs-ratelimit-used": String(used),
@@ -122,10 +149,15 @@ const server = http.createServer((req, res) => {
   let body: unknown;
   let m: RegExpMatchArray | null;
   if (path === "/database/search") {
+    // A track title starting with "nomatch" finds nothing (exercises the "try as artist / album" fallback).
+    if ((query.track ?? "").toLowerCase().startsWith("nomatch")) {
+      record(200);
+      return send(res, 200, { pagination: { page: 1, pages: 1, per_page: 50, items: 0 }, results: [] }, rateHeaders());
+    }
     body = query.page === "2" ? searchPage2 : query.page && query.page !== "1" ? { pagination: { page: Number(query.page), pages: 3, per_page: 50, items: 120 }, results: [] } : searchPage1;
     body = localise(body);
   } else if ((m = path.match(/^\/masters\/(\d+)\/versions$/))) {
-    body = localise(versionsPage);
+    body = localise(versionsFor(query));
   } else if ((m = path.match(/^\/releases\/(\d+)$/))) {
     if (m[1] === "404404") {
       status = 404;

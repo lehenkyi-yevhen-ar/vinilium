@@ -23,7 +23,8 @@
     "signOut": "Logg ut",
     "menu": "Meny",
     "language": "Språk",
-    "userMenu": "Kontomeny"
+    "userMenu": "Kontomeny",
+    "search": "Søk"
   },
   "locales": {
     "uk": "Українська",
@@ -43,7 +44,8 @@
     "step2Title": "Sammenlign utgivelser",
     "step2Text": "Filtrer på land, år og plateselskap for å finne den du eier, eller den du vil ha.",
     "step3Title": "Hold dine lister",
-    "step3Text": "En ønskeliste og en samling, med egne notater og stand."
+    "step3Text": "En ønskeliste og en samling, med egne notater og stand.",
+    "ctaSearch": "Begynn å søke"
   },
   "auth": {
     "email": "E-post",
@@ -170,5 +172,134 @@
     "telegramLabel": "Telegram",
     "notConfigured": "Kontaktopplysningene er ikke satt opp ennå.",
     "discogsTitle": "Om Discogs"
+  },
+  "signInRequired": {
+    "title": "Logg inn for å søke",
+    "text": "Søk etter utgivelser er for innloggede brukere. Det er gratis, og ønskelisten og samlingen din lagres på kontoen din.",
+    "signIn": "Logg inn",
+    "signUp": "Opprett en gratis konto",
+    "expired": "Økten din er utløpt. Logg inn igjen for å fortsette å søke."
+  },
+  "finder": {
+    "title": "Finn utgivelsen din",
+    "lead": "Begynn med et spor du husker, og snevre det inn til den nøyaktige utgivelsen.",
+    "stepsLabel": "Søketrinn",
+    "steps": {
+      "track": "Spor",
+      "artist": "Artist",
+      "album": "Album",
+      "pressing": "Utgivelse"
+    },
+    "modeLabel": "Søk etter",
+    "modes": {
+      "track": "Spor",
+      "artist": "Artist",
+      "album": "Album"
+    },
+    "queryLabel": {
+      "track": "Sportittel",
+      "artist": "Artistnavn",
+      "album": "Albumtittel"
+    },
+    "placeholder": {
+      "track": "f.eks. One More Time",
+      "artist": "f.eks. Daft Punk",
+      "album": "f.eks. Discovery"
+    },
+    "submit": "Søk",
+    "queryRequired": "Skriv inn noe å søke etter.",
+    "hint": "Husker du ikke sporet? Bytt til artist eller album.",
+    "fallbackTitle": "Ikke det du mente?",
+    "fallbackText": "Prøv «{q}» som",
+    "tryAs": {
+      "track": "et spor",
+      "artist": "en artist",
+      "album": "et album"
+    },
+    "emptyTitle": "Ingen treff",
+    "emptyText": "Sjekk stavemåten, eller søk på en annen måte.",
+    "artistsTitle": "Velg artist",
+    "artistsLead": "Treffene er gruppert etter artist.",
+    "albumsTitle": "Velg album",
+    "albumsBy": "Album av {artist}",
+    "otherArtists": "Velg en annen artist",
+    "unknownArtist": "Ukjent artist",
+    "albumCount": "{count, plural, one {# album} other {# album}}",
+    "seePressings": "Se utgivelser",
+    "openRelease": "Åpne utgivelsen",
+    "standalone": "Enkeltutgivelse",
+    "yearUnknown": "Ukjent år",
+    "loadMore": "Vis flere",
+    "incomplete": "Resultatene kan være ufullstendige: Discogs har flere treff enn det som vises.",
+    "resultsFor": "Resultater for «{q}»",
+    "filterArtists": "Filtrer artistene",
+    "filterPlaceholder": "Skriv en del av navnet",
+    "noArtistMatch": "Ingen artist i disse resultatene passer. Vis flere resultater, eller søk på artistnavn."
+  },
+  "pressings": {
+    "title": "Velg utgivelse",
+    "headingFor": "Utgivelser av {title}",
+    "headingUnknown": "Utgivelser av dette albumet",
+    "by": "av {artist}",
+    "back": "Tilbake til album",
+    "filters": "Filtre",
+    "country": "Land",
+    "year": "År",
+    "label": "Plateselskap",
+    "all": "Alle",
+    "clear": "Fjern filtre",
+    "count": "{count, plural, one {# utgivelse} other {# utgivelser}}",
+    "emptyTitle": "Ingen utgivelser passer med filtrene",
+    "emptyText": "Prøv å fjerne et filter.",
+    "catno": "Kat.nr. {catno}",
+    "open": "Åpne utgivelsen"
+  },
+  "release": {
+    "backToPressings": "Tilbake til utgivelser",
+    "backToSearch": "Tilbake til søket",
+    "coverAlt": "Omslag til {title}",
+    "by": "av {artist}",
+    "released": "Utgitt",
+    "country": "Land",
+    "label": "Plateselskap",
+    "format": "Format",
+    "genres": "Sjanger",
+    "styles": "Stil",
+    "tracklist": "Sporliste",
+    "noTracks": "Ingen sporliste er oppgitt for denne utgivelsen.",
+    "identifiers": "Strekkoder og matrise",
+    "viewOnDiscogs": "Se på Discogs",
+    "details": "Om utgivelsen"
+  },
+  "lists": {
+    "heading": "Listene dine",
+    "addWishlist": "Legg til i ønskelisten",
+    "addCollection": "Legg til i samlingen",
+    "inWishlist": "På ønskelisten din",
+    "inCollection": "I samlingen din",
+    "moveToCollection": "Flytt til samlingen",
+    "moveToWishlist": "Flytt til ønskelisten",
+    "remove": "Fjern fra listene mine",
+    "note": "En utgivelse er på én liste om gangen. Når du flytter den, fjernes den fra den andre.",
+    "added": "Lagt til i {list}.",
+    "moved": "Flyttet til {list}.",
+    "removed": "Fjernet fra listene dine.",
+    "wishlist": "ønskelisten",
+    "collection": "samlingen",
+    "error": "Vi kunne ikke oppdatere listene dine. Prøv igjen.",
+    "loading": "Sjekker listene dine …"
+  },
+  "discogsStates": {
+    "loading": "Henter fra Discogs …",
+    "throttledTitle": "Det er litt travelt akkurat nå",
+    "throttledDiscogs": "Discogs begrenser hvor fort vi kan spørre. Vi prøver igjen av oss selv.",
+    "throttledApp": "Du søker veldig raskt. Vent litt.",
+    "retryIn": "Prøver igjen om {seconds} s.",
+    "retryNow": "Prøv igjen nå",
+    "errorTitle": "Vi kunne ikke laste dette",
+    "errorText": "Discogs svarte ikke som forventet. Prøv igjen.",
+    "unconfiguredText": "Søk er ikke satt opp på denne serveren ennå.",
+    "notFoundTitle": "Ikke funnet",
+    "notFoundText": "Dette finnes ikke lenger på Discogs."
   }
 }

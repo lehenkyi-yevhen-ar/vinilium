@@ -66,9 +66,25 @@ export interface VersionSummary {
   discogsUrl: string;
 }
 
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+/** Filters Discogs supports on a master's versions. `released` is a year. */
+export interface VersionFilters {
+  country?: string;
+  released?: string;
+  label?: string;
+}
+
 export interface VersionsPage extends Page {
   masterId: number;
   versions: VersionSummary[];
+  /** Options for the filter dropdowns, as reported by Discogs for the current (filtered) result set. */
+  facets: { country: FacetValue[]; released: FacetValue[]; label: FacetValue[] };
+  /** The filters this page was fetched with. */
+  filters: VersionFilters;
 }
 
 export interface TrackItem {
@@ -115,7 +131,7 @@ export type DiscogsResult<T> =
 
 /** JSON error body of the HTTP API (what the UI receives). `scope` says whose limit was hit. */
 export interface ApiErrorBody {
-  error: DiscogsErrorCode | "rate_limited" | "bad_request" | "forbidden";
+  error: DiscogsErrorCode | "rate_limited" | "bad_request" | "forbidden" | "unauthorized";
   scope?: "discogs" | "app";
   retryAfter?: number;
   message?: string;

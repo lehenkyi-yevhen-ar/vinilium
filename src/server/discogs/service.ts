@@ -6,7 +6,7 @@ import {
   normalizeVersionsResponse,
   searchParamsFor,
 } from "@/lib/discogs/normalize";
-import type { DiscogsResult, ReleaseDetail, SearchMode, SearchPage, VersionsPage } from "@/lib/discogs/types";
+import type { DiscogsResult, ReleaseDetail, SearchMode, SearchPage, VersionFilters, VersionsPage } from "@/lib/discogs/types";
 import { cacheKey, getCached, purgeExpiredCache, putCached } from "./cache";
 import { discogsGet, type ClientDeps, type RequestOutcome } from "./client";
 import { apiBase, cacheTtlSeconds, MAX_SEARCH_PAGES, MAX_VERSION_PAGES, PAGE_SIZE } from "./config";
@@ -77,14 +77,28 @@ export async function searchDiscogs(deps: Deps, input: { mode: SearchMode; query
   );
 }
 
-export async function getMasterVersions(deps: Deps, input: { masterId: number; page: number }): Promise<DiscogsResult<VersionsPage>> {
+/** Only these three are passed to Discogs; blanks are dropped so equivalent requests share a cache row. */
+export function cleanFilters(f: VersionFilters | undefined): VersionFilters {
+  const out: VersionFilters = {};
+  for (const k of ["country", "released", "label"] as const) {
+    const v = f?.[k]?.normalize("NFC").trim().replace(/\s+/g, " ");
+    if (v) out[k] = v.slice(0, 100);
+  }
+  return out;
+}
+
+export async function getMasterVersions(
+  deps: Deps,
+  input: { masterId: number; page: number; filters?: VersionFilters },
+): Promise<DiscogsResult<VersionsPage>> {
   const page = Math.min(Math.max(1, Math.trunc(input.page) || 1), MAX_VERSION_PAGES);
-  const key = cacheKey(apiBase(), "versions", { master: input.masterId, page, per_page: PAGE_SIZE });
+  const filters = cleanFilters(input.filters);
+  const key = cacheKey(apiBase(), "versions", { master: input.masterId, page, per_page: PAGE_SIZE, ...filters });
 
   return cached<VersionsPage>(
     deps,
     key,
-    () => discogsGet(`/masters/${input.masterId}/versions`, { per_page: PAGE_SIZE, page }, deps),
+    () => discogsGet(`/masters/${input.masterId}/versions`, { per_page: PAGE_SIZE, page, ...filters }, deps),
     (json) => {
       const r = normalizeVersionsResponse(json, imageMapper());
       return {
@@ -95,6 +109,8 @@ export async function getMasterVersions(deps: Deps, input: { masterId: number; p
         totalItems: r.totalItems,
         ...pageFlags(r.page, r.pages, MAX_VERSION_PAGES),
         versions: r.versions,
+        facets: r.facets,
+        filters,
       };
     },
   );

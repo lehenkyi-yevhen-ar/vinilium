@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { site } from "@/config/site";
 import { Link } from "@/i18n/navigation";
 import { ButtonLink } from "@/ds/ButtonLink";
-import { UserIcon } from "@/ds/icons";
+import { SearchIcon, UserIcon } from "@/ds/icons";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { SignOutButton } from "./SignOutButton";
 
@@ -17,6 +17,10 @@ export async function SiteHeader({ signedIn, userName }: { signedIn: boolean; us
             {site.name}
           </Link>
           <div className="navbar__actions pill-group">
+            <ButtonLink href="/search" variant="ghost" className="x-hide-mobile">
+              <SearchIcon />
+              <span>{t("search")}</span>
+            </ButtonLink>
             <LocaleSwitcher signedIn={signedIn} />
             {signedIn ? (
               <>

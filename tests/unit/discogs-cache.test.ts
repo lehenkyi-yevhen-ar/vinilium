@@ -62,10 +62,10 @@ describe("TTL", () => {
     expect(cfg.cacheTtlSeconds()).toBe(21_600);
   });
 
-  it("uses ONE configurable constant, defaulting to 6 hours", async () => {
+  it("uses ONE configurable constant, defaulting to 4 hours (a 2 h margin under the 6 h cap)", async () => {
     let cfg = await import("@/server/discogs/config");
-    expect(cfg.DEFAULT_CACHE_TTL_SECONDS).toBe(21_600);
-    expect(cfg.cacheTtlSeconds()).toBe(21_600);
+    expect(cfg.DEFAULT_CACHE_TTL_SECONDS).toBe(14_400);
+    expect(cfg.cacheTtlSeconds()).toBe(14_400);
 
     vi.resetModules();
     setEnv({ DISCOGS_CACHE_TTL_SECONDS: "900" });
@@ -117,7 +117,7 @@ describe("service: cache-through", () => {
       return r;
     });
     const deps = { db, fetchImpl: fetchImpl as unknown as typeof fetch, sleep: async () => {}, now, random: () => 0.5 };
-    return { searchDiscogs: (i: Parameters<typeof searchDiscogs>[1]) => searchDiscogs(deps, i), getRelease: (id: number) => getRelease(deps, id), getMasterVersions: (i: { masterId: number; page: number }) => getMasterVersions(deps, i), fetchImpl };
+    return { searchDiscogs: (i: Parameters<typeof searchDiscogs>[1]) => searchDiscogs(deps, i), getRelease: (id: number) => getRelease(deps, id), getMasterVersions: (i: Parameters<typeof getMasterVersions>[1]) => getMasterVersions(deps, i), fetchImpl };
   }
 
   it("fetches once, then serves from cache until the TTL passes, then refetches", async () => {
@@ -130,7 +130,7 @@ describe("service: cache-through", () => {
     expect(second).toMatchObject({ ok: true, cached: true });
     expect(s.fetchImpl).toHaveBeenCalledTimes(1);
 
-    now = T0 + 21_600_000 + 1; // just past 6 h
+    now = T0 + 14_400_000 + 1; // just past 4 h
     const third = await s.getRelease(1001);
     expect(third).toMatchObject({ ok: true, cached: false });
     expect(s.fetchImpl).toHaveBeenCalledTimes(2);
@@ -154,7 +154,7 @@ describe("service: cache-through", () => {
     for (const k of ["lowest_price", "num_for_sale", "estimated_weight", "blocked_from_sale", "community", "42.5"]) {
       expect(stored).not.toContain(k);
     }
-    expect(row.expiresAt.getTime() - row.fetchedAt.getTime()).toBe(21_600_000);
+    expect(row.expiresAt.getTime() - row.fetchedAt.getTime()).toBe(14_400_000);
   });
 
   it("search: groups, dedupes and flags an honest 'incomplete' state", async () => {
@@ -185,8 +185,29 @@ describe("service: cache-through", () => {
   it("versions: dedupes and paginates", async () => {
     const s = await svc([json(versionsPage)]);
     const r = await s.getMasterVersions({ masterId: 500, page: 1 });
-    expect(r.ok && r.data.versions.map((v) => v.id)).toEqual([11, 12]);
+    expect(r.ok && r.data.versions.map((v) => v.id)).toEqual([11, 12, 13]);
     expect(r.ok && r.data).toMatchObject({ masterId: 500, hasMore: false, incomplete: false });
+  });
+
+  it("versions: passes filters to Discogs, caches per filter set, and returns facets", async () => {
+    const filtered = { ...versionsPage, versions: versionsPage.versions.filter((v) => v.country === "Japan"), pagination: { page: 1, pages: 1, per_page: 50, items: 1 } };
+    const s = await svc([json(versionsPage), json(filtered)]);
+
+    const all = await s.getMasterVersions({ masterId: 500, page: 1 });
+    expect(all.ok && all.data.facets.country.map((f) => f.value)).toEqual(["France", "Japan", "UK"]); // alphabetical
+    expect(all.ok && all.data.facets.released.map((f) => f.value)).toEqual(["2001", "2002"]);
+    expect(all.ok && all.data.facets.label.map((f) => f.value)).toEqual(["Victor", "Virgin"]);
+
+    const jp = await s.getMasterVersions({ masterId: 500, page: 1, filters: { country: " Japan ", label: "", released: "" } });
+    expect(jp.ok && jp.data.versions.map((v) => v.id)).toEqual([13]);
+    expect(jp.ok && jp.data.filters).toEqual({ country: "Japan" });
+    const params = (s.fetchImpl.mock.calls[1] as unknown as [URL])[0].searchParams;
+    expect(params.get("country")).toBe("Japan");
+    expect(params.has("label")).toBe(false);
+
+    // the unfiltered and filtered requests are cached separately
+    expect((await s.getMasterVersions({ masterId: 500, page: 1 })).ok).toBe(true);
+    expect(s.fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("passes the throttled state (with retryAfter) through to the caller and caches nothing", async () => {

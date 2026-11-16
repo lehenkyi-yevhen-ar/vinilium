@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import type { ApiErrorBody, DiscogsResult } from "@/lib/discogs/types";
-import { getAuth } from "@/server/auth";
+import { getRequestUserId, isCrossSite } from "@/server/auth/request-user";
 import { getDb } from "@/server/db";
 import { limits } from "@/server/limits";
 import { clientIp, hit } from "@/server/rate-limit";
@@ -15,39 +15,24 @@ export function errorResponse(status: number, body: ApiErrorBody): Response {
   return Response.json(body, { status, headers });
 }
 
-/** Signed-in user id, or null. Skips the database entirely when there is no session cookie. */
-async function optionalUserId(headers: Headers): Promise<string | null> {
-  if (!(headers.get("cookie") ?? "").includes("session_token")) return null;
-  try {
-    const s = await getAuth().api.getSession({ headers });
-    return s?.user.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Our own limits, per IP AND per signed-in user. Returns a ready 429 response when blocked, else null.
- * Anonymous callers are limited by IP only.
+ * Gate for every Discogs endpoint: (1) only our own pages may call it (browsers label cross-site requests), (2) the caller
+ * must be signed in, (3) our own limits, per IP AND per user. Returns a ready error response, or null to proceed.
+ * Sign-in is required because the Terms forbid giving third parties access to the Content and the 60/min budget is shared.
  */
 export async function guard(request: Request, scope: "search" | "image"): Promise<Response | null> {
-  // Our endpoints serve OUR pages. Browsers label requests made from other sites (hotlinking an image, calling the API
-  // from a third-party page); refuse those, since the Terms forbid giving third parties access to Discogs Content.
-  // Servers and scripts do not send this header, so this is a courtesy barrier: the rate limits are the real one.
-  if (request.headers.get("sec-fetch-site") === "cross-site") {
+  if (isCrossSite(request)) {
     return errorResponse(403, { error: "forbidden", message: "This endpoint is only available to this site's own pages." });
   }
+  const userId = await getRequestUserId(request.headers);
+  if (!userId) return errorResponse(401, { error: "unauthorized", message: "Sign in to search." });
+
   const db = getDb();
   const cfg = limits();
   const ip = clientIp(request.headers);
   const byIp = await hit(db, { key: `${scope}:ip:${ip}`, limit: cfg[scope].ip, windowSec: cfg.windowSec });
-  let blocked = byIp.allowed ? null : byIp;
-
-  const userId = await optionalUserId(request.headers);
-  if (userId) {
-    const byUser = await hit(db, { key: `${scope}:user:${userId}`, limit: cfg[scope].user, windowSec: cfg.windowSec });
-    if (!byUser.allowed && (!blocked || byUser.retryAfter > blocked.retryAfter)) blocked = byUser;
-  }
+  const byUser = await hit(db, { key: `${scope}:user:${userId}`, limit: cfg[scope].user, windowSec: cfg.windowSec });
+  const blocked = [byIp, byUser].filter((r) => !r.allowed).sort((a, b) => b.retryAfter - a.retryAfter)[0];
   return blocked ? errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: blocked.retryAfter }) : null;
 }
 
@@ -74,8 +59,22 @@ export const searchQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(MAX_SEARCH_PAGES).default(1),
 });
 
+const optionalText = z
+  .string()
+  .transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " "))
+  .pipe(z.string().max(100))
+  .optional()
+  .transform((s) => s || undefined);
+
 export const versionsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(MAX_VERSION_PAGES).default(1),
+  country: optionalText,
+  label: optionalText,
+  released: z
+    .string()
+    .regex(/^\d{4}$/)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 });
 
 /** Discogs ids are positive integers; anything else is rejected before it reaches a URL. */

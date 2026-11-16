@@ -25,10 +25,10 @@ export type TakeResult =
   | { ok: true; state: BucketState }
   | { ok: false; retryAfterSec: number; state: BucketState };
 
-export const initialState = (now: number): BucketState => ({
-  tokens: DEFAULT_CAPACITY,
-  capacity: DEFAULT_CAPACITY,
-  refillPerSec: DEFAULT_CAPACITY / WINDOW_SECONDS,
+export const initialState = (now: number, capacity = DEFAULT_CAPACITY): BucketState => ({
+  tokens: capacity,
+  capacity,
+  refillPerSec: capacity / WINDOW_SECONDS,
   updatedAt: now,
   blockedUntil: null,
 });
@@ -39,8 +39,8 @@ export function refill(s: BucketState, now: number): BucketState {
 }
 
 /**
- * Take `cost` tokens, leaving at least `reserve` untouched (images use a reserve so a page of thumbnails
- * cannot starve API calls). Pure: persistence is below.
+ * Take `cost` tokens, leaving at least `reserve` untouched (not used today: images have their own bucket, but the
+ * option lets a shared bucket keep tokens back for higher-priority callers). Pure: persistence is below.
  */
 export function take(state: BucketState, now: number, cost = 1, reserve = 0): TakeResult {
   if (state.blockedUntil !== null && state.blockedUntil > now) {
@@ -111,10 +111,11 @@ async function withLockedBucket<T>(
   db: AppDb,
   id: string,
   now: number,
+  initialCapacity: number,
   fn: (s: BucketState) => { next: BucketState; result: T; extra?: Partial<typeof discogsBucket.$inferInsert> },
 ): Promise<T> {
   return db.transaction(async (tx) => {
-    const init = initialState(now);
+    const init = initialState(now, initialCapacity);
     await tx.insert(discogsBucket).values({ id, ...toRow(init) }).onConflictDoNothing();
     const [row] = await tx.select().from(discogsBucket).where(eq(discogsBucket.id, id)).for("update");
     const { next, result, extra } = fn(toState(row));
@@ -128,10 +129,10 @@ async function withLockedBucket<T>(
 
 export async function acquireToken(
   db: AppDb,
-  opts: { id: string; cost?: number; reserveFraction?: number; now?: number },
+  opts: { id: string; cost?: number; reserveFraction?: number; capacity?: number; now?: number },
 ): Promise<TakeResult> {
   const now = opts.now ?? Date.now();
-  return withLockedBucket(db, opts.id, now, (s) => {
+  return withLockedBucket(db, opts.id, now, opts.capacity ?? DEFAULT_CAPACITY, (s) => {
     const reserve = (opts.reserveFraction ?? 0) * s.capacity;
     const r = take(s, now, opts.cost ?? 1, reserve);
     return { next: r.state, result: r };
@@ -143,7 +144,7 @@ export async function recordObserved(
   opts: { id: string; limit: number | null; used: number | null; remaining: number | null; now?: number },
 ): Promise<void> {
   const now = opts.now ?? Date.now();
-  await withLockedBucket(db, opts.id, now, (s) => ({
+  await withLockedBucket(db, opts.id, now, DEFAULT_CAPACITY, (s) => ({
     next: applyObserved(s, opts, now),
     result: undefined,
     extra: {
@@ -160,7 +161,7 @@ export async function recordObserved(
  */
 export async function blockFor(db: AppDb, opts: { id: string; seconds: number; now?: number }): Promise<void> {
   const now = opts.now ?? Date.now();
-  await withLockedBucket(db, opts.id, now, (s) => ({
+  await withLockedBucket(db, opts.id, now, DEFAULT_CAPACITY, (s) => ({
     next: { ...refill(s, now), tokens: 1, blockedUntil: now + opts.seconds * 1000 },
     result: undefined,
   }));

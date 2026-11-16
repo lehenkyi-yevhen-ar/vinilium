@@ -1,8 +1,8 @@
 import "server-only";
-import { allowedImageOrigins, bucketId, cacheTtlSeconds } from "./config";
+import { allowedImageOrigins, cacheTtlSeconds, IMAGE_BUCKET_CAPACITY, imageBucketId } from "./config";
 import { discogsHeaders } from "./client";
 import { resolveDiscogsAuth } from "./credentials";
-import { acquireToken, blockFor, parseRateHeaders, recordObserved, type AppDb } from "./token-bucket";
+import { acquireToken, blockFor, type AppDb } from "./token-bucket";
 
 /**
  * Image proxy: the browser never talks to Discogs image hosts. We validate the URL against an exact host
@@ -13,8 +13,6 @@ import { acquireToken, blockFor, parseRateHeaders, recordObserved, type AppDb } 
 export const PROXY_PATH = "/api/discogs/image";
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = /^image\/(jpeg|png|gif|webp)$/i; // no SVG: it can carry script
-/** Images may use at most this share of the bucket, so thumbnails cannot starve API calls. */
-export const IMAGE_RESERVE_FRACTION = 0.25;
 const MAX_REDIRECTS = 2;
 
 export interface ImageAllowList {
@@ -88,10 +86,10 @@ export async function proxyImage(
 
   const f = deps.fetchImpl ?? fetch;
   const clock = deps.now ?? Date.now;
-  const id = bucketId();
+  const id = imageBucketId();
 
-  // Images draw on the same budget as API calls, but never dip into the reserve.
-  const taken = await acquireToken(deps.db, { id, reserveFraction: IMAGE_RESERVE_FRACTION, now: clock() });
+  // Images have a budget of their own (see config.ts): thumbnails never compete with API calls for tokens.
+  const taken = await acquireToken(deps.db, { id, capacity: IMAGE_BUCKET_CAPACITY, now: clock() });
   if (!taken.ok) return { ok: false, kind: "throttled", retryAfter: taken.retryAfterSec };
 
   let current: URL = first;
@@ -120,9 +118,6 @@ export async function proxyImage(
     break;
   }
   if (!res) return { ok: false, kind: "upstream" };
-
-  const rate = parseRateHeaders(res.headers);
-  if (rate.limit !== null || rate.remaining !== null) await recordObserved(deps.db, { id, ...rate, now: clock() }).catch(() => {});
 
   if (res.status === 429) {
     res.body?.cancel().catch(() => {});

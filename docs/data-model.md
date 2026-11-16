@@ -3,7 +3,7 @@
 **Terms verified 2026-11-16 (see `discogs-compliance.md`): Outcome B applies.** Content may not be displayed when more than 6 h older
 than on discogs.com and may not be stored longer than necessary, so no long-term `releases` table. Status after milestone 2: implemented are the auth tables, `rate_limit` (shared with our own limiter, whose keys are
 prefixed `app:`), `discogs_cache` and `discogs_bucket` (shared token bucket), in `drizzle/0000_*.sql` and
-`drizzle/0001_*.sql`. `user_items` and `releases` are NOT built yet. **Decided:** one list per pressing
+`drizzle/0001_*.sql`; `user_items` (the Wishlist/Collection entries, UNIQUE per user and release, ON DELETE CASCADE) in `drizzle/0002_*.sql`. `releases` is NOT built and will not be. **Decided:** one list per pressing
 (`UNIQUE (user_id, discogs_release_id)`), so "Move" is a single `UPDATE`.
 
 The question was whether the Discogs API Terms of Use allow us to **keep Discogs content** (release metadata, images)
@@ -69,7 +69,9 @@ page. Consequences you should know about:
 ## Product decisions (milestone 4)
 
 1. ~~One list at a time?~~ **Decided: yes.** `UNIQUE (user_id, discogs_release_id)`; "Move" is one `UPDATE`.
-2. **Outcome B applies, so please confirm you are fine with the list search/sort limits above.** (Still open.)
+2. **Confirmed 2026-11-16 for the MVP:** list search/sort only on `added_at`, notes and condition. Lists are paginated (12-24 per
+   page), fetch only the visible page, load progressively with skeletons, and handle a throttled state per item without
+   breaking the page. `user_items` already exists (milestone 3 uses it for the Add buttons); the list screens are milestone 4.
 
 ## Why there is no `releases` table
 

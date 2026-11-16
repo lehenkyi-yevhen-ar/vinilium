@@ -23,7 +23,8 @@
     "signOut": "Sign out",
     "menu": "Menu",
     "language": "Language",
-    "userMenu": "Account menu"
+    "userMenu": "Account menu",
+    "search": "Search"
   },
   "locales": {
     "uk": "Українська",
@@ -43,7 +44,8 @@
     "step2Title": "Compare pressings",
     "step2Text": "Filter by country, year and label to find the one on your shelf, or the one you want.",
     "step3Title": "Keep your lists",
-    "step3Text": "A wishlist and a collection, with your own notes and condition grading."
+    "step3Text": "A wishlist and a collection, with your own notes and condition grading.",
+    "ctaSearch": "Start searching"
   },
   "auth": {
     "email": "Email",
@@ -170,5 +172,134 @@
     "telegramLabel": "Telegram",
     "notConfigured": "Contact details have not been set up yet.",
     "discogsTitle": "About Discogs"
+  },
+  "signInRequired": {
+    "title": "Sign in to search",
+    "text": "Searching for pressings is for signed-in users. It is free, and your wishlist and collection are saved to your account.",
+    "signIn": "Sign in",
+    "signUp": "Create a free account",
+    "expired": "Your session has ended. Sign in again to keep searching."
+  },
+  "finder": {
+    "title": "Find your pressing",
+    "lead": "Start with a track you remember, then narrow it down to the exact pressing.",
+    "stepsLabel": "Search steps",
+    "steps": {
+      "track": "Track",
+      "artist": "Artist",
+      "album": "Album",
+      "pressing": "Pressing"
+    },
+    "modeLabel": "Search by",
+    "modes": {
+      "track": "Track",
+      "artist": "Artist",
+      "album": "Album"
+    },
+    "queryLabel": {
+      "track": "Track title",
+      "artist": "Artist name",
+      "album": "Album title"
+    },
+    "placeholder": {
+      "track": "e.g. One More Time",
+      "artist": "e.g. Daft Punk",
+      "album": "e.g. Discovery"
+    },
+    "submit": "Search",
+    "queryRequired": "Type something to search for.",
+    "hint": "Do not remember the track? Switch to artist or album.",
+    "fallbackTitle": "Not what you meant?",
+    "fallbackText": "Try “{q}” as",
+    "tryAs": {
+      "track": "a track",
+      "artist": "an artist",
+      "album": "an album"
+    },
+    "emptyTitle": "No matches",
+    "emptyText": "Check the spelling, or search another way.",
+    "artistsTitle": "Pick the artist",
+    "artistsLead": "Matches are grouped by artist.",
+    "albumsTitle": "Pick the album",
+    "albumsBy": "Albums by {artist}",
+    "otherArtists": "Choose another artist",
+    "unknownArtist": "Unknown artist",
+    "albumCount": "{count, plural, one {# album} other {# albums}}",
+    "seePressings": "See pressings",
+    "openRelease": "Open release",
+    "standalone": "Single pressing",
+    "yearUnknown": "Year unknown",
+    "loadMore": "Load more",
+    "incomplete": "Results may be incomplete: Discogs has more matches than are shown.",
+    "resultsFor": "Results for “{q}”",
+    "filterArtists": "Filter these artists",
+    "filterPlaceholder": "Type part of a name",
+    "noArtistMatch": "No artist in these results matches. Load more results, or search by artist name."
+  },
+  "pressings": {
+    "title": "Pick the pressing",
+    "headingFor": "Pressings of {title}",
+    "headingUnknown": "Pressings of this album",
+    "by": "by {artist}",
+    "back": "Back to albums",
+    "filters": "Filters",
+    "country": "Country",
+    "year": "Year",
+    "label": "Label",
+    "all": "All",
+    "clear": "Clear filters",
+    "count": "{count, plural, one {# pressing} other {# pressings}}",
+    "emptyTitle": "No pressing matches these filters",
+    "emptyText": "Try removing a filter.",
+    "catno": "Cat. no. {catno}",
+    "open": "Open release"
+  },
+  "release": {
+    "backToPressings": "Back to pressings",
+    "backToSearch": "Back to search",
+    "coverAlt": "Cover of {title}",
+    "by": "by {artist}",
+    "released": "Released",
+    "country": "Country",
+    "label": "Label",
+    "format": "Format",
+    "genres": "Genre",
+    "styles": "Style",
+    "tracklist": "Tracklist",
+    "noTracks": "No tracklist is listed for this release.",
+    "identifiers": "Barcodes and matrix",
+    "viewOnDiscogs": "View on Discogs",
+    "details": "Release details"
+  },
+  "lists": {
+    "heading": "Your lists",
+    "addWishlist": "Add to Wishlist",
+    "addCollection": "Add to Collection",
+    "inWishlist": "On your Wishlist",
+    "inCollection": "In your Collection",
+    "moveToCollection": "Move to Collection",
+    "moveToWishlist": "Move to Wishlist",
+    "remove": "Remove from my lists",
+    "note": "A pressing is on one list at a time. Moving it takes it off the other.",
+    "added": "Added to your {list}.",
+    "moved": "Moved to your {list}.",
+    "removed": "Removed from your lists.",
+    "wishlist": "Wishlist",
+    "collection": "Collection",
+    "error": "We could not update your lists. Please try again.",
+    "loading": "Checking your lists…"
+  },
+  "discogsStates": {
+    "loading": "Loading from Discogs…",
+    "throttledTitle": "We are a little busy",
+    "throttledDiscogs": "Discogs limits how fast we can ask. We will try again on our own.",
+    "throttledApp": "You are searching very quickly. Please wait a moment.",
+    "retryIn": "Trying again in {seconds} s.",
+    "retryNow": "Try again now",
+    "errorTitle": "We could not load this",
+    "errorText": "Discogs did not answer as expected. Please try again.",
+    "unconfiguredText": "Search is not set up on this server yet.",
+    "notFoundTitle": "Not found",
+    "notFoundText": "This item does not exist on Discogs any more."
   }
 }

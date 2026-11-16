@@ -29,11 +29,18 @@ export const searchPage2 = {
 };
 
 export const versionsPage = {
-  pagination: { page: 1, pages: 1, per_page: 50, items: 2 },
+  pagination: { page: 1, pages: 1, per_page: 50, items: 3 },
   versions: [
     { id: 11, title: "Glass Harbor", label: "Virgin", catno: "V 2975", country: "UK", released: "2001", format: "2xLP, Album", major_formats: ["Vinyl"], thumb: "https://i.discogs.com/v/11.jpg", status: "Accepted", stats: { community: { in_wantlist: 5, in_collection: 9 } }, price: "30.00" },
     { id: 11, title: "Glass Harbor", label: "Virgin", catno: "V 2975", country: "UK", released: "2001" },
     { id: 12, title: "Glass Harbor", label: "Virgin", catno: "8 50000", country: "France", released: "2001", format: "CD, Album" },
+    { id: 13, title: "Glass Harbor", label: "Victor", catno: "VICP-61", country: "Japan", released: "2002", format: "CD, Album" },
+  ],
+  filter_facets: [
+    { id: "country", title: "Country", values: [{ title: "UK", value: "UK", count: 1 }, { title: "Japan", value: "Japan", count: 1 }, { title: "France", value: "France", count: 1 }] },
+    { id: "released", title: "Year", values: [{ title: "2002", value: "2002", count: 1 }, { title: "2001", value: "2001", count: 2 }] },
+    { id: "label", title: "Label", values: [{ title: "Virgin", value: "Virgin", count: 2 }, { title: "Victor", value: "Victor", count: 1 }] },
+    { id: "format", title: "Format", values: [{ title: "CD", value: "CD", count: 2 }] },
   ],
 };
 

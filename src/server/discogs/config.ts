@@ -3,7 +3,7 @@ import { site } from "@/config/site";
 import { serverEnv } from "@/lib/env";
 
 export const DEFAULT_API_BASE = "https://api.discogs.com";
-export const DEFAULT_CACHE_TTL_SECONDS = 21_600; // 6 hours
+export const DEFAULT_CACHE_TTL_SECONDS = 14_400; // 4 hours: leaves a 2 h margin under the 6 h display limit
 /**
  * API Terms of Use: Content may not be displayed if it is more than six hours older than discogs.com, and may not be
  * cached or stored longer than necessary. So the configured TTL can never exceed this, whatever the env says.
@@ -24,6 +24,16 @@ export function apiBase(): string {
 /** Identifier of the shared token bucket: one budget per API origin (so a test mock never shares the real one). */
 export function bucketId(): string {
   return `api:${new URL(apiBase()).host}`;
+}
+
+/**
+ * Images get their OWN budget, so a page of thumbnails can never use up the Discogs API allowance. The image host sends
+ * no X-Discogs-Ratelimit headers (observed), so this is our own ceiling, shared by all users: 300 per minute on top of the
+ * per-IP and per-user limits. A 429 from the image host blocks this bucket only.
+ */
+export const IMAGE_BUCKET_CAPACITY = 300;
+export function imageBucketId(): string {
+  return `img:${new URL(apiBase()).host}`;
 }
 
 /** THE one TTL constant: cache rows and the image proxy's Cache-Control all use it. Capped at 6 h (see above). */

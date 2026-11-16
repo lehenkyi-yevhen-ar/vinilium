@@ -82,4 +82,22 @@ test.describe("app shell", () => {
       expect(overflow).toBe(0);
     });
   }
+
+  for (const [locale, title, signIn] of [
+    ["en", "Sign in to search", "Sign in"],
+    ["uk", "Увійдіть, щоб шукати", "Увійти"],
+    ["nb", "Logg inn for å søke", "Logg inn"],
+  ] as const) {
+    test(`search is for signed-in users: ${locale} visitors see a clear sign-in state (the home page stays public)`, async ({ page }) => {
+      await page.goto(`/${locale}/search`);
+      await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+      const link = page.getByRole("main").getByRole("link", { name: signIn, exact: true });
+      await expect(link).toHaveAttribute("href", `/${locale}/sign-in?next=%2Fsearch`);
+      for (const path of ["master/500", "release/123"]) {
+        await page.goto(`/${locale}/${path}`);
+        await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+      }
+      expect((await page.request.get(`/${locale}`)).status()).toBe(200);
+    });
+  }
 });

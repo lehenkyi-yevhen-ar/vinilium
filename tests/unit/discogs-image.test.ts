@@ -121,7 +121,7 @@ describe("proxyImage", () => {
     if (!out.ok) return;
     expect(new Uint8Array(await out.response.arrayBuffer())).toEqual(bytes);
     expect(out.response.headers.get("content-type")).toBe("image/jpeg");
-    expect(out.response.headers.get("cache-control")).toBe("public, max-age=21600, s-maxage=21600");
+    expect(out.response.headers.get("cache-control")).toBe("public, max-age=14400, s-maxage=14400");
     expect(out.response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(out.response.headers.get("content-security-policy")).toContain("sandbox");
 
@@ -165,7 +165,7 @@ describe("proxyImage", () => {
     expect(await run(f as unknown as typeof fetch)).toEqual({ ok: false, kind: "bad_request" });
   });
 
-  it("handles a 429 gracefully: reports throttled with retryAfter and blocks the shared bucket", async () => {
+  it("handles a 429 gracefully: reports throttled with retryAfter and blocks IMAGES only", async () => {
     const f = vi.fn(async () => new Response("", { status: 429, headers: { "retry-after": "30" } }));
     const out = await run(f as unknown as typeof fetch);
     expect(out).toEqual({ ok: false, kind: "throttled", retryAfter: 30 });
@@ -173,18 +173,32 @@ describe("proxyImage", () => {
     const again = await run(f as unknown as typeof fetch);
     expect(again.ok).toBe(false);
     expect(f).toHaveBeenCalledTimes(1);
-  });
-
-  it("never dips into the reserve kept for API calls", async () => {
+    // ... but API calls are not affected by the image host's complaint
     const { acquireToken } = await import("@/server/discogs/token-bucket");
     const { bucketId } = await import("@/server/discogs/config");
-    for (let i = 0; i < 19; i++) await acquireToken(db, { id: bucketId(), now: 9_000_000 }); // 6 of 25 left (< 25% reserve)
+    expect((await acquireToken(db, { id: bucketId(), now: 9_000_000 })).ok).toBe(true);
+  });
+
+  it("has a budget of its own: a page of thumbnails cannot use up the API allowance, and vice versa", async () => {
+    const { acquireToken } = await import("@/server/discogs/token-bucket");
+    const { bucketId, imageBucketId, IMAGE_BUCKET_CAPACITY } = await import("@/server/discogs/config");
+    const ok = () => img();
+
+    // 60 thumbnails in one go (more than the whole API allowance): all served, API tokens untouched
+    for (let i = 0; i < 60; i++) expect((await run((async () => ok()) as unknown as typeof fetch)).ok).toBe(true);
+    const api = await Promise.all(Array.from({ length: 30 }, () => acquireToken(db, { id: bucketId(), now: 9_000_000 })));
+    expect(api.filter((r) => r.ok)).toHaveLength(25); // the full default API bucket, as if no image had been fetched
+
+    // exhausting the API bucket does not throttle images
+    expect((await run((async () => ok()) as unknown as typeof fetch)).ok).toBe(true);
+
+    // the image bucket has a ceiling too (it is NOT unlimited)
+    const drain = await Promise.all(Array.from({ length: IMAGE_BUCKET_CAPACITY + 20 }, () => acquireToken(db, { id: imageBucketId(), capacity: IMAGE_BUCKET_CAPACITY, now: 9_000_000 })));
+    expect(drain.filter((r) => !r.ok).length).toBeGreaterThan(0);
     const f = vi.fn();
     const out = await run(f as unknown as typeof fetch);
     expect(out.ok).toBe(false);
-    if (!out.ok) expect(out.kind).toBe("throttled");
     expect(f).not.toHaveBeenCalled();
-    expect((await acquireToken(db, { id: bucketId(), now: 9_000_000 })).ok).toBe(true); // API calls still get through
   });
 
   it("rejects non-image and SVG content types, and oversized files", async () => {

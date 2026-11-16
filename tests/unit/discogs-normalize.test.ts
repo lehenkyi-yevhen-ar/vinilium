@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { groupByArtist, mergeGroups } from "@/lib/discogs/group";
 import {
   artistKey,
+  normalizeFacets,
   normalizeRelease,
   normalizeSearchResponse,
   normalizeVersionsResponse,
@@ -97,7 +98,7 @@ describe("normalizeVersionsResponse", () => {
   const r = normalizeVersionsResponse(versionsPage, image);
 
   it("dedupes by id and keeps only whitelisted fields", () => {
-    expect(r.versions.map((v) => v.id)).toEqual([11, 12]);
+    expect(r.versions.map((v) => v.id)).toEqual([11, 12, 13]);
     expect(r.versions[0]).toMatchObject({
       title: "Glass Harbor",
       label: "Virgin",
@@ -109,6 +110,21 @@ describe("normalizeVersionsResponse", () => {
     expect(r.versions[0].formats).toEqual(["2xLP", "Album", "Vinyl"]);
     const json = JSON.stringify(r);
     for (const k of MARKETPLACE_KEYS) expect(json).not.toContain(k);
+  });
+});
+
+describe("normalizeFacets", () => {
+  it("keeps country, year and label options, sorted, ignoring other facets and bad values", () => {
+    const f = normalizeVersionsResponse(versionsPage, image).facets;
+    expect(f.country).toEqual([{ value: "France", count: 1 }, { value: "Japan", count: 1 }, { value: "UK", count: 1 }]);
+    expect(f.released).toEqual([{ value: "2001", count: 2 }, { value: "2002", count: 1 }]);
+    expect(f.label.map((x) => x.value)).toEqual(["Victor", "Virgin"]);
+    expect(JSON.stringify(f)).not.toContain("CD"); // the format facet is not one of ours
+  });
+
+  it("is empty when Discogs sends none", () => {
+    expect(normalizeFacets(undefined)).toEqual({ country: [], released: [], label: [] });
+    expect(normalizeFacets([{ id: "country", values: [null, { value: "" }, { value: "UK", count: "x" }] }]).country).toEqual([{ value: "UK", count: 0 }]);
   });
 });
 

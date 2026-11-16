@@ -45,3 +45,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /blob-report/
+
+# e2e signed-in session (created by tests/e2e/auth.setup.ts)
+/tests/.auth/
