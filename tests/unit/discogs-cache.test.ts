@@ -54,6 +54,14 @@ describe("TTL", () => {
     expect((await getCached<{ v: number }>(db, "k2", T0 + 15_000))?.payload.v).toBe(2);
   });
 
+  it("can never exceed 6 hours, whatever the environment says (API Terms of Use)", async () => {
+    vi.resetModules();
+    setEnv({ DISCOGS_CACHE_TTL_SECONDS: "86400" });
+    const cfg = await import("@/server/discogs/config");
+    expect(cfg.MAX_CONTENT_AGE_SECONDS).toBe(21_600);
+    expect(cfg.cacheTtlSeconds()).toBe(21_600);
+  });
+
   it("uses ONE configurable constant, defaulting to 6 hours", async () => {
     let cfg = await import("@/server/discogs/config");
     expect(cfg.DEFAULT_CACHE_TTL_SECONDS).toBe(21_600);
@@ -91,10 +99,12 @@ describe("purge", () => {
     expect(keys).toEqual(["1.1.1.1/sign-in/email", "app:search:ip:2.2.2.2"]);
   });
 
-  it("opportunistic purge fires about 1 write in 50", async () => {
-    const { shouldPurgeOpportunistically } = await import("@/server/discogs/cache");
-    expect(shouldPurgeOpportunistically(() => 0.01)).toBe(true);
-    expect(shouldPurgeOpportunistically(() => 0.5)).toBe(false);
+  it("purgeExpiredCache removes only expired cache rows", async () => {
+    const { putCached, purgeExpiredCache } = await import("@/server/discogs/cache");
+    await putCached(db, "gone", { x: 1 }, 10, T0);
+    await putCached(db, "kept", { x: 2 }, 1000, T0);
+    expect(await purgeExpiredCache(db, T0 + 11_000)).toBe(1);
+    expect((await db.select({ key: discogsCache.key }).from(discogsCache)).map((r) => r.key)).toEqual(["kept"]);
   });
 });
 
@@ -124,6 +134,16 @@ describe("service: cache-through", () => {
     const third = await s.getRelease(1001);
     expect(third).toMatchObject({ ok: true, cached: false });
     expect(s.fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("deletes expired rows on every write: nothing is kept longer than necessary", async () => {
+    const { putCached } = await import("@/server/discogs/cache");
+    await putCached(db, "stale-1", { x: 1 }, 10, T0 - 3_600_000); // expired an hour ago
+    await putCached(db, "stale-2", { x: 2 }, 10, T0 - 3_600_000);
+    const s = await svc([json(releasePayload)]);
+    await s.getRelease(1001); // a normal cache write...
+    const keys = (await db.select({ key: discogsCache.key }).from(discogsCache)).map((r) => r.key);
+    expect(keys).toEqual(["v1|https://api.discogs.com|release|id=1001"]); // ...removed both expired rows
   });
 
   it("stores only the normalised, whitelisted shape: no raw payload, no price or marketplace fields", async () => {

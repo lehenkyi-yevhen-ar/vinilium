@@ -120,11 +120,13 @@
   },
   "footer": {
     "tagline": "Vinylutgivelser, ønskeliste og samling.",
-    "discogsNotice": "Utgivelsesdata og bilder leveres av Discogs. {appName} er ikke tilknyttet eller støttet av Discogs.",
-    "dataProvidedBy": "Data provided by Discogs",
+    "discogsNotice": "This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.",
+    "dataProvidedBy": "Data provided by Discogs.",
     "viewOnDiscogs": "Se på Discogs",
     "fontsCredit": "Skrifter: Ermilov og KyivType Sans (CC BY-ND 4.0).",
-    "designSystem": "Grensesnitt: designsystemet «Ліс»."
+    "designSystem": "Grensesnitt: designsystemet «Ліс».",
+    "contact": "Kontakt",
+    "linksLabel": "Informasjon"
   },
   "states": {
     "emptyTitle": "Ingenting her ennå",
@@ -153,5 +155,20 @@
       "ignore": "Hvis du ikke ba om dette, kan du se bort fra meldingen. Passordet ditt forblir det samme."
     },
     "linkFallback": "Fungerer ikke knappen? Lim inn denne lenken i nettleseren:"
+  },
+  "contact": {
+    "title": "Kontakt",
+    "lead": "Skriv til oss hvis noe er uklart, ødelagt eller mangler.",
+    "topicsTitle": "Hva du kan skrive om",
+    "topicQuestions": "Spørsmål om hvordan appen fungerer.",
+    "topicBugs": "Feilrapporter: hva du gjorde, hva du forventet, hva som skjedde, og enheten og nettleseren din.",
+    "topicPrivacy": "Forespørsler om personopplysningene dine: innsyn, retting og sletting av konto.",
+    "selfService": "Vil du slette kontoen med en gang, kan du gjøre det på kontosiden.",
+    "accountLink": "Min konto",
+    "reachTitle": "Slik når du oss",
+    "emailLabel": "E-post",
+    "telegramLabel": "Telegram",
+    "notConfigured": "Kontaktopplysningene er ikke satt opp ennå.",
+    "discogsTitle": "Om Discogs"
   }
 }

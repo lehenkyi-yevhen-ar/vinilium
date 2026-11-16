@@ -4,6 +4,11 @@ import { serverEnv } from "@/lib/env";
 
 export const DEFAULT_API_BASE = "https://api.discogs.com";
 export const DEFAULT_CACHE_TTL_SECONDS = 21_600; // 6 hours
+/**
+ * API Terms of Use: Content may not be displayed if it is more than six hours older than discogs.com, and may not be
+ * cached or stored longer than necessary. So the configured TTL can never exceed this, whatever the env says.
+ */
+export const MAX_CONTENT_AGE_SECONDS = 21_600;
 
 /** Hosts we will fetch images from. EXACT matches only (no wildcard subdomains). */
 export const DISCOGS_IMAGE_HOSTS: readonly string[] = ["i.discogs.com", "img.discogs.com", "s.discogs.com"];
@@ -21,9 +26,9 @@ export function bucketId(): string {
   return `api:${new URL(apiBase()).host}`;
 }
 
-/** THE one TTL constant: cached API data, cache rows, and the image proxy's Cache-Control all use it. */
+/** THE one TTL constant: cache rows and the image proxy's Cache-Control all use it. Capped at 6 h (see above). */
 export function cacheTtlSeconds(): number {
-  return serverEnv().DISCOGS_CACHE_TTL_SECONDS ?? DEFAULT_CACHE_TTL_SECONDS;
+  return Math.min(serverEnv().DISCOGS_CACHE_TTL_SECONDS ?? DEFAULT_CACHE_TTL_SECONDS, MAX_CONTENT_AGE_SECONDS);
 }
 
 /** `AppName/0.1 (+https://contact)` : descriptive, identifies the app and a way to reach its operator. */

@@ -44,6 +44,9 @@ export default defineConfig({
         BETTER_AUTH_URL: `http://localhost:${PORT}`,
         NEXT_PUBLIC_APP_URL: `http://localhost:${PORT}`,
         NEXT_PUBLIC_APP_NAME: "Vinilium",
+        // Fake public contact details (inlined at build time) so the contact page tests are deterministic.
+        NEXT_PUBLIC_CONTACT_EMAIL: "contact@example.test",
+        NEXT_PUBLIC_CONTACT_TELEGRAM: "@example_contact",
         // Discogs points at the mock with FAKE credentials, so a real key can never reach the real API from a test.
         DISCOGS_API_BASE: `http://localhost:${MOCK_PORT}`,
         DISCOGS_CONSUMER_KEY: "test-key",

@@ -41,9 +41,13 @@ describe("message files", () => {
   }
 
   it("keeps the Discogs attribution wording identical in every language", () => {
-    // Pending verification against the Discogs API Terms of Use text.
-    expect(uk.footer.dataProvidedBy).toBe("Data provided by Discogs");
-    expect(en.footer.dataProvidedBy).toBe("Data provided by Discogs");
-    expect(nb.footer.dataProvidedBy).toBe("Data provided by Discogs");
+    // Prescribed by the API Terms of Use ("Discogs Intellectual Property"): "Data provided by Discogs."
+    for (const m of [uk, en, nb]) expect(m.footer.dataProvidedBy).toBe("Data provided by Discogs.");
+  });
+
+  it("shows the non-affiliation notice exactly as the Terms prescribe, in every language", () => {
+    const required =
+      "This application uses Discogs\u2019 API but is not affiliated with, sponsored or endorsed by Discogs. \u2018Discogs\u2019 is a trademark of Zink Media, LLC.";
+    for (const m of [uk, en, nb]) expect(m.footer.discogsNotice).toBe(required);
   });
 });

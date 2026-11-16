@@ -74,12 +74,22 @@ body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; bac
 /* Footer extras */
 .x-footer-notes { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-6); font: var(--text-caption); color: var(--color-text-muted); }
 
+/* Footer links (contact now, legal pages later) */
+.x-footer-links { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin-top: var(--space-3); font: var(--text-body-s); }
+
+/* Content pages (contact, and later the legal pages) */
+.x-list { margin: 0 0 var(--space-3); padding-inline-start: var(--space-5); display: grid; gap: var(--space-2); font: var(--text-body-m); color: var(--color-text); }
+.x-list--plain { list-style: none; padding-inline-start: 0; }
+.x-contact li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); }
+.x-contact__label { min-width: 7rem; color: var(--color-text-muted); font: var(--text-body-s); }
+.x-note { margin: 0; color: var(--color-text-muted); font: var(--text-body-s); }
+
 /* Header actions that the mobile TabBar replaces (phones only) */
 /* Specific enough to beat the system's .btn { display: inline-flex } regardless of stylesheet order. */
 @media (max-width: 640px) { .navbar__actions > .x-hide-mobile { display: none; } }
 
 /* 44px touch targets for standalone links (the system's rule); inline links inside sentences are exempt. */
-.x-link-block, .x-foot a, .x-source a, .navbar .navbar__logo { display: inline-flex; align-items: center; min-height: var(--touch-target); }
+.x-link-block, .x-foot a, .x-source a, .x-footer-links a, .x-contact a, .navbar .navbar__logo { display: inline-flex; align-items: center; min-height: var(--touch-target); }
 .x-skip { min-height: var(--touch-target); display: inline-flex; align-items: center; }
 .x-link-block { align-self: flex-start; }
 .x-foot { align-items: center; }

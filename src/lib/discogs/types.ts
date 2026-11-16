@@ -115,7 +115,7 @@ export type DiscogsResult<T> =
 
 /** JSON error body of the HTTP API (what the UI receives). `scope` says whose limit was hit. */
 export interface ApiErrorBody {
-  error: DiscogsErrorCode | "rate_limited" | "bad_request";
+  error: DiscogsErrorCode | "rate_limited" | "bad_request" | "forbidden";
   scope?: "discogs" | "app";
   retryAfter?: number;
   message?: string;

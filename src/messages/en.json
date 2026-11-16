@@ -120,11 +120,13 @@
   },
   "footer": {
     "tagline": "Vinyl pressings, wishlist and collection.",
-    "discogsNotice": "Release data and images are provided by Discogs. {appName} is not affiliated with or endorsed by Discogs.",
-    "dataProvidedBy": "Data provided by Discogs",
+    "discogsNotice": "This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.",
+    "dataProvidedBy": "Data provided by Discogs.",
     "viewOnDiscogs": "View on Discogs",
     "fontsCredit": "Fonts: Ermilov and KyivType Sans (CC BY-ND 4.0).",
-    "designSystem": "Interface: Ліс design system."
+    "designSystem": "Interface: Ліс design system.",
+    "contact": "Contact",
+    "linksLabel": "Information"
   },
   "states": {
     "emptyTitle": "Nothing here yet",
@@ -153,5 +155,20 @@
       "ignore": "If you did not ask for this, you can ignore this message. Your password stays the same."
     },
     "linkFallback": "Button not working? Paste this link into your browser:"
+  },
+  "contact": {
+    "title": "Contact",
+    "lead": "Write to us if something is unclear, broken or missing.",
+    "topicsTitle": "What to write about",
+    "topicQuestions": "Questions about how the app works.",
+    "topicBugs": "Bug reports: what you did, what you expected, what happened, and your device and browser.",
+    "topicPrivacy": "Requests about your personal data: access, correction and account deletion.",
+    "selfService": "To delete your account right away, use the account page.",
+    "accountLink": "My account",
+    "reachTitle": "How to reach us",
+    "emailLabel": "Email",
+    "telegramLabel": "Telegram",
+    "notConfigured": "Contact details have not been set up yet.",
+    "discogsTitle": "About Discogs"
   }
 }

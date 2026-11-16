@@ -5,8 +5,9 @@ import { APP_RATE_LIMIT_PREFIX } from "@/server/rate-limit";
 import type { AppDb } from "./token-bucket";
 
 /**
- * TTL-bound cache of our normalised Discogs data. Rows are never refreshed in place and never outlive
- * `expires_at`: reads ignore expired rows, writes replace them, and `purgeExpired` deletes them.
+ * TTL-bound cache of our normalised Discogs data. Rows never outlive `expires_at`: reads ignore expired rows, every
+ * write deletes expired rows (the Terms forbid storing Content longer than necessary), and the cron job is a backstop
+ * for quiet periods.
  */
 
 /** Cache key: versioned, scoped to the API origin, params sorted so equivalent requests share a row. */
@@ -49,6 +50,12 @@ export async function putCached(
   return { fetchedAt, expiresAt };
 }
 
+/** Deletes cache rows past `expires_at` (a single indexed DELETE). Run after every cache write. */
+export async function purgeExpiredCache(db: AppDb, now = Date.now()): Promise<number> {
+  const rows = await db.delete(discogsCache).where(lt(discogsCache.expiresAt, new Date(now))).returning({ key: discogsCache.key });
+  return rows.length;
+}
+
 export interface PurgeResult {
   cacheRows: number;
   rateLimitRows: number;
@@ -61,15 +68,10 @@ const RATE_LIMIT_RETENTION_MS = 60 * 60 * 1000;
  * copies); our limiter counters go an hour after their window ended.
  */
 export async function purgeExpired(db: AppDb, now = Date.now()): Promise<PurgeResult> {
-  const cache = await db.delete(discogsCache).where(lt(discogsCache.expiresAt, new Date(now))).returning({ key: discogsCache.key });
+  const cacheRows = await purgeExpiredCache(db, now);
   const limits = await db
     .delete(rateLimit)
     .where(and(like(rateLimit.key, `${APP_RATE_LIMIT_PREFIX}%`), lt(rateLimit.lastRequest, now - RATE_LIMIT_RETENTION_MS)))
     .returning({ id: rateLimit.id });
-  return { cacheRows: cache.length, rateLimitRows: limits.length };
-}
-
-/** Roughly 1 in 50 writes also purges, so cleanup happens even if the scheduled job is not configured yet. */
-export function shouldPurgeOpportunistically(random = Math.random): boolean {
-  return random() < 0.02;
+  return { cacheRows, rateLimitRows: limits.length };
 }

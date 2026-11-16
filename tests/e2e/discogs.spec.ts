@@ -236,6 +236,14 @@ test("our own per-IP limit answers 429 'rate_limited' with Retry-After, and does
   expect((await search(request, q, 41)).status()).toBe(200); // another IP is fine
 });
 
+test("refuses browser requests that come from another site (no hotlinking / third-party use)", async ({ request }) => {
+  for (const path of ["/api/discogs/releases/123", `/api/discogs/image?u=${encodeURIComponent(`${MOCK}/images/a.png`)}`]) {
+    const res = await request.get(path, { headers: { ...ip(50), "sec-fetch-site": "cross-site" } });
+    expect(res.status(), path).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "forbidden" });
+  }
+});
+
 test("the purge endpoint requires the cron secret", async ({ request }) => {
   expect((await request.get("/api/cron/purge")).status()).toBe(401);
   expect((await request.get("/api/cron/purge", { headers: { authorization: "Bearer wrong" } })).status()).toBe(401);

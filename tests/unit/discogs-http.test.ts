@@ -47,6 +47,17 @@ describe("guard: per-IP and per-user limits", () => {
     expect(await blocked?.json()).toMatchObject({ error: "rate_limited", scope: "app" });
   });
 
+  it("refuses requests the browser labels cross-site (hotlinking / third-party pages) without touching the limiter", async () => {
+    const { guard } = await import("@/server/discogs/http");
+    const res = await guard(req({ "sec-fetch-site": "cross-site", "x-forwarded-for": "198.51.100.30" }), "image");
+    expect(res?.status).toBe(403);
+    expect(await res?.json()).toMatchObject({ error: "forbidden" });
+    expect(await db.select().from(rateLimit)).toHaveLength(0);
+    // our own pages (same-origin) and plain server-side calls (no header) are not affected
+    expect(await guard(req({ "sec-fetch-site": "same-origin", "x-forwarded-for": "198.51.100.31" }), "image")).toBeNull();
+    expect(await guard(req({ "x-forwarded-for": "198.51.100.32" }), "image")).toBeNull();
+  });
+
   it("keeps search and image budgets separate", async () => {
     const { guard } = await import("@/server/discogs/http");
     const h = { "x-forwarded-for": "198.51.100.9" };

@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import { site } from "@/config/site";
+import { Link } from "@/i18n/navigation";
 import { DiscogsAttribution } from "./DiscogsAttribution";
 
 export function SiteFooter() {
@@ -15,8 +16,14 @@ export function SiteFooter() {
         </div>
         <div className="x-footer-notes">
           <DiscogsAttribution />
-          <span>{t("discogsNotice", { appName: site.name })}</span>
+          {/* Wording is prescribed by the Discogs API Terms of Use (section "Discogs Intellectual Property"): keep it verbatim, in English. */}
+          <span lang="en">{t("discogsNotice")}</span>
         </div>
+        <nav className="x-footer-links" aria-label={t("linksLabel")}>
+          <Link className="link link--quiet" href="/contact">
+            {t("contact")}
+          </Link>
+        </nav>
         <div className="footer__legal">
           <span>
             © {year} {site.name}

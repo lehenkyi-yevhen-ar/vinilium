@@ -31,6 +31,12 @@ async function optionalUserId(headers: Headers): Promise<string | null> {
  * Anonymous callers are limited by IP only.
  */
 export async function guard(request: Request, scope: "search" | "image"): Promise<Response | null> {
+  // Our endpoints serve OUR pages. Browsers label requests made from other sites (hotlinking an image, calling the API
+  // from a third-party page); refuse those, since the Terms forbid giving third parties access to Discogs Content.
+  // Servers and scripts do not send this header, so this is a courtesy barrier: the rate limits are the real one.
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    return errorResponse(403, { error: "forbidden", message: "This endpoint is only available to this site's own pages." });
+  }
   const db = getDb();
   const cfg = limits();
   const ip = clientIp(request.headers);

@@ -120,11 +120,13 @@
   },
   "footer": {
     "tagline": "Вінілові видання, список бажаного та колекція.",
-    "discogsNotice": "Дані про видання та зображення надає Discogs. {appName} не пов’язаний із Discogs і не підтримується ним.",
-    "dataProvidedBy": "Data provided by Discogs",
+    "discogsNotice": "This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.",
+    "dataProvidedBy": "Data provided by Discogs.",
     "viewOnDiscogs": "Переглянути на Discogs",
     "fontsCredit": "Шрифти: Ermilov і KyivType Sans (CC BY-ND 4.0).",
-    "designSystem": "Інтерфейс: дизайн-система «Ліс»."
+    "designSystem": "Інтерфейс: дизайн-система «Ліс».",
+    "contact": "Контакти",
+    "linksLabel": "Інформація"
   },
   "states": {
     "emptyTitle": "Тут поки порожньо",
@@ -153,5 +155,20 @@
       "ignore": "Якщо ви цього не просили, проігноруйте лист. Ваш пароль не зміниться."
     },
     "linkFallback": "Кнопка не працює? Вставте це посилання в браузер:"
+  },
+  "contact": {
+    "title": "Контакти",
+    "lead": "Напишіть нам, якщо щось незрозуміло, не працює або чогось не вистачає.",
+    "topicsTitle": "Про що писати",
+    "topicQuestions": "Запитання про те, як працює застосунок.",
+    "topicBugs": "Повідомлення про помилки: що ви робили, чого очікували, що сталося, а також ваш пристрій і браузер.",
+    "topicPrivacy": "Запити щодо персональних даних: доступ, виправлення та видалення акаунта.",
+    "selfService": "Щоб одразу видалити акаунт, скористайтеся сторінкою акаунта.",
+    "accountLink": "Мій акаунт",
+    "reachTitle": "Як з нами зв’язатися",
+    "emailLabel": "Електронна пошта",
+    "telegramLabel": "Telegram",
+    "notConfigured": "Контактні дані ще не налаштовано.",
+    "discogsTitle": "Про Discogs"
   }
 }

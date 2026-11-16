@@ -15,7 +15,8 @@ Everything below is a **placeholder** and is flagged here on purpose:
 | --- | --- | --- |
 | App name | `NEXT_PUBLIC_APP_NAME` | `Vinilium` |
 | Public domain | `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_URL` | `http://localhost:3000` |
-| Contact (Discogs `User-Agent`, legal pages) | `APP_CONTACT` | `https://example.com/contact` |
+| Contact for Discogs (`User-Agent`) | `APP_CONTACT` | `https://example.com/contact` |
+| Public contact email / Telegram (contact page, privacy policy) | `NEXT_PUBLIC_CONTACT_EMAIL`, `NEXT_PUBLIC_CONTACT_TELEGRAM` | `contact@example.com` / `https://t.me/your_handle` (set in `.env.local`, never in the repo) |
 | Email sender | `EMAIL_FROM` | `Vinilium <onboarding@resend.dev>` (Resend sandbox: only delivers to your own Resend account email) |
 | Translations | `src/messages/{uk,nb}.json` | Written by an AI model; have a native speaker review them |
 | Legal pages (privacy, terms) | not written yet | Planned for milestone 5; footer carries Discogs attribution only |
@@ -43,10 +44,12 @@ npm run dev                     # http://localhost:3000
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | When both are set, the Google button appears. Redirect URI: `{BETTER_AUTH_URL}/api/auth/callback/google`. |
 | `RESEND_API_KEY` | prod | Empty in dev: verification and reset links are **printed to the server console**. In production, a missing key throws. |
 | `EMAIL_FROM` | no | Needs a verified domain in Resend before launch. |
-| `APP_CONTACT` | no | Placeholder, see above. |
+| `APP_CONTACT` | no | Sent to Discogs in the `User-Agent`. **Once the production domain exists, set it to the URL of the contact page: `https://<domain>/en/contact`** (the English page: Discogs staff read English, and every locale serves the same page). Until then it stays a placeholder. |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | yes (before launch) | Public contact address shown on `/<locale>/contact` and used by the privacy policy as the contact for personal-data requests. Visible in the browser by design. If missing or invalid, the page says contact details are not set up. |
+| `NEXT_PUBLIC_CONTACT_TELEGRAM` | no | `@handle` or a `t.me` link. Invalid values are dropped. **Unset = the Telegram line is hidden.** |
 | `DISCOGS_TOKEN` | no | Personal access token (`Authorization: Discogs token=...`). Server-only. Used only if the key/secret pair below is not set. |
 | `DISCOGS_CONSUMER_KEY` / `DISCOGS_CONSUMER_SECRET` | one of the two styles | App credentials (`Authorization: Discogs key=..., secret=...`). Set both or neither. **Preferred over `DISCOGS_TOKEN` when both are set.** Server-only. |
-| `DISCOGS_CACHE_TTL_SECONDS` | no | The ONE TTL for everything cached from Discogs (cache rows and the image proxy's `Cache-Control`). Default `21600` (6 h). |
+| `DISCOGS_CACHE_TTL_SECONDS` | no | The ONE TTL for everything cached from Discogs (cache rows and the image proxy's `Cache-Control`). Default and **maximum** `21600` (6 h): the Discogs Terms forbid showing older Content, so larger values are capped. |
 | `CRON_SECRET` | prod | 16+ chars. Protects `GET /api/cron/purge`; the endpoint is disabled without it. Vercel Cron sends it automatically. |
 | `RL_SEARCH_IP_PER_MIN`, `RL_SEARCH_USER_PER_MIN`, `RL_IMAGE_IP_PER_MIN`, `RL_IMAGE_USER_PER_MIN` | no | Our own request limits (defaults 30 / 60 / 300 / 600). |
 | `DISCOGS_API_BASE` | never | Tests only: points the client at the mock server. Do not set in a real environment. |
@@ -109,7 +112,7 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
   `429 {"error":"throttled","scope":"discogs","retryAfter":N}` (plus a `Retry-After` header) so the UI can show a countdown.
   Our own per-IP / per-user limit answers `429 {"error":"rate_limited","scope":"app",...}`.
 * **Purge cadence**: `vercel.json` runs the purge hourly. **Vercel's Hobby plan only allows daily cron jobs**, so change
-  the schedule to once a day there (expired rows are never served either way; roughly 2% of writes also purge).
+  the schedule to once a day there (expired rows are never served either way, and every cache write also deletes expired rows).
 * **Client IP** for the limiter comes from `x-vercel-forwarded-for` / `x-forwarded-for` / `x-real-ip` and only valid IPs
   are accepted. That is trustworthy behind Vercel; if you self-host, put a proxy in front that overwrites these headers.
 * **Local gotcha (Windows / some ISPs)**: if requests to `i.discogs.com` time out (`UND_ERR_CONNECT_TIMEOUT`) while
@@ -135,6 +138,12 @@ npm run test:e2e    # Playwright: app shell smoke tests + the Discogs flow again
 3. Import the repo into Vercel; set the variables above for Production (and Preview if wanted).
 4. Set `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` to the production origin and add the Google redirect URI.
 5. Verify a sending domain in Resend and set `EMAIL_FROM` and `RESEND_API_KEY`.
+6. Set `NEXT_PUBLIC_CONTACT_EMAIL` (and optionally `_TELEGRAM`), then set `APP_CONTACT=https://<domain>/en/contact`.
+7. Google Cloud console > Google Auth Platform > Branding: use the same address as **User support email** (it must be an
+   address on your Google account or a Google Group you manage; if your project address is neither, create a Group with that
+   address) and as a **Developer contact information** email. App home page: `https://<domain>`. Privacy policy link:
+   `https://<domain>/en/privacy` once that page exists (not needed while the app is in Testing mode, required to publish).
+   Authorised domain: the production domain.
 
 ## Credits and licences
 

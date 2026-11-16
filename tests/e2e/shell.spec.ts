@@ -49,4 +49,37 @@ test.describe("app shell", () => {
     expect(overflow).toBe(0);
     await expect(page.getByRole("link", { name: "Data provided by Discogs" })).toHaveAttribute("href", /discogs\.com/);
   });
+
+  test("footer carries the Terms-prescribed notice verbatim, and the attribution link passes ranking credit", async ({ page }) => {
+    await page.goto("/uk"); // a non-English page: the notice must still be the prescribed English sentence
+    const notice =
+      "This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.";
+    await expect(page.locator("footer").getByText(notice, { exact: true })).toBeVisible();
+    const link = page.getByRole("link", { name: "Data provided by Discogs." });
+    await expect(link).toHaveAttribute("href", /^https:\/\/www\.discogs\.com/);
+    expect(await link.getAttribute("rel")).not.toMatch(/nofollow|sponsored|ugc/);
+  });
+
+  for (const [locale, title, footerLink] of [
+    ["en", "Contact", "Contact"],
+    ["uk", "Контакти", "Контакти"],
+    ["nb", "Kontakt", "Kontakt"],
+  ] as const) {
+    test(`contact page (${locale}) is public, linked from the footer, translated and shows the configured email`, async ({ page }) => {
+      await page.goto(`/${locale}`);
+      await page.locator("footer").getByRole("link", { name: footerLink, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/${locale}/contact$`));
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+      // E2E server sets NEXT_PUBLIC_CONTACT_EMAIL / _TELEGRAM to fake values (see playwright.config.ts).
+      await expect(page.getByRole("link", { name: "contact@example.test" })).toHaveAttribute("href", "mailto:contact@example.test");
+      const telegram = page.getByRole("link", { name: "@example_contact" });
+      await expect(telegram).toHaveAttribute("href", "https://t.me/example_contact");
+      await expect(telegram).toHaveAttribute("rel", /noopener/);
+      // the prescribed Discogs notice is on this page too, in English
+      await expect(page.getByText("is not affiliated with, sponsored or endorsed by Discogs.", { exact: false }).first()).toBeVisible();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow).toBe(0);
+    });
+  }
 });

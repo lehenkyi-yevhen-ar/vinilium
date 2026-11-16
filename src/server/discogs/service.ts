@@ -7,7 +7,7 @@ import {
   searchParamsFor,
 } from "@/lib/discogs/normalize";
 import type { DiscogsResult, ReleaseDetail, SearchMode, SearchPage, VersionsPage } from "@/lib/discogs/types";
-import { cacheKey, getCached, purgeExpired, putCached, shouldPurgeOpportunistically } from "./cache";
+import { cacheKey, getCached, purgeExpiredCache, putCached } from "./cache";
 import { discogsGet, type ClientDeps, type RequestOutcome } from "./client";
 import { apiBase, cacheTtlSeconds, MAX_SEARCH_PAGES, MAX_VERSION_PAGES, PAGE_SIZE } from "./config";
 import { imageMapper } from "./image";
@@ -37,7 +37,7 @@ async function cached<T>(
   if (data === null) return { ok: false, error: "upstream" }; // 200 but not the shape we expect
 
   const { fetchedAt } = await putCached(deps.db, key, data, cacheTtlSeconds(), now);
-  if (shouldPurgeOpportunistically()) void purgeExpired(deps.db, now).catch(() => {});
+  await purgeExpiredCache(deps.db, now).catch(() => {}); // never keep expired Content around; a purge failure must not fail the request
   return { ok: true, data, cached: false, fetchedAt: fetchedAt.toISOString() };
 }
 

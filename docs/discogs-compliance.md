@@ -1,58 +1,79 @@
 # Discogs API Terms of Use: compliance tracker
 
-**Verification status: NOT VERIFIED against the official text.** The official page
-(<https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use>) returned HTTP 403 to automated
-fetches and archived copies were blocked. Everything below comes from search excerpts and from public GitHub issues
-of other apps that quote or paraphrase the Terms. Treat each row as a claim to check, not as a rule.
-Once the full text is pasted, this file is rewritten with verbatim clauses and each row is marked verified.
+**Source: the full text of the Terms, pasted by the project owner on 2026-11-16** ("Last Updated: May 27th, 2025"; the
+support article is dated July 23, 2025). Every rule below is therefore **verified from source text** unless a row says
+otherwise. Short quotes are verbatim. This is an engineering reading of the Terms, not legal advice.
 
-| # | Rule (as reported) | Source quality | Affects us how | What we do now |
+What the pasted text does **not** contain, and what is therefore still unverified: the documents it refers to
+(*API Specifications*, *Database Guidelines* section 13 on images, *Application Name and Description Policy*, the Help
+Center), and anything Discogs changes later ("We may at any time revise the TOU", with notice "via account email or
+otherwise": keep the Discogs account email monitored and re-read the Terms periodically).
+
+Status legend: **Done** = implemented and tested. **Done, residual risk** = implemented, a gap is described.
+**UI obligation** = cannot be met until the screens exist (milestone 3+). **Owner** = a decision or action for the owner.
+
+## Rules and where the code meets them
+
+| # | Rule (verbatim) | Section | Status | How we meet it |
 | --- | --- | --- | --- | --- |
-| 1 | Show **"Data provided by Discogs"** as a link to the matching discogs.com page, **directly next to** Discogs data (per data block, not only a footer). | Quoted in one third-party issue (asuteau/sillon #43); not verified. | Every search result list, release card, list view. | `DiscogsAttribution` component exists (footer now); it must be rendered next to every Discogs data block from milestone 3. Link target is passed per block. The phrase is kept in English in all locales until the exact wording is confirmed. |
-| 2 | A **non-affiliation** notice ("not affiliated with, sponsored or endorsed by Discogs"). | Proposed wording in third-party issues, marked "to confirm". | Footer / about. | Footer notice present in all 3 languages. |
-| 3 | Content must not be shown if **more than 6 hours** older than on discogs.com. | Paraphrase of an archived copy, reported by two issues. | Cache TTL for API data AND images. | **Built (M2):** one constant `DISCOGS_CACHE_TTL_SECONDS` (default 21600 s) drives cache rows (`discogs_cache.expires_at`) and the image proxy's `Cache-Control`. Expired rows are never served and are purged. Whether 6 h is right, and whether it also governs images, waits for the text. |
-| 4 | Do not **store content longer than needed**. | Paraphrase, same sources. | Whether `releases` / `cover_path` may exist. | **Built (M2):** no `releases` table, no `cover_path`, nothing written to disk. Images are streamed through the proxy and never stored by us. See `docs/data-model.md`. |
-| 5 | Two data classes: **CC0 data** and **Restricted Data** (marketplace data: pricing, sales history, inventory, and release images posted with offers). Restricted Data may not be transferred to third parties or used commercially. | Search excerpt of the official page (partial). | We must not request or show marketplace/price data; image handling needs care. | **Built (M2):** only `/database/search`, `/masters/{id}/versions`, `/releases/{id}` are called. Normalisation is a field WHITELIST (`src/lib/discogs/normalize.ts`), so price/marketplace fields (`lowest_price`, `num_for_sale`, `price`, `blocked_from_sale`, `estimated_weight`, community stats) never reach the cache or the UI; unit tests and the e2e flow assert this. |
-| 6 | **Commercial use** is allowed generally but can be barred at Discogs' discretion; using the API to drive traffic to **other non-Discogs sites** is reported as prohibited commercial use. | Search excerpt + one issue quoting. | No ads, paid plans, affiliate or "buy elsewhere" links (you confirmed none in v1). | None planned. |
-| 7 | Descriptive **User-Agent** on every request; authenticated rate limit is 60 requests/minute per token (shared by all our users). Image requests require authentication and are rate limited. | Discogs developer docs (public). | Throttling, queue, image proxy. | **Built (M2):** Postgres token bucket shared by all instances; limit read from `X-Discogs-Ratelimit*` headers (not hard-coded); 429 -> backoff + jitter, then a `throttled` state with `retryAfter`; descriptive `User-Agent`; image proxy with exact host allow-list. |
-| 8 | A user's **collection** data is Restricted user data. | One issue's interpretation. | Not applicable: our lists live in our database and are the user's own entries, not Discogs collection data. | Re-check wording once the full text is available. |
+| 1 | Display *"This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. ‘Discogs’ is a trademark of Zink Media, LLC."* "prominently on Your application and any other public-facing use". | Discogs Intellectual Property | **Done** (fixed 2026-11-16: the earlier text was a paraphrase and did not match) | Footer on every page and on the Contact page, verbatim and in English in all three languages (`footer.discogsNotice`, `lang="en"`). Unit test compares the string; e2e checks it on `/uk`. |
+| 2 | *"Data provided by Discogs."* "directly next to any data You use from the Discogs API", with "a hyperlink to the discogs.com page that includes the data", not using "any mechanism that prevents passing along search engine ranking credit ... such as 'nofollow'". | Discogs Intellectual Property | **Done** (component) / **UI obligation** (placement) | `DiscogsAttribution` renders the phrase with its period; `rel="noopener noreferrer"` only (no nofollow/sponsored/ugc; e2e asserts it). Every result carries `discogsUrl` for its own page. **Every block of Discogs data in the UI must render the component next to it** (checklist below). |
+| 3 | "You may not display in any format or to any audience the Content if it is more than six (6) hours older than the information on Our online properties". | API Use and Restrictions | **Done, residual risk** | Default TTL 21 600 s (6 h) and a hard cap (`MAX_CONTENT_AGE_SECONDS`): the env var cannot raise it. The image proxy's `Cache-Control` uses the same TTL. API responses carry `fetchedAt`. Residual: data served at the very end of its TTL and then left on screen is older than 6 h. See "Owner decisions" (a lower TTL gives a margin). |
+| 4 | "You may not cache or store the Content longer than is necessary to provide a service to Your application’s users." | API Use and Restrictions | **Done, residual risk** | Only a TTL cache (`discogs_cache`); expired rows are deleted on **every cache write** and by an hourly cron backstop (`/api/cron/purge`); no `releases` table; images are streamed, never stored; our lists hold Discogs **IDs** plus the user's own data. Residual: on a quiet site expired rows wait for the cron (hourly; daily on Vercel Hobby). They are never served. |
+| 5 | Restricted Data = "Discogs User Data" (username, user images, collection, wantlist, ...), "Marketplace Data" ("pricing, release images posted in connection with offers for sale, and sales history") and "Images" (release, artist, label and user images). Licence: "limited, personal, non-sublicensable, non-transferable, non-exclusive, revocable ... to create and run websites and applications". Not allowed: "Transfer Restricted Data to any third party", "Use Restricted Data for any commercial purposes". | API Use and Restrictions | **Done** (conditional) | We call only `/database/search`, `/masters/{id}/versions`, `/releases/{id}` and never read user, collection, wantlist or marketplace data. The normaliser is a field **whitelist**, so price/marketplace fields never reach cache or UI (unit + e2e assert it). **Images are Restricted Data**: showing them inside our own free, non-commercial app falls under the licence as we read it; we proxy and never store them, and the proxy refuses browser requests that come from other sites (no hotlinking). **Condition: the app must stay non-commercial.** The licence is revocable. |
+| 6 | CC0 Data: "Release titles, notes, dates, format, track listings, barcodes and other identifiers, credits, versions, URL links ...", artist names, label names. | Description of Content | **Done** | We show titles, artists, labels, formats, track listings, barcodes/matrix identifiers, dates and versions. Country, genres and styles are not in the CC0 list but are not in a Restricted category either. The 6-hour and no-storage rules are written about "the Content" generally, so we apply them to CC0 data too (the conservative reading). |
+| 7 | Prohibited commercial uses include: "Selling or giving to any third party Our API, the Content, or access to Our API or the Content"; "Charging a fee to use or access any part of Your application that integrates with Our API or the Content if we provide that access to users free of charge"; "Using Our API or the Content with the intent to drive traffic to other non-Discogs websites or services". Also: no Restricted Data "with a third-party advertising or marketing platform". | API Use and Restrictions | **Done by design** / **Owner** | The app is free with no ads, paid plans, donations or affiliate links (owner decision, now also a hard requirement because images are Restricted Data). Never add "buy elsewhere", streaming or marketplace links derived from Discogs data. The Contact page links only to our own email/Telegram (not Content). Residual on "giving ... access": our `/api/discogs/*` endpoints are public. See Owner decisions. |
+| 8 | "You will not ... Attempt to or actually circumvent Our rate limits, such as by creating additional API keys to overcome these limits." Discogs "may apply rate limits". | API Use and Restrictions | **Done** | One credential set is used at a time (key + secret preferred over token); the shared token bucket follows the limit Discogs reports (60/min observed). Never create extra keys or rotate between them to gain throughput. |
+| 9 | No "automated systems designed to access, analyze, or scrape" outside the Terms; no replicating or duplicating Content. | API Use and Restrictions | **Done** | Requests happen only on user demand; page sizes and page counts are capped (search 5 pages, versions 10 pages of 50); results are cached only for the TTL; there is no crawler, bulk export or background sync. |
+| 10 | Access can be revoked, charged for or discontinued "at any time and for any reason ... without prior notice"; the API and Content may be modified or discontinued. | API Access and Termination; Modifications | **Owner** (risk) | The app degrades with explicit states (`throttled`, `upstream`, `unconfigured`) instead of failing. Lists store IDs only, so nothing of ours is lost if access ends. Keep the Discogs account email monitored. |
+| 11 | "You must be at least 18 years of age" in the United States to access the API and Content; the developer must "provide accurate identification data". | Preamble; User Account | **Owner** | Applies to the person who owns the Discogs developer account and keys. |
+| 12 | "Combine Your application or website code with Our API in a way (such as using a software license) that is incompatible with the TOU". | API Use and Restrictions | **Owner** | No conflict today. Re-check when a licence for our code is chosen (the design system's own code licence is also still undecided). |
+| 13 | Application name and description must follow Discogs' "Application Name and Description Policy". | Discogs Intellectual Property | **Not verified** | The policy was not provided. "Vinilium" does not contain the Discogs mark; confirm against the policy before launch. |
 
-## Questions the full text must answer
+Not in the Terms (earlier assumptions, now known to come from elsewhere or to be unverified): the 60 requests/min figure and
+the requirement to authenticate image requests (the Terms only say Discogs "may apply rate limits"; see "Observed
+behaviour" for what the real API did) and the descriptive `User-Agent` (kept as good practice).
 
-1. Exact attribution wording and whether the link must go to the specific release/master/artist page.
-2. Is 6 hours a cap on **storing** content, on **displaying** it, or both? Does it apply to images and to IDs?
-3. May we keep the normalised release metadata of items a user has explicitly added to their own list?
-4. Are release images "Restricted Data", and may our proxy cache them (CDN `Cache-Control`) for up to the TTL?
-5. Is a public, free, ad-free service in scope without special permission?
+## Answers to the open questions
 
+1. **Attribution wording and link.** Exact wording above. The link goes to "the discogs.com page that includes the data",
+   so each item links to its own release/master page, not the homepage.
+2. **Is 6 h a cap on storing or displaying?** Displaying is explicit (6 h). Storing is limited to "longer than is
+   necessary to provide a service" (no number). It reads as covering "the Content" in general, including images. It says
+   nothing about IDs; we keep only IDs, because a list cannot work without them.
+3. **May we keep normalised metadata of listed items?** **No, not as a long-term copy.** What we show must be at most 6 h old and
+   stored no longer than necessary, so a `releases` table would have to be refreshed before display, which is just the TTL
+   cache. **Outcome B in `data-model.md` applies**; Outcome A is ruled out.
+4. **Are images Restricted Data, may the proxy cache them?** Yes, "Images" are Restricted Data. Short `Cache-Control` up to the
+   TTL is consistent with "no longer than necessary" and the 6 h rule; we store nothing. The Terms say nothing about
+   authenticating image requests.
+5. **Is a free, ad-free public service in scope?** Yes: "Commercial use ... is generally permitted", and a free non-commercial
+   app is the clearest case. No special permission is mentioned; Discogs keeps "sole discretion" and may revoke.
 
-## Implementation status (end of milestone 2)
+## Per-block attribution checklist (UI obligation for milestone 3+)
 
-| Area | State |
-| --- | --- |
-| API client, throttling, retry/backoff, cache + TTL, purge | Built and tested (unit, mocked e2e, one real smoke test). |
-| Search / versions / release endpoints, marketplace-field stripping | Built and tested. |
-| Own rate limits (per IP and per user) | Built; per-user path unit-tested only (no signed-in e2e yet). |
-| **Image proxy** | Built (allow-list, streaming, TTL-bound `Cache-Control`, no storage) but **NOT final**: see below. |
-| Attribution next to every data block, non-affiliation notice | Component + footer notice exist; per-block placement happens when the UI is built (M3+). |
+Render `<DiscogsAttribution href={discogsUrl} />` directly next to: each search result group or card, each master/version
+list, each release page, each list row that shows Discogs data. The footer link alone does not satisfy rule 2.
+Never put `nofollow`, `sponsored` or `ugc` on it. Do not show a block whose `fetchedAt` is more than 6 h old (re-fetch).
 
-## Choices that still depend on the Terms text
+## Changes made after reading the Terms (2026-11-16)
 
-Nothing below is finalised. Each is isolated behind one constant or one function so the answer is a small change.
+* Footer notice replaced by the prescribed sentence (verbatim, English, all locales); also shown on the Contact page.
+* Attribution text now ends with the period given in the Terms.
+* `DISCOGS_CACHE_TTL_SECONDS` is capped at 21 600 in code; it can no longer be set above 6 h.
+* Expired cache rows are deleted on every cache write (was: about 2% of writes).
+* Browser requests marked `Sec-Fetch-Site: cross-site` are refused (403) by all `/api/discogs/*` endpoints, so other sites cannot
+  embed our proxy or call it from their pages.
 
-1. **TTL value and scope.** `DISCOGS_CACHE_TTL_SECONDS` (default 6 h, no hard cap in code). If the Terms say 6 h is a cap on *displaying*, on *storing*, or both, and whether it covers IDs, images and our own derived grouping, this value (and possibly the purge cadence) changes.
-2. **Images.** (a) May we proxy-cache them at all, and for how long (`Cache-Control` currently = the TTL, `public`)? (b) Are release images "Restricted Data"? (c) Must we authenticate image requests? (d) Do image requests count toward the 60/min limit? Today thumbnails draw from the same bucket as API calls but may only use 75% of it (`IMAGE_RESERVE_FRACTION`). See `src/server/discogs/image.ts`.
-3. **The `releases` table / any retention beyond the TTL.** Not built, by instruction. `docs/data-model.md` shows both outcomes.
-4. **Normalised metadata kept for items on a user's list.** Depends on question 3 of the list above.
-5. **Which fields we show.** Tracklist, identifiers (barcode / matrix) and the `released` date are kept; if any is Restricted or not covered by the licence, it is dropped in `normalizeRelease`.
-6. **Attribution wording and link target** (`DiscogsAttribution`, per data block).
-7. **Anonymous access.** Search and images are public (rate limited by IP). If the Terms or the shared 60/min budget argue for sign-in only, that is a one-line change in `guard()`.
+## Owner decisions that remain
 
-## Observed behaviour (from running against the real API, NOT from the Terms)
-
-Recorded on 2026-11-16 with an app key + secret (`Authorization: Discogs key=..., secret=...`):
-
-* Search, release fetch and image fetch all worked with key + secret authentication.
-* `X-Discogs-Ratelimit: 60`, with `X-Discogs-Ratelimit-Remaining` counting down (59, 58, ...). The client adopts the reported limit; nothing is hard-coded.
-* Responses from the image host `i.discogs.com` carry **no** `X-Discogs-Ratelimit*` headers, and a test request **without** credentials was also served (HTTP 200). This does not prove images are exempt from limits or free of an authentication requirement, only what one request showed; the Terms decide.
-* The image host answered with `Cache-Control: public, max-age=31536000` (one year). Our proxy deliberately replaces it with the TTL.
+a. **Lists under Outcome B.** Because stored metadata is ruled out, list views fetch (and cache for the TTL) each item from
+   Discogs, and list search/sort by artist or title only covers items currently cached. Please confirm you accept the limits
+   in `docs/data-model.md` ("Outcome B") before milestone 4.
+b. **TTL margin.** With a 6 h TTL, a page can show data older than 6 h (see rule 3). Setting `DISCOGS_CACHE_TTL_SECONDS=14400`
+   (4 h) gives a 2 h margin at the cost of more Discogs calls. Not changed, because you chose 6 h.
+c. **Public vs signed-in access.** Search and images are anonymous (limited by IP). Given the rule on "giving ... access to the
+   Content" to third parties, requiring sign-in for `/api/discogs/*` would be safer, at the cost of an anonymous search
+   experience. One line in `guard()`. Server-side scripts can still call the public endpoints today (the cross-site check
+   only stops browsers).
+d. **Application name policy** (rule 13) and **account email monitoring** (rule 10).
