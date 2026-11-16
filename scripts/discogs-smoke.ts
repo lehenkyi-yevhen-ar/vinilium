@@ -14,6 +14,9 @@ config({ path: ".env.local", quiet: true });
 dns.setDefaultResultOrder("ipv4first");
 
 async function main() {
+  // It deletes the cache rows it creates, so it must never run against production (no flag overrides this).
+  const { guardDatabase } = await import("./lib/db-guard");
+  await guardDatabase({ purpose: "Real-API smoke test", allowProduction: false });
   const { getDb } = await import("../src/server/db");
   const { searchDiscogs, getRelease } = await import("../src/server/discogs/service");
   const { proxyImage } = await import("../src/server/discogs/image");

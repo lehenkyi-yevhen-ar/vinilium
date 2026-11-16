@@ -1,5 +1,5 @@
 import { expect, test as setup } from "@playwright/test";
-import { config as loadEnv } from "dotenv";
+import { e2eDatabaseUrl } from "../helpers/e2e-db";
 
 export const STORAGE_STATE = "tests/.auth/user.json";
 const PASSWORD = "E2e-Password-123";
@@ -10,8 +10,7 @@ const PASSWORD = "E2e-Password-123";
  * in through the real endpoint and saves the session cookie. The teardown deletes the user (their rows cascade).
  */
 setup("create a verified e2e user and sign in", async ({ request, baseURL }) => {
-  setup.skip(!process.env.E2E_HAS_DB, "Needs DATABASE_URL: the e2e user and the session live in Postgres.");
-  loadEnv({ path: ".env.local", quiet: true });
+  setup.skip(!process.env.E2E_HAS_DB, "Needs DEV_DATABASE_URL (the dev branch): the e2e user and the session live in Postgres.");
 
   const origin = baseURL!;
   const email = `e2e-${Date.now().toString(36)}@example.test`;
@@ -20,7 +19,7 @@ setup("create a verified e2e user and sign in", async ({ request, baseURL }) => 
   expect(up.ok(), "sign-up").toBe(true);
 
   const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: e2eDatabaseUrl()! });
   try {
     await pool.query('update "user" set email_verified = true where email = $1', [email]);
   } finally {

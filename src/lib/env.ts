@@ -4,7 +4,13 @@ const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v);
 const optional = <T extends z.ZodType>(schema: T) => z.preprocess(emptyToUndefined, schema.optional());
 
 const serverSchema = z.object({
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  // The PRODUCTION database. Development and tests use DEV_DATABASE_URL when it is set (see src/lib/database-target.ts), so a
+  // local .env.local may contain only the dev one. At least one must be present; the app says which is missing.
+  DATABASE_URL: optional(z.string()),
+  DEV_DATABASE_URL: optional(z.string()),
+  /** Optional human labels printed by the safety guard, e.g. "dev" / "production". Not secret. */
+  DEV_DATABASE_BRANCH: optional(z.string()),
+  DATABASE_BRANCH: optional(z.string()),
   BETTER_AUTH_SECRET: z.string().min(16, "BETTER_AUTH_SECRET must be at least 16 characters"),
   BETTER_AUTH_URL: z.url(),
   GOOGLE_CLIENT_ID: optional(z.string()),

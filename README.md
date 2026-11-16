@@ -30,7 +30,7 @@ Node.js 22+ (developed on 24) and npm.
 ```bash
 npm install
 cp .env.example .env.local      # then fill in the values (see below)
-npm run db:migrate              # applies drizzle/*.sql to DATABASE_URL
+npm run db:migrate              # applies drizzle/*.sql to the DEV database (DEV_DATABASE_URL)
 npm run dev                     # http://localhost:3000
 ```
 
@@ -38,7 +38,9 @@ npm run dev                     # http://localhost:3000
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Neon **pooled** connection string (`...-pooler...`, `sslmode=require`). |
+| `DEV_DATABASE_URL` | local | Neon **pooled** connection string of the **dev branch**. Used by `npm run dev`, the e2e tests and all `db:*` scripts whenever it is set. See "Two databases" below. |
+| `DATABASE_URL` | production | Neon **pooled** connection string of the **production branch** (`...-pooler...`, `sslmode=require`). Used when `NODE_ENV=production`. |
+| `DEV_DATABASE_BRANCH`, `DATABASE_BRANCH` | no | Names (not secret) the safety guard prints next to the host, e.g. `dev` / `production`. |
 | `BETTER_AUTH_SECRET` | yes | 32+ random chars: `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL` | yes | Public origin, no trailing slash. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | When both are set, the Google button appears. Redirect URI: `{BETTER_AUTH_URL}/api/auth/callback/google`. |
@@ -57,14 +59,39 @@ npm run dev                     # http://localhost:3000
 Only `NEXT_PUBLIC_*` variables reach the browser, and none of them is a secret. `.env*` is git-ignored except
 `.env.example`.
 
+### Two databases: dev and production
+
+| Variable | Branch | Used by |
+| --- | --- | --- |
+| `DEV_DATABASE_URL` | **dev** | `npm run dev`, `npm test`'s helpers, **all e2e runs**, `db:migrate`, `db:studio`, the real-API smoke test |
+| `DATABASE_URL` | **production** | only when `NODE_ENV=production`: a deployed server, or a local `npm run build && npm start` |
+
+The rule lives in `src/lib/database-target.ts`: in development and test the app uses `DEV_DATABASE_URL` if it is set, otherwise
+it falls back to `DATABASE_URL` (production) and **warns loudly**. Put only `DEV_DATABASE_URL` in your local `.env.local` if you
+can: then production is unreachable from your machine.
+
+**Safety guard.** Every script that touches a database prints its target first (variable, host, database, branch; **never the
+user or password**) and then applies this rule:
+
+| Command | Dev database | Production |
+| --- | --- | --- |
+| `db:migrate`, `db:studio` | runs | refuses unless you pass `--production` (`npm run db:migrate -- --production`) |
+| e2e tests, `discogs:smoke` (create or delete test data) | runs | **refuses, always**; there is no flag. e2e uses `DEV_DATABASE_URL` only and skips if it is unset. |
+| `db:status` | reads | reads (read-only) |
+
+A bare `npx drizzle-kit migrate` cannot reach production either: `drizzle.config.ts` gives it an unreachable address unless a
+guarded script has confirmed the target. If `DEV_DATABASE_URL` points at the same server as `DATABASE_URL`, everything refuses.
+CI: set `DEV_DATABASE_URL` to a throwaway Neon branch; never give CI the production string.
+
 ### Database and migrations
 
 Schema lives in `src/server/db/schema.ts`; migrations are committed in `drizzle/`.
 
 ```bash
 npm run db:generate   # after changing the schema: writes a new SQL migration
-npm run db:migrate    # applies pending migrations to DATABASE_URL
-npm run db:studio     # optional: browse data
+npm run db:migrate    # applies pending migrations to the DEV database; add -- --production for production
+npm run db:status     # READ-ONLY report on both databases: migrations applied, row counts (no hosts, no e-mails)
+npm run db:studio     # optional: browse data (guarded like db:migrate)
 ```
 
 The auth tables mirror what the Better Auth CLI generates for this configuration (checked by generating a
@@ -145,14 +172,14 @@ npm test            # unit tests (Vitest): messages, auth links, Discogs normali
                     # Postgres running the real migrations): no database or secrets needed.
 npm run test:e2e    # Playwright: shell smoke tests, the Discogs + lists APIs, and the finder UI (desktop and phone
                     # viewport) against a MOCKED Discogs server; a verified e2e user is created and deleted automatically
-                    # (FAKE credentials, no real token). The Discogs flow needs a real Postgres: it uses DATABASE_URL
+                    # (FAKE credentials, no real token). The Discogs flow needs a real Postgres: it uses DEV_DATABASE_URL ONLY
                     # (from .env.local, or a throwaway Neon branch in CI) and SKIPS when none is set. It removes its rows afterwards.
 ```
 
 ## Deploying to Vercel + Neon (summary; full walkthrough in milestone 5)
 
-1. Create a Neon project; copy the **pooled** connection string into `DATABASE_URL`.
-2. Run `npm run db:migrate` once against it.
+1. In Neon, use your **production branch**: copy its **pooled** connection string into `DATABASE_URL` (Vercel, Production).
+2. Run `npm run db:migrate -- --production` once against it (it prints the target and needs the flag).
 3. Import the repo into Vercel; set the variables above for Production (and Preview if wanted).
 4. Set `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` to the production origin and add the Google redirect URI.
 5. Verify a sending domain in Resend and set `EMAIL_FROM` and `RESEND_API_KEY`.

@@ -1,7 +1,7 @@
 import "server-only";
 import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { serverEnv } from "@/lib/env";
+import { databaseTarget } from "./target";
 import * as schema from "./schema";
 
 /**
@@ -14,7 +14,7 @@ import * as schema from "./schema";
 const g = globalThis as unknown as { __vinilium_db?: ReturnType<typeof create> };
 
 function create() {
-  const pool = new Pool({ connectionString: serverEnv().DATABASE_URL });
+  const pool = new Pool({ connectionString: databaseTarget().url });
   return drizzle(pool, { schema });
 }
 

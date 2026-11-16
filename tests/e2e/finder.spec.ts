@@ -6,7 +6,7 @@ import type { ArtistGroup } from "../../src/lib/discogs/types";
  * track -> artist -> album -> pressing (with filters) -> release card -> Wishlist / Collection.
  * Runs on a desktop and on a phone-sized viewport (mobile-first), one after the other.
  */
-test.skip(!process.env.E2E_HAS_DB, "Needs DATABASE_URL: sign-in, the Discogs cache and the lists live in Postgres.");
+test.skip(!process.env.E2E_HAS_DB, "Needs DEV_DATABASE_URL (the dev branch): sign-in, the Discogs cache and the lists live in Postgres.");
 test.describe.configure({ mode: "serial" });
 // Every step is a real round trip through the app to a remote Postgres, so a full walk takes a while.
 test.setTimeout(120_000);

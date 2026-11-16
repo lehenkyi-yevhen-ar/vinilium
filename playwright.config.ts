@@ -1,14 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
 import { config as loadEnv } from "dotenv";
+import { e2eDatabaseUrl } from "./tests/helpers/e2e-db";
 
-// Local runs pick the database up from .env.local; CI passes DATABASE_URL (a throwaway Neon branch).
+// Local runs pick DEV_DATABASE_URL up from .env.local; CI passes it too (a throwaway Neon branch). e2e NEVER uses DATABASE_URL
+// (production): it creates and deletes users and cache rows. See tests/helpers/e2e-db.ts.
 loadEnv({ path: ".env.local", quiet: true });
+const e2eDbUrl = e2eDatabaseUrl();
 
 const STORAGE_STATE = "tests/.auth/user.json";
 const PORT = 3200;
 const MOCK_PORT = 3201;
 const FAKE_DB = "postgresql://user:pass@127.0.0.1:1/none";
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = e2eDbUrl !== null;
 // The Discogs flow needs a real Postgres (cache, token bucket, limiter). Without one its tests skip, loudly.
 process.env.E2E_HAS_DB = hasDb ? "1" : "";
 
@@ -64,7 +67,10 @@ export default defineConfig({
       timeout: 300_000,
       reuseExistingServer: !process.env.CI,
       env: {
-        DATABASE_URL: hasDb ? process.env.DATABASE_URL! : FAKE_DB,
+        // The server runs in production mode, so it reads DATABASE_URL: hand it the DEV database under that name, and blank the
+        // real variables so nothing in .env.local can leak through.
+        DATABASE_URL: e2eDbUrl ?? FAKE_DB,
+        DEV_DATABASE_URL: "",
         BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
         BETTER_AUTH_URL: `http://localhost:${PORT}`,
         NEXT_PUBLIC_APP_URL: `http://localhost:${PORT}`,

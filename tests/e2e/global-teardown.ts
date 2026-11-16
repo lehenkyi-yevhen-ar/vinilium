@@ -1,11 +1,11 @@
-import { config as loadEnv } from "dotenv";
+import { e2eDatabaseUrl } from "../helpers/e2e-db";
 
 /** Removes the rows the Discogs e2e tests created (they live under the mock's origin), so the database stays clean. */
 export default async function globalTeardown() {
-  loadEnv({ path: ".env.local", quiet: true });
-  if (!process.env.DATABASE_URL) return;
+  const url = e2eDatabaseUrl();
+  if (!url) return;
   const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: url });
   try {
     // e2e users (their sessions, accounts and list items cascade)
     await pool.query("delete from \"user\" where email like 'e2e-%@example.test'");

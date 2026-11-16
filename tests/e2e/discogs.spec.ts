@@ -7,7 +7,7 @@ import type { ArtistGroup } from "../../src/lib/discogs/types";
  * search -> versions -> release -> image proxy, plus cache, throttling and our own limits.
  * Needs a real Postgres (cache, token bucket and limiter live there): see playwright.config.ts.
  */
-test.skip(!process.env.E2E_HAS_DB, "Needs DATABASE_URL (e.g. a throwaway Neon branch); the Discogs flow stores its cache and limits in Postgres.");
+test.skip(!process.env.E2E_HAS_DB, "Needs DEV_DATABASE_URL (the dev branch, or a throwaway one in CI); the Discogs flow stores its cache and limits in Postgres.");
 test.describe.configure({ mode: "serial" });
 
 const MOCK = "http://localhost:3201";

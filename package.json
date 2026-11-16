@@ -12,9 +12,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
-    "discogs:smoke": "tsx --conditions=react-server scripts/discogs-smoke.ts"
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:studio": "tsx scripts/db-studio.ts",
+    "discogs:smoke": "tsx --conditions=react-server scripts/discogs-smoke.ts",
+    "db:status": "tsx scripts/db-status.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
