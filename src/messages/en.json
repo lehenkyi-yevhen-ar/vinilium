@@ -216,8 +216,8 @@
       "artist": "an artist",
       "album": "an album"
     },
-    "emptyTitle": "No matches",
-    "emptyText": "Check the spelling, or search another way.",
+    "emptyTitle": "No vinyl matches",
+    "emptyText": "Only vinyl pressings are searched. It may exist only on CD or as a download, or the spelling may differ.",
     "artistsTitle": "Pick the artist",
     "artistsLead": "Matches are grouped by artist.",
     "albumsTitle": "Pick the album",
@@ -234,7 +234,13 @@
     "resultsFor": "Results for “{q}”",
     "filterArtists": "Filter these artists",
     "filterPlaceholder": "Type part of a name",
-    "noArtistMatch": "No artist in these results matches. Load more results, or search by artist name."
+    "noArtistMatch": "No artist in these results matches. Load more results, or search by artist name.",
+    "vinylOnly": "Vinyl pressings only.",
+    "byLabel": "Artist (optional)",
+    "byPlaceholder": "e.g. Lana Del Rey",
+    "byHelp": "Narrows the search to one artist.",
+    "withoutArtist": "search without the artist",
+    "showMoreAlbums": "Show more albums"
   },
   "pressings": {
     "title": "Pick the pressing",
@@ -248,7 +254,7 @@
     "label": "Label",
     "all": "All",
     "clear": "Clear filters",
-    "count": "{count, plural, one {# pressing} other {# pressings}}",
+    "count": "{count, plural, one {# vinyl pressing} other {# vinyl pressings}}",
     "emptyTitle": "No pressing matches these filters",
     "emptyText": "Try removing a filter.",
     "catno": "Cat. no. {catno}",

@@ -42,7 +42,8 @@ test("search groups by artist, dedupes, treats master_id 0 as standalone, and st
   expect(groups.map((g) => g.artist)).toEqual(["Cobalt Parade", "Some Band", null]);
 
   const discovery = groups[0].entries[0];
-  expect(discovery).toMatchObject({ key: "m:500", kind: "master", id: 500, mergedHits: 3 }); // 2 releases + the master -> ONE entry
+  expect(discovery).toMatchObject({ key: "m:500", kind: "master", id: 500, mergedHits: 2 }); // 2 VINYL releases -> ONE entry; the CD of that master never arrives
+  expect(JSON.stringify(groups)).not.toMatch(/"CD"/); // vinyl only
   expect(groups[1].entries[0]).toMatchObject({ key: "r:2001", kind: "release", mergedHits: 2 }); // master_id 0 = standalone, deduped by id
 
   expect(body.data).toMatchObject({ page: 1, pages: 3, hasMore: true, incomplete: true }); // honest "may be incomplete"
@@ -53,7 +54,7 @@ test("search groups by artist, dedupes, treats master_id 0 as standalone, and st
 
   thumb = discovery.thumb!;
   expect(thumb).toMatch(/^\/api\/discogs\/image\?u=/);
-  expect(new URL(thumb, "http://x").searchParams.get("u")).toBe(`${MOCK}/images/aaa/master500.jpg`);
+  expect(new URL(thumb, "http://x").searchParams.get("u")).toBe(`${MOCK}/images/aaa/thumb1.jpg`);
   expect(raw).not.toContain("i.discogs.com"); // the browser never sees an upstream image URL
 });
 
@@ -69,7 +70,8 @@ test("calls Discogs with the app's credentials and a descriptive User-Agent", as
   const entry = (await mockLog(request)).find((e) => e.path === "/database/search" && e.query.artist === Q1)!;
   expect(entry.authorization).toBe("Discogs key=test-key, secret=test-secret");
   expect(entry.userAgent).toMatch(/^Vinilium\/0\.1 \(/);
-  expect(entry.query).toMatchObject({ type: "master", per_page: "50", page: "1" });
+  // ALWAYS vinyl releases (a master search cannot be filtered by medium: see the regression tests)
+  expect(entry.query).toMatchObject({ type: "release", format: "Vinyl", per_page: "50", page: "1" });
 });
 
 test("'load more' fetches page 2 and merges it without duplicating masters", async ({ request }) => {
@@ -79,18 +81,47 @@ test("'load more' fetches page 2 and merges it without duplicating masters", asy
   const merged = mergeGroups(groupsPage1, body.data.groups);
   const daft = merged.find((g) => g.artist === "Cobalt Parade")!;
   expect(daft.entries.map((e) => e.key)).toEqual(["m:500", "m:600", "m:700"]);
-  expect(daft.entries[0].mergedHits).toBe(4);
+  expect(daft.entries[0].mergedHits).toBe(3); // 2 vinyl releases on page 1 + 1 on page 2
 });
 
-test("lists a master's versions, deduped and without prices", async ({ request }) => {
+test("lists a master's VINYL versions, deduped and without prices", async ({ request }) => {
   const res = await request.get("/api/discogs/masters/500/versions", { headers: ip(4) });
   expect(res.status()).toBe(200);
   const body = await res.json();
-  expect(body.data.versions.map((v: { id: number }) => v.id)).toEqual([11, 12, 13]);
+  expect(body.data.versions.map((v: { id: number }) => v.id)).toEqual([11, 13, 14]); // the French CD (12) is not a pressing here
+  const asked = (await mockLog(request)).filter((e) => e.path === "/masters/500/versions").at(-1)!;
+  expect(asked.query).toMatchObject({ format: "Vinyl" });
+  expect(body.data.facets.country.map((f: { value: string }) => f.value)).not.toContain("France");
   expect(body.data).toMatchObject({ masterId: 500, hasMore: false, incomplete: false });
   expect(body.data.versions[0].discogsUrl).toBe("https://www.discogs.com/release/11");
   const raw = JSON.stringify(body);
   for (const k of [...MARKETPLACE, "stats"]) expect(raw).not.toContain(k);
+});
+
+test("resolves albums' own titles, years and covers from their master records (batched, cached, no prices)", async ({ request }) => {
+  const res = await request.get("/api/discogs/masters?ids=500,600,404404", { headers: ip(70) });
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.data.masters).toMatchObject([
+    { id: 500, title: "Glass Harbor", year: 2001, artist: "Cobalt Parade" },
+    { id: 600, title: "Paper Tide", year: 1997 },
+  ]);
+  expect(body.data.missing).toEqual([404404]);
+  expect(new URL(body.data.masters[0].thumb, "http://x").searchParams.get("u")).toBe(`${MOCK}/images/m/500.jpg`);
+  const raw = JSON.stringify(body);
+  for (const k of MARKETPLACE) expect(raw).not.toContain(k);
+  expect(raw).not.toContain("9.99");
+
+  const asked = (await mockLog(request)).filter((e) => e.path === "/masters/500" || e.path === "/masters/600");
+  const again = await (await request.get("/api/discogs/masters?ids=500,600", { headers: ip(70) })).json();
+  expect(again.cached).toBe(true);
+  expect((await mockLog(request)).filter((e) => e.path === "/masters/500" || e.path === "/masters/600")).toHaveLength(asked.length); // no new calls
+});
+
+test("the masters endpoint takes 1 to 12 ids only", async ({ request }) => {
+  for (const q of ["", "ids=", "ids=abc", "ids=1,,2", `ids=${Array.from({ length: 13 }, (_, i) => i + 1).join(",")}`]) {
+    expect((await request.get(`/api/discogs/masters${q ? `?${q}` : ""}`, { headers: ip(71) })).status(), q).toBe(400);
+  }
 });
 
 test("fetches a release, caches it, and strips marketplace data", async ({ request }) => {
@@ -118,6 +149,7 @@ test("rejects bad input and maps 404", async ({ request }) => {
     "/api/discogs/masters/0/versions",
     "/api/discogs/search?mode=artist",
     "/api/discogs/search?q=x&mode=bogus",
+    "/api/discogs/search?q=x&mode=master", // masters are never searched
     "/api/discogs/search?q=x&mode=artist&page=6", // beyond the page cap
     "/api/discogs/search?q=&mode=artist",
     `/api/discogs/search?q=${"x".repeat(101)}&mode=artist`,
@@ -137,7 +169,7 @@ test("image proxy streams an authenticated image with cache headers bounded by t
   const buf = await res.body();
   expect([...buf.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
 
-  const img = (await mockLog(request)).find((e) => e.path === "/images/aaa/master500.jpg")!;
+  const img = (await mockLog(request)).find((e) => e.path === "/images/aaa/thumb1.jpg")!;
   expect(img.authorization).toBe("Discogs key=test-key, secret=test-secret"); // image requests are authenticated
 });
 
@@ -259,6 +291,7 @@ test.describe("signed out", () => {
     for (const path of [
       `/api/discogs/search?q=daft&mode=artist`,
       "/api/discogs/masters/500/versions",
+      "/api/discogs/masters?ids=500",
       "/api/discogs/releases/123",
       `/api/discogs/image?u=${encodeURIComponent(`${MOCK}/images/a.png`)}`,
       "/api/lists/items/123",

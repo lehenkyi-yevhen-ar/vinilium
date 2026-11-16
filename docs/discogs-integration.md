@@ -42,10 +42,13 @@ Success: `{ "data": <SearchPage | VersionsPage | ReleaseDetail>, "cached": boole
 
 ### Search specifics
 
-* `mode=track` -> `track=<q>&type=release`; `mode=artist` -> `artist=<q>&type=master`; `mode=master` -> `q=<q>&type=master`.
+* Every mode searches **vinyl releases**: `type=release&format=Vinyl` plus `track=<q>` (mode `track`), `artist=<q>` (`artist`) or
+  `release_title=<q>` (`album`). `by=<artist>` adds `artist=<by>` to a track or album search. See "Why vinyl releases" below.
 * Results are grouped by artist (first-appearance order = Discogs' relevance order). Releases that share a master collapse
-  into ONE `kind: "master"` entry (`mergedHits` says how many raw hits); `master_id = 0` stays a standalone
-  `kind: "release"` entry. Open a master with `/masters/:id/versions`.
+  into ONE `kind: "master"` entry (`mergedHits` says how many vinyl releases matched); `master_id = 0` stays a standalone
+  vinyl `kind: "release"` entry. Open a master with `/masters/:id/versions` (also vinyl-only).
+* An entry's title/year/cover are those of ONE release until the master record is resolved (`GET /api/discogs/masters?ids=`, at
+  most 12 per call, cached per master); the albums step resolves only the albums it shows.
 * Pages are bounded (search 5, versions 10, 50 per page). `hasMore` = the next page may be requested; `incomplete` =
   not everything Discogs matched is on screen (more pages exist, even beyond our cap). **When `incomplete` is true the UI must
   say that results may be incomplete.**
@@ -74,3 +77,36 @@ filtered result set) and `filters` (what was applied). Each filter set is cached
 Thumbnails are fetched through `/api/discogs/image` from a separate token bucket (300 per minute shared by all users, plus
 the per-IP and per-user limits), so a page of 50 thumbnails never uses up the 60-per-minute API allowance. A 429 from the
 image host blocks images only. The image host sends no `X-Discogs-Ratelimit*` headers (observed 2026-11-16).
+
+## Why vinyl releases, grouped by master (evidence, real API, 2026-11-16)
+
+Bug report: searching the track "neon static" and choosing Mira Vale showed ONE card, "Neon Static, 2014, CDr, Single,
+Promo", and not the album. What the real API returned:
+
+| Query | Result | Finding |
+| --- | --- | --- |
+| `type=release&track=neon static` (the old query) | 804 hits, 17 pages. Page 1: 50 releases, 40 not vinyl. 9 by Mira Vale, **all in master 910002 (the single)**. | No vinyl filter, and the album's master is not on page 1. The card's data came from the first release (a CDr promo). |
+| `type=release&track=neon static&artist=Mira Vale&format=Vinyl` | 21 hits, 21 vinyl, 4 masters incl. **910001 (the album)**. | The release-level format filter is reliable. |
+| `type=release&track=neon static&format=Vinyl` | 173 hits, all vinyl (Mira Vale's album included). | Works without the artist too. |
+| `type=master&q=neon static&format=Vinyl` | 33 masters, **none by Mira Vale**. | A master's `format` is its main release's (the album's is an MP3), so masters cannot be filtered by medium. |
+| `type=master&track=...` | works, but its `format` is the same unreliable field. | Not used. |
+| `/masters/910001` | title, year, artists, images, and also `lowest_price`/`num_for_sale`. | Authoritative album data; the price fields are stripped by the whitelist. |
+| `/masters/910001/versions?format=Vinyl` | 14 pressings (one is a Box Set, which can contain LPs). | The versions filter is reliable. |
+
+So: all three modes use vinyl RELEASE searches grouped by master, the response is also checked client-side (a hit without
+Vinyl in its format list is dropped), album titles come from the master record, and versions are always `format=Vinyl`.
+Facet values arrive form-encoded (`Germany%2C+Austria%2C+%26+Switzerland`) and are decoded for display and for the filter.
+
+Typical cost of the corrected flow, track `neon static`, artist chosen from the list: 1 search + 2 masters (Mira Vale's two
+albums) + 1 versions + 1 release = **5 Discogs calls** (6 with a filter change). Track "slow orbit" with artist "Cobalt Parade":
+1 search + 3 masters (the first 12 albums contain 3 masters) + 1 versions = 5. Cached results cost nothing for 4 hours.
+
+Honest limits: a search page holds 50 releases, so a very common title can match more artists than the first pages show
+(`incomplete`, "load more", the artist field and the artist filter exist for that). Standalone vinyl releases without a master
+(often unofficial) are listed as single pressings.
+
+## Test fixtures
+
+`tests/fixtures/real/` holds responses recorded from the real API on 2026-11-16 for the regression tests. They are trimmed to the
+CC0 data fields the tests need (ids, titles, years, formats, countries): no images or thumbnails, no community statistics, no
+user data, and the price fields of the master record replaced by synthetic values. See the README there.

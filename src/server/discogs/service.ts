@@ -1,17 +1,24 @@
 import "server-only";
 import { groupByArtist } from "@/lib/discogs/group";
 import {
+  normalizeMaster,
   normalizeRelease,
   normalizeSearchResponse,
   normalizeVersionsResponse,
   searchParamsFor,
 } from "@/lib/discogs/normalize";
-import type { DiscogsResult, ReleaseDetail, SearchMode, SearchPage, VersionFilters, VersionsPage } from "@/lib/discogs/types";
+import type { DiscogsResult, MasterSummary, MastersBatch, ReleaseDetail, SearchMode, SearchPage, VersionFilters, VersionsPage } from "@/lib/discogs/types";
 import { cacheKey, getCached, purgeExpiredCache, putCached } from "./cache";
 import { discogsGet, type ClientDeps, type RequestOutcome } from "./client";
 import { apiBase, cacheTtlSeconds, MAX_SEARCH_PAGES, MAX_VERSION_PAGES, PAGE_SIZE } from "./config";
 import { imageMapper } from "./image";
 import type { AppDb } from "./token-bucket";
+
+/** Everything in this app is about vinyl; the medium is a constant, not a user choice. */
+const VINYL = "Vinyl";
+
+/** The most masters resolved in one call. Each costs one Discogs request when it is not cached yet. */
+export const MAX_MASTERS_PER_BATCH = 12;
 
 type Deps = Omit<ClientDeps, "db"> & { db: AppDb };
 
@@ -51,11 +58,15 @@ export function normalizeQuery(q: string): string {
   return q.normalize("NFC").trim().replace(/\s+/g, " ");
 }
 
-export async function searchDiscogs(deps: Deps, input: { mode: SearchMode; query: string; page: number }): Promise<DiscogsResult<SearchPage>> {
+export async function searchDiscogs(
+  deps: Deps,
+  input: { mode: SearchMode; query: string; by?: string | null; page: number },
+): Promise<DiscogsResult<SearchPage>> {
   const query = normalizeQuery(input.query);
+  const by = input.mode === "artist" || !input.by ? null : normalizeQuery(input.by).slice(0, 100) || null;
   const page = Math.min(Math.max(1, Math.trunc(input.page) || 1), MAX_SEARCH_PAGES);
-  const params = { ...searchParamsFor(input.mode, query), per_page: PAGE_SIZE, page };
-  const key = cacheKey(apiBase(), "search", { mode: input.mode, q: query, page, per_page: PAGE_SIZE });
+  const params = { ...searchParamsFor(input.mode, query, by), per_page: PAGE_SIZE, page };
+  const key = cacheKey(apiBase(), "search", { mode: input.mode, q: query, by: by ?? "", page, per_page: PAGE_SIZE });
 
   return cached<SearchPage>(
     deps,
@@ -66,6 +77,7 @@ export async function searchDiscogs(deps: Deps, input: { mode: SearchMode; query
       return {
         mode: input.mode,
         query,
+        by,
         page: r.page,
         pages: r.pages,
         perPage: r.perPage,
@@ -93,12 +105,12 @@ export async function getMasterVersions(
 ): Promise<DiscogsResult<VersionsPage>> {
   const page = Math.min(Math.max(1, Math.trunc(input.page) || 1), MAX_VERSION_PAGES);
   const filters = cleanFilters(input.filters);
-  const key = cacheKey(apiBase(), "versions", { master: input.masterId, page, per_page: PAGE_SIZE, ...filters });
+  const key = cacheKey(apiBase(), "versions", { master: input.masterId, page, per_page: PAGE_SIZE, format: VINYL, ...filters });
 
   return cached<VersionsPage>(
     deps,
     key,
-    () => discogsGet(`/masters/${input.masterId}/versions`, { per_page: PAGE_SIZE, page, ...filters }, deps),
+    () => discogsGet(`/masters/${input.masterId}/versions`, { per_page: PAGE_SIZE, page, format: VINYL, ...filters }, deps),
     (json) => {
       const r = normalizeVersionsResponse(json, imageMapper());
       return {
@@ -124,4 +136,50 @@ export async function getRelease(deps: Deps, releaseId: number): Promise<Discogs
     () => discogsGet(`/releases/${releaseId}`, {}, deps),
     (json) => normalizeRelease(json, imageMapper()),
   );
+}
+
+/**
+ * Resolve a few masters (title, year, cover) for the albums step. Cached one by one (TTL), looked up one at a time through
+ * the shared budget. If Discogs asks us to slow down we stop and report what is `missing` with a `retryAfter`, so the
+ * screen can show what it has instead of failing.
+ */
+export async function getMasters(deps: Deps, ids: number[]): Promise<DiscogsResult<MastersBatch>> {
+  const wanted = [...new Set(ids)].slice(0, MAX_MASTERS_PER_BATCH);
+  const now = (deps.now ?? Date.now)();
+  const found: MasterSummary[] = [];
+  const missing: number[] = [];
+  let retryAfter: number | undefined;
+  let fetchedAt = new Date(now);
+  let wroteAny = false;
+
+  for (const id of wanted) {
+    const key = cacheKey(apiBase(), "master", { id });
+    const hit = await getCached<MasterSummary>(deps.db, key, now);
+    if (hit) {
+      found.push(hit.payload);
+      continue;
+    }
+    if (retryAfter !== undefined) {
+      missing.push(id); // already being throttled: do not ask again
+      continue;
+    }
+    const out = await discogsGet(`/masters/${id}`, {}, deps);
+    if (!out.ok) {
+      if (out.kind === "unconfigured") return { ok: false, error: "unconfigured" };
+      if (out.kind === "throttled") retryAfter = out.retryAfter;
+      missing.push(id);
+      continue;
+    }
+    const master = normalizeMaster(out.json, imageMapper());
+    if (!master) {
+      missing.push(id);
+      continue;
+    }
+    const written = await putCached(deps.db, key, master, cacheTtlSeconds(), now);
+    fetchedAt = written.fetchedAt;
+    wroteAny = true;
+    found.push(master);
+  }
+  if (wroteAny) await purgeExpiredCache(deps.db, now).catch(() => {});
+  return { ok: true, data: { masters: found, missing, ...(retryAfter !== undefined ? { retryAfter } : {}) }, cached: !wroteAny, fetchedAt: fetchedAt.toISOString() };
 }

@@ -97,7 +97,7 @@ Signed-in users find a pressing in four steps, all in `src/components/finder/`:
 
 | Screen | URL | What happens |
 | --- | --- | --- |
-| 1-3 Track, Artist, Album | `/<locale>/search?mode=track\|artist\|album&q=&artist=` | Search by track (or by artist / album name as a fallback), pick the artist (long lists can be filtered by typing), pick the album. A track that matches nothing offers to retry as an artist or album. |
+| 1-3 Track, Artist, Album | `/<locale>/search?mode=track\|artist\|album&q=&by=&g=` | **Vinyl pressings only.** Search by track (optionally narrowed by an artist), by artist, or by album title; pick the artist (long lists can be filtered by typing), then the album (12 at a time; each album's title, year and cover come from its master record). An empty result offers to retry as another kind of search. |
 | 4 Pressing | `/<locale>/master/<id>` | Pressings of the album, filtered by country, year and label (Discogs' own filters and facets). |
 | Release card | `/<locale>/release/<id>` | Details, tracklist, barcodes/matrix, and **Add to Wishlist / Add to Collection** (real list API, one list per pressing; "Move" is one update). |
 
@@ -114,8 +114,9 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/discogs/search?q=&mode=track\|artist\|master&page=` | Search, grouped by artist and deduped (max 5 pages of 50). **Sign-in required** (all `/api/discogs/*`). |
-| `GET /api/discogs/masters/:id/versions?page=&country=&released=&label=` | Pressings of a master (max 10 pages of 50), with filter facets. |
+| `GET /api/discogs/search?q=&mode=track\|artist\|album&by=&page=` | Vinyl releases, grouped by artist and by master, deduped (max 5 pages of 50). `by` narrows a track or album search to one artist. **Sign-in required** (all `/api/discogs/*`). |
+| `GET /api/discogs/masters?ids=1,2,3` | Title, year and cover of up to 12 albums (master records), cached one by one. |
+| `GET /api/discogs/masters/:id/versions?page=&country=&released=&label=` | VINYL pressings of a master (max 10 pages of 50), with filter facets. |
 | `GET /api/discogs/releases/:id` | One release. |
 | `GET /api/discogs/image?u=` | Image proxy (exact Discogs image hosts only, streamed, never stored). |
 | `GET\|PUT\|DELETE /api/lists/items/:releaseId` | The signed-in user's wishlist / collection entry for one pressing (`PUT {"list":"wishlist"\|"collection"}` adds or moves). |

@@ -1,4 +1,4 @@
-import type { FacetValue, ReleaseDetail, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
+import type { FacetValue, MasterSummary, ReleaseDetail, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
 
 /**
  * Raw Discogs JSON -> our shapes. This is a WHITELIST: only the fields copied below survive, so price and
@@ -63,12 +63,19 @@ export function artistKey(artist: string | null): string {
     .trim();
 }
 
-/** One raw search hit -> a (not yet deduped) entry, or null if it is unusable. */
+/** True when a release's format list (names and descriptions) includes Vinyl. */
+export const isVinyl = (formats: readonly string[]) => formats.some((f) => f.toLowerCase() === "vinyl");
+
+/** One raw search hit -> a (not yet deduped) entry, or null if it is unusable OR not vinyl. */
 export function normalizeSearchHit(raw: unknown, image: ImageMapper): SearchEntry | null {
   if (!isObj(raw)) return null;
   const id = int(raw.id);
   const type = raw.type === "master" || raw.type === "release" ? raw.type : null;
   if (id === null || id <= 0 || !type) return null;
+
+  // Vinyl only. The query already asks Discogs for format=Vinyl; this checks the answer too, wherever the field exists.
+  const allFormats = strs(raw.format, 40);
+  if (Array.isArray(raw.format) && !isVinyl(allFormats)) return null;
 
   const { artist, title } = splitArtistTitle(str(raw.title) ?? "");
   if (!title) return null;
@@ -85,7 +92,7 @@ export function normalizeSearchHit(raw: unknown, image: ImageMapper): SearchEntr
     title,
     year: year(raw.year),
     thumb: image(str(raw.thumb) ?? str(raw.cover_image)),
-    formats: dedupe(strs(raw.format, 6)),
+    formats: dedupe(allFormats).slice(0, 6),
     country: str(raw.country),
     discogsUrl: asMaster ? discogsUrlFor("master", masterId, type === "master" ? raw.uri : undefined) : discogsUrlFor("release", id, raw.uri),
     mergedHits: 1,
@@ -129,9 +136,14 @@ export function normalizeVersion(raw: unknown, image: ImageMapper): VersionSumma
   const id = int(raw.id);
   const title = str(raw.title);
   if (id === null || id <= 0 || !title) return null;
+  // The request asks for format=Vinyl; verify the answer where Discogs tells us the medium. A Box Set / All Media entry
+  // can contain LPs, so it stays; a row that is only CD, File or Cassette does not.
+  const majors = strs(raw.major_formats, 8);
+  if (majors.length && !majors.some((m) => ["vinyl", "box set", "all media"].includes(m.toLowerCase()))) return null;
+  // Medium first ("Vinyl"), then the descriptors ("LP, Album"), so a card that shows only a few says what it is.
   const formats = dedupe([
-    ...(str(raw.format)?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
     ...strs(raw.major_formats, 4),
+    ...(str(raw.format)?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
   ]).slice(0, 8);
   return {
     id,
@@ -148,6 +160,15 @@ export function normalizeVersion(raw: unknown, image: ImageMapper): VersionSumma
 
 const FACET_CAP = 300;
 
+function decodeFacet(v: string | null): string | null {
+  if (v === null) return null;
+  try {
+    return decodeURIComponent(v.replace(/\+/g, " ")).trim() || null;
+  } catch {
+    return v; // not valid percent-encoding: use as is
+  }
+}
+
 /** Discogs `filter_facets`: [{ id: "country", values: [{ value, title, count }] }, ...] -> the three we filter by. */
 export function normalizeFacets(raw: unknown): { country: FacetValue[]; released: FacetValue[]; label: FacetValue[] } {
   const out = { country: [] as FacetValue[], released: [] as FacetValue[], label: [] as FacetValue[] };
@@ -160,7 +181,9 @@ export function normalizeFacets(raw: unknown): { country: FacetValue[]; released
     const values: FacetValue[] = [];
     for (const v of Array.isArray(f.values) ? f.values : []) {
       if (!isObj(v)) continue;
-      const value = str(v.value) ?? str(v.title);
+      // Discogs sends `value` form-encoded ("Germany%2C+Austria%2C+%26+Switzerland") and `title` readable. The filter takes
+      // the plain text (our request encodes it again), so decode: the encoded form would be shown AND double-encoded.
+      const value = decodeFacet(str(v.value)) ?? str(v.title);
       if (!value || seen.has(value)) continue;
       seen.add(value);
       values.push({ value, count: Math.max(0, int(v.count) ?? 0) });
@@ -254,14 +277,44 @@ export function normalizeRelease(raw: unknown, image: ImageMapper): ReleaseDetai
   };
 }
 
-/** The Discogs query parameters for each search mode. */
-export function searchParamsFor(mode: SearchMode, query: string): Record<string, string> {
+/**
+ * The Discogs query for each search mode. ALWAYS vinyl RELEASES: evidence (real API, 2026-11-16) showed that
+ *  - searching masters cannot be filtered by medium (a master's `format` is its main release's, often an MP3), and
+ *  - track= only works on releases.
+ * Results are grouped by master afterwards. `by` narrows a track or album search to one artist.
+ */
+export function searchParamsFor(mode: SearchMode, query: string, by?: string | null): Record<string, string> {
+  const base: Record<string, string> = { type: "release", format: "Vinyl" };
   switch (mode) {
     case "track":
-      return { track: query, type: "release" };
+      base.track = query;
+      break;
     case "artist":
-      return { artist: query, type: "master" };
-    case "master":
-      return { q: query, type: "master" };
+      base.artist = query;
+      break;
+    case "album":
+      base.release_title = query;
+      break;
   }
+  if (by && mode !== "artist") base.artist = by;
+  return base;
+}
+
+/** /masters/{id} -> the album's own title, year and cover. A whitelist: the master record also carries price fields. */
+export function normalizeMaster(raw: unknown, image: ImageMapper): MasterSummary | null {
+  if (!isObj(raw)) return null;
+  const id = int(raw.id);
+  const title = str(raw.title);
+  if (id === null || id <= 0 || !title) return null;
+  const artists = (Array.isArray(raw.artists) ? raw.artists : []).filter(isObj).map((a) => str(a.anv) ?? str(a.name)).filter((n): n is string => n !== null);
+  const images = (Array.isArray(raw.images) ? raw.images : []).filter(isObj);
+  const primary = images.find((i) => i.type === "primary") ?? images[0];
+  return {
+    id,
+    title,
+    artist: artists.length ? artists.join(", ") : null,
+    year: year(raw.year),
+    thumb: image(str(primary?.uri150) ?? str(primary?.uri)),
+    discogsUrl: discogsUrlFor("master", id, raw.uri),
+  };
 }

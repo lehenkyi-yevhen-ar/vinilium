@@ -116,6 +116,14 @@ describe("respond: DiscogsResult -> HTTP", () => {
 });
 
 describe("input schemas", () => {
+  it("accepts 1 to 12 distinct master ids for the batch endpoint", async () => {
+    const { masterIdsSchema } = await import("@/server/discogs/http");
+    expect(masterIdsSchema.parse("910001,910002")).toEqual([910001, 910002]);
+    expect(masterIdsSchema.parse("5,5,6")).toEqual([5, 6]);
+    expect(masterIdsSchema.safeParse(Array.from({ length: 12 }, (_, i) => i + 1).join(",")).success).toBe(true);
+    for (const bad of ["", "0", "a", "1,,2", "1,2,", Array.from({ length: 13 }, (_, i) => i + 1).join(","), "1;2", "-1"]) expect(masterIdsSchema.safeParse(bad).success, bad).toBe(false);
+  });
+
   it("accepts only positive integer ids", async () => {
     const { idSchema } = await import("@/server/discogs/http");
     expect(idSchema.parse("951004")).toBe(951004);
@@ -124,7 +132,11 @@ describe("input schemas", () => {
 
   it("normalises and bounds search input", async () => {
     const { searchQuerySchema } = await import("@/server/discogs/http");
-    expect(searchQuerySchema.parse({ q: "  daft   punk ", mode: "artist" })).toEqual({ q: "cobalt parade", mode: "artist", page: 1 });
+    expect(searchQuerySchema.parse({ q: "  daft   punk ", mode: "artist" })).toEqual({ q: "cobalt parade", mode: "artist", by: undefined, page: 1 });
+    expect(searchQuerySchema.parse({ q: "neon static", mode: "track", by: "  Lana   Del Rey " })).toEqual({ q: "neon static", mode: "track", by: "Mira Vale", page: 1 });
+    expect(searchQuerySchema.parse({ q: "x", mode: "album", by: "" }).by).toBeUndefined();
+    expect(searchQuerySchema.safeParse({ q: "x", mode: "track", by: "y".repeat(101) }).success).toBe(false);
+    expect(searchQuerySchema.safeParse({ q: "x", mode: "master" }).success).toBe(false); // masters are not searched
     expect(searchQuerySchema.safeParse({ q: "x", mode: "artist", page: "6" }).success).toBe(false);
     expect(searchQuerySchema.safeParse({ q: "   ", mode: "artist" }).success).toBe(false);
     expect(searchQuerySchema.safeParse({ q: "x", mode: "label" }).success).toBe(false);

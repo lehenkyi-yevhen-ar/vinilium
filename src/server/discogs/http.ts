@@ -55,7 +55,14 @@ export function respond<T>(result: DiscogsResult<T>): Response {
 
 export const searchQuerySchema = z.object({
   q: z.string().transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " ")).pipe(z.string().min(1).max(100)),
-  mode: z.enum(["track", "artist", "master"]),
+  mode: z.enum(["track", "artist", "album"]),
+  /** Optional artist to narrow a track or album search to. */
+  by: z
+    .string()
+    .transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " "))
+    .pipe(z.string().max(100))
+    .optional()
+    .transform((s) => s || undefined),
   page: z.coerce.number().int().min(1).max(MAX_SEARCH_PAGES).default(1),
 });
 
@@ -76,6 +83,12 @@ export const versionsQuerySchema = z.object({
     .optional()
     .or(z.literal("").transform(() => undefined)),
 });
+
+/** `?ids=1,2,3`: one to MAX_MASTERS_PER_BATCH distinct master ids. */
+export const masterIdsSchema = z
+  .string()
+  .regex(/^[1-9]\d{0,9}(,[1-9]\d{0,9}){0,11}$/)
+  .transform((s) => [...new Set(s.split(",").map(Number))]);
 
 /** Discogs ids are positive integers; anything else is rejected before it reaches a URL. */
 export const idSchema = z.string().regex(/^[1-9]\d{0,9}$/).transform(Number);

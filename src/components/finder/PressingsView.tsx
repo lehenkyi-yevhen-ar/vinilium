@@ -113,7 +113,7 @@ export function PressingsView({ masterId }: { masterId: number }) {
   const keep = (extra: Partial<Record<FilterKey, string | undefined>>) => {
     const now = new URLSearchParams(window.location.search);
     const query: Record<string, string> = {};
-    for (const k of ["q", "mode", "a", "t"]) if (now.get(k)) query[k] = now.get(k)!;
+    for (const k of ["q", "mode", "by", "a", "t"]) if (now.get(k)) query[k] = now.get(k)!;
     for (const k of FILTER_KEYS) {
       const v = k in extra ? extra[k] : now.get(k) || undefined;
       if (v) query[k] = v;
@@ -122,7 +122,9 @@ export function PressingsView({ masterId }: { masterId: number }) {
   };
   const setFilter = (key: FilterKey, value: string) => router.replace({ pathname: `/master/${masterId}`, query: keep({ [key]: value || undefined }) }, { scroll: false });
   const hasFilter = Boolean(country || released || label);
-  const backQuery = params.get("q") ? { mode: params.get("mode") ?? "track", q: params.get("q")!, artist: (artist && artistKey(artist)) || "-" } : null;
+  const backQuery = params.get("q")
+    ? { mode: params.get("mode") ?? "track", q: params.get("q")!, ...(params.get("by") ? { by: params.get("by")! } : {}), g: (artist && artistKey(artist)) || "-" }
+    : null;
 
   const stepLabels = (["track", "artist", "album", "pressing"] as const).map((k) => f(`steps.${k}`));
 

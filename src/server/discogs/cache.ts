@@ -10,14 +10,20 @@ import type { AppDb } from "./token-bucket";
  * for quiet periods.
  */
 
+/**
+ * Bump when the shape or meaning of cached payloads changes, so rows written by older code are never served.
+ * v2 (2026-11-16): searches became vinyl-only and group by master; versions are vinyl-only.
+ */
+export const CACHE_KEY_VERSION = "v2";
+
 /** Cache key: versioned, scoped to the API origin, params sorted so equivalent requests share a row. */
-export function cacheKey(origin: string, kind: "search" | "versions" | "release", params: Record<string, string | number>): string {
+export function cacheKey(origin: string, kind: "search" | "versions" | "release" | "master", params: Record<string, string | number>): string {
   const canon = Object.entries(params)
     .map(([k, v]) => [k, String(v).normalize("NFC").trim().replace(/\s+/g, " ")] as const)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([k, v]) => `${k}=${encodeURIComponent(k === "q" || k === "track" || k === "artist" ? v.toLowerCase() : v)}`)
+    .map(([k, v]) => `${k}=${encodeURIComponent(k === "q" || k === "track" || k === "artist" || k === "by" ? v.toLowerCase() : v)}`)
     .join("&");
-  return `v1|${origin}|${kind}|${canon}`;
+  return `${CACHE_KEY_VERSION}|${origin}|${kind}|${canon}`;
 }
 
 export interface CacheHit<T> {

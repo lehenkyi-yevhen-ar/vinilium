@@ -143,7 +143,7 @@ describe("service: cache-through", () => {
     const s = await svc([json(releasePayload)]);
     await s.getRelease(1001); // a normal cache write...
     const keys = (await db.select({ key: discogsCache.key }).from(discogsCache)).map((r) => r.key);
-    expect(keys).toEqual(["v1|https://api.discogs.com|release|id=1001"]); // ...removed both expired rows
+    expect(keys).toEqual(["v2|https://api.discogs.com|release|id=1001"]); // ...removed both expired rows
   });
 
   it("stores only the normalised, whitelisted shape: no raw payload, no price or marketplace fields", async () => {
@@ -170,7 +170,7 @@ describe("service: cache-through", () => {
   it("search: bounds the page number and says incomplete even at the cap", async () => {
     const last = { ...searchPage1, pagination: { page: 5, pages: 9, per_page: 50, items: 450 } };
     const s = await svc([json(last)]);
-    const r = await s.searchDiscogs({ mode: "master", query: "discovery", page: 99 });
+    const r = await s.searchDiscogs({ mode: "album", query: "discovery", page: 99 });
     expect((s.fetchImpl.mock.calls[0] as unknown as [URL])[0].searchParams.get("page")).toBe("5"); // clamped to MAX_SEARCH_PAGES
     expect(r.ok && r.data).toMatchObject({ page: 5, pages: 9, hasMore: false, incomplete: true });
   });
@@ -185,7 +185,7 @@ describe("service: cache-through", () => {
   it("versions: dedupes and paginates", async () => {
     const s = await svc([json(versionsPage)]);
     const r = await s.getMasterVersions({ masterId: 500, page: 1 });
-    expect(r.ok && r.data.versions.map((v) => v.id)).toEqual([11, 12, 13]);
+    expect(r.ok && r.data.versions.map((v) => v.id)).toEqual([11, 13, 14]);
     expect(r.ok && r.data).toMatchObject({ masterId: 500, hasMore: false, incomplete: false });
   });
 
@@ -194,7 +194,7 @@ describe("service: cache-through", () => {
     const s = await svc([json(versionsPage), json(filtered)]);
 
     const all = await s.getMasterVersions({ masterId: 500, page: 1 });
-    expect(all.ok && all.data.facets.country.map((f) => f.value)).toEqual(["France", "Japan", "UK"]); // alphabetical
+    expect(all.ok && all.data.facets.country.map((f) => f.value)).toEqual(["Japan", "UK", "US"]); // alphabetical
     expect(all.ok && all.data.facets.released.map((f) => f.value)).toEqual(["2001", "2002"]);
     expect(all.ok && all.data.facets.label.map((f) => f.value)).toEqual(["Victor", "Virgin"]);
 
@@ -227,7 +227,7 @@ describe("service: cache-through", () => {
   it("keeps cache rows for different API origins apart", async () => {
     const s = await svc([json(releasePayload)]);
     await s.getRelease(1001);
-    const [row] = await db.select().from(discogsCache).where(eq(discogsCache.key, "v1|https://api.discogs.com|release|id=1001"));
+    const [row] = await db.select().from(discogsCache).where(eq(discogsCache.key, "v2|https://api.discogs.com|release|id=1001"));
     expect(row).toBeDefined();
   });
 });

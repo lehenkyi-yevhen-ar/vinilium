@@ -216,8 +216,8 @@
       "artist": "en artist",
       "album": "et album"
     },
-    "emptyTitle": "Ingen treff",
-    "emptyText": "Sjekk stavemåten, eller søk på en annen måte.",
+    "emptyTitle": "Ingen vinyltreff",
+    "emptyText": "Vi søker bare etter vinylutgivelser. Det kan finnes bare på CD eller som nedlasting, eller stavemåten kan være en annen.",
     "artistsTitle": "Velg artist",
     "artistsLead": "Treffene er gruppert etter artist.",
     "albumsTitle": "Velg album",
@@ -234,7 +234,13 @@
     "resultsFor": "Resultater for «{q}»",
     "filterArtists": "Filtrer artistene",
     "filterPlaceholder": "Skriv en del av navnet",
-    "noArtistMatch": "Ingen artist i disse resultatene passer. Vis flere resultater, eller søk på artistnavn."
+    "noArtistMatch": "Ingen artist i disse resultatene passer. Vis flere resultater, eller søk på artistnavn.",
+    "vinylOnly": "Bare vinylutgivelser.",
+    "byLabel": "Artist (valgfritt)",
+    "byPlaceholder": "f.eks. Lana Del Rey",
+    "byHelp": "Snevrer inn søket til én artist.",
+    "withoutArtist": "søk uten artist",
+    "showMoreAlbums": "Vis flere album"
   },
   "pressings": {
     "title": "Velg utgivelse",
@@ -248,7 +254,7 @@
     "label": "Plateselskap",
     "all": "Alle",
     "clear": "Fjern filtre",
-    "count": "{count, plural, one {# utgivelse} other {# utgivelser}}",
+    "count": "{count, plural, one {# vinylutgivelse} other {# vinylutgivelser}}",
     "emptyTitle": "Ingen utgivelser passer med filtrene",
     "emptyText": "Prøv å fjerne et filter.",
     "catno": "Kat.nr. {catno}",

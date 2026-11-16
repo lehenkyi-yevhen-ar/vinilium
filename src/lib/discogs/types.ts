@@ -3,7 +3,8 @@
  * fields (see normalize.ts): nothing price- or marketplace-related can appear here by construction.
  */
 
-export type SearchMode = "track" | "artist" | "master";
+/** What the user types. All three search VINYL RELEASES (type=release, format=Vinyl) and group them by master. */
+export type SearchMode = "track" | "artist" | "album";
 
 export interface SearchEntry {
   /** Stable key used for dedupe: `m:<masterId>` or `r:<releaseId>`. */
@@ -51,6 +52,8 @@ export interface Page {
 export interface SearchPage extends Page {
   mode: SearchMode;
   query: string;
+  /** Optional artist the track / album search was narrowed to. */
+  by: string | null;
   groups: ArtistGroup[];
 }
 
@@ -116,6 +119,23 @@ export interface ReleaseDetail {
   /** Barcode / matrix / runout strings that help tell pressings apart. */
   identifiers: { type: string; value: string }[];
   discogsUrl: string;
+}
+
+/** A master release, resolved from /masters/{id}: the album's own title, year and cover (not a single release's). */
+export interface MasterSummary {
+  id: number;
+  title: string;
+  artist: string | null;
+  year: number | null;
+  thumb: string | null;
+  discogsUrl: string;
+}
+
+/** Result of resolving a few masters in one call. `missing` ids could not be resolved right now (see `retryAfter`). */
+export interface MastersBatch {
+  masters: MasterSummary[];
+  missing: number[];
+  retryAfter?: number;
 }
 
 export type DiscogsErrorCode =

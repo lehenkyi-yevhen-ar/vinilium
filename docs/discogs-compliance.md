@@ -81,6 +81,9 @@ b. **TTL: 4 h default, 6 h cap.** Done.
 c. **Sign-in required for search and images.** Done, with a clear "Sign in to search" state.
 d. **Attribution** next to every block of Discogs data, enforced screen by screen. Done for milestone 3.
 
+* Recorded real responses are kept as test fixtures (`tests/fixtures/real`), trimmed to CC0 fields only (ids, titles, years, formats,
+  countries); no images, community or marketplace data. Please confirm you are comfortable with that reading of the storage rule.
+
 ## Still open
 
 * **Application name policy** (rule 13): not provided, so "Vinilium" is unchecked against it.

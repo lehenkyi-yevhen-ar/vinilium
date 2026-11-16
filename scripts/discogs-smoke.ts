@@ -82,7 +82,7 @@ async function main() {
   await bucket("image");
 
   // No permanent copies: remove what this check cached.
-  const del = await db.delete(discogsCache).where(like(discogsCache.key, "v1|https://api.discogs.com|%")).returning({ key: discogsCache.key });
+  const del = await db.delete(discogsCache).where(like(discogsCache.key, "v%|https://api.discogs.com|%")).returning({ key: discogsCache.key });
   console.log(`\ncleanup: removed ${del.length} cached row(s) created by this check`);
 }
 

@@ -9,7 +9,7 @@
  *   GET  /__log                                             every request the app made, incl. auth headers
  */
 import http from "node:http";
-import { releasePayload, searchPage1, searchPage2, versionsPage } from "../fixtures/discogs";
+import { masterPayloads, releasePayload, searchPage1, searchPage2, versionsPage } from "../fixtures/discogs";
 
 const PORT = Number(process.env.MOCK_PORT ?? 3201);
 const ORIGIN = `http://localhost:${PORT}`;
@@ -44,7 +44,7 @@ function send(res: http.ServerResponse, status: number, body: unknown, headers: 
   res.end(data);
 }
 
-type V = { id: number; label?: string; country?: string; released?: string; [k: string]: unknown };
+type V = { id: number; label?: string; country?: string; released?: string; major_formats?: string[]; [k: string]: unknown };
 
 /** Versions of a master after applying the same filters the real API supports, with facets for what is left. */
 function versionsFor(query: Record<string, string>) {
@@ -52,6 +52,7 @@ function versionsFor(query: Record<string, string>) {
   const all = (versionsPage.versions as V[]).filter((v) => !seen.has(v.id) && seen.add(v.id));
   const kept = all.filter(
     (v) =>
+      (!query.format || (v.major_formats ?? []).some((m) => m.toLowerCase() === query.format.toLowerCase())) &&
       (!query.country || v.country === query.country) &&
       (!query.label || v.label === query.label) &&
       (!query.released || v.released === query.released),
@@ -149,15 +150,28 @@ const server = http.createServer((req, res) => {
   let body: unknown;
   let m: RegExpMatchArray | null;
   if (path === "/database/search") {
-    // A track title starting with "nomatch" finds nothing (exercises the "try as artist / album" fallback).
-    if ((query.track ?? "").toLowerCase().startsWith("nomatch")) {
+    // A track that starts with "nomatch" / "cdonly" finds nothing on VINYL (exercises the empty state and its fallback).
+    const track = (query.track ?? "").toLowerCase();
+    if (query.format === "Vinyl" && (track.startsWith("nomatch") || track.startsWith("cdonly"))) {
       record(200);
       return send(res, 200, { pagination: { page: 1, pages: 1, per_page: 50, items: 0 }, results: [] }, rateHeaders());
     }
-    body = query.page === "2" ? searchPage2 : query.page && query.page !== "1" ? { pagination: { page: Number(query.page), pages: 3, per_page: 50, items: 120 }, results: [] } : searchPage1;
-    body = localise(body);
+    const page = query.page === "2" ? searchPage2 : query.page && query.page !== "1" ? { pagination: { page: Number(query.page), pages: 3, per_page: 50, items: 120 }, results: [] } : searchPage1;
+    // Honour format=Vinyl like the real API: without it the CD hit comes through too.
+    const by = (query.track || query.release_title) && query.artist ? query.artist.toLowerCase() : "";
+    const results = (page.results as Array<{ format?: string[]; title?: string } | null>)
+      .filter((r) => !query.format || !r?.format || r.format.includes(query.format))
+      // "track/album + artist": only that artist's hits (the real API narrows the same way)
+      .filter((r) => !by || (r?.title ?? "").toLowerCase().startsWith(by));
+    body = localise({ ...page, results });
   } else if ((m = path.match(/^\/masters\/(\d+)\/versions$/))) {
     body = localise(versionsFor(query));
+  } else if ((m = path.match(/^\/masters\/(\d+)$/))) {
+    const master = masterPayloads[Number(m[1])];
+    if (!master) {
+      status = 404;
+      body = { message: "Master release not found." };
+    } else body = localise(master);
   } else if ((m = path.match(/^\/releases\/(\d+)$/))) {
     if (m[1] === "404404") {
       status = 404;

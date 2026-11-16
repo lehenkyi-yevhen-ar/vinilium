@@ -22,6 +22,7 @@ export function dedupeEntries(entries: SearchEntry[]): SearchEntry[] {
     merged.mergedHits = prev.mergedHits + e.mergedHits;
     merged.fromMaster = prev.fromMaster || e.fromMaster;
     merged.thumb = merged.thumb ?? prev.thumb ?? e.thumb;
+    merged.formats = [...new Set([...prev.formats, ...e.formats])].slice(0, 6);
     merged.year = merged.year ?? prev.year ?? e.year;
     byKey.set(e.key, merged);
   }

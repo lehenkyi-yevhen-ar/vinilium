@@ -3,13 +3,14 @@ import { groupByArtist, mergeGroups } from "@/lib/discogs/group";
 import {
   artistKey,
   normalizeFacets,
+  normalizeMaster,
   normalizeRelease,
   normalizeSearchResponse,
   normalizeVersionsResponse,
   searchParamsFor,
   splitArtistTitle,
 } from "@/lib/discogs/normalize";
-import { releasePayload, searchPage1, searchPage2, versionsPage } from "../fixtures/discogs";
+import { masterPayloads, releasePayload, searchPage1, searchPage2, versionsPage } from "../fixtures/discogs";
 
 // Identity-ish mapper: lets us see which URLs survive; real allow-listing is tested in discogs-image.test.ts.
 const image = (u: string | null | undefined) => (u && u.includes("i.discogs.com") ? `/proxy?u=${u}` : null);
@@ -31,13 +32,14 @@ describe("splitArtistTitle / artistKey", () => {
   });
 });
 
-describe("normalizeSearchResponse + groupByArtist", () => {
+describe("normalizeSearchResponse + groupByArtist (vinyl releases grouped by master)", () => {
   const r = normalizeSearchResponse(searchPage1, image);
   const groups = groupByArtist(r.entries);
 
-  it("drops unusable hits and counts them", () => {
-    expect(r.dropped).toBe(2); // the "x"/artist hit and null
-    expect(r.entries).toHaveLength(7);
+  it("drops unusable hits AND non-vinyl hits, and counts them", () => {
+    expect(r.dropped).toBe(3); // the "x"/artist hit, null, and the CD (id 1004)
+    expect(r.entries).toHaveLength(6);
+    for (const e of r.entries) expect(e.formats.map((f) => f.toLowerCase())).toContain("vinyl");
   });
 
   it("reads pagination", () => {
@@ -46,14 +48,21 @@ describe("normalizeSearchResponse + groupByArtist", () => {
 
   it("groups by artist in relevance order, folding case differences", () => {
     expect(groups.map((g) => g.artist)).toEqual(["Cobalt Parade", "Some Band", null]);
-    expect(groups[0].entries.map((e) => e.title)).toEqual(["Glass Harbor", "Paper Tide"]);
+    expect(groups[0].entries.map((e) => e.key)).toEqual(["m:500", "m:600"]);
   });
 
-  it("collapses releases that share a master into ONE entry and prefers the master's own data", () => {
+  it("collapses the VINYL releases of one master into ONE entry (the CD of that master is not counted)", () => {
     const discovery = groups[0].entries[0];
-    expect(discovery).toMatchObject({ key: "m:500", kind: "master", id: 500, mergedHits: 3, year: 2001 });
-    expect(discovery.discogsUrl).toBe("https://www.discogs.com/master/500-Glass-Harbor");
-    expect(discovery.thumb).toBe("/proxy?u=https://i.discogs.com/aaa/master500.jpg");
+    expect(discovery).toMatchObject({ key: "m:500", kind: "master", id: 500, mergedHits: 2, year: 2001 });
+    expect(discovery.formats).toEqual(["Vinyl", "LP", "Album", "Reissue"]); // union of the vinyl releases, never "CD"
+    expect(discovery.discogsUrl).toBe("https://www.discogs.com/master/500");
+    expect(discovery.thumb).toBe("/proxy?u=https://i.discogs.com/aaa/thumb1.jpg");
+  });
+
+  it("keeps a release's own title only as a FALLBACK: the album title comes from the master record later", () => {
+    // The first hit is a remix. This is the real failure mode (Mira Vale - Neon Static): the entry's title is a
+    // release's, so the UI resolves /masters/{id} for the real one.
+    expect(groups[0].entries[0].title).toBe("Glass Harbor (Remixes)");
   });
 
   it("treats master_id = 0 as a standalone item and dedupes it by release id", () => {
@@ -77,7 +86,6 @@ describe("normalizeSearchResponse + groupByArtist", () => {
     const json = JSON.stringify(groups);
     for (const k of MARKETPLACE_KEYS) expect(json).not.toContain(k);
     expect(json).not.toContain("42.5");
-    expect(json).not.toContain("9.99");
   });
 });
 
@@ -89,8 +97,31 @@ describe("mergeGroups (load more)", () => {
 
     const daft = merged.find((g) => g.artist === "Cobalt Parade")!;
     expect(daft.entries.map((e) => e.key)).toEqual(["m:500", "m:600", "m:700"]);
-    expect(daft.entries[0].mergedHits).toBe(4); // 3 from page 1 + 1 from page 2
+    expect(daft.entries[0].mergedHits).toBe(3); // 2 vinyl releases from page 1 + 1 from page 2
     expect(merged.map((g) => g.artist)).toEqual(["Cobalt Parade", "Some Band", null]);
+  });
+});
+
+describe("normalizeMaster", () => {
+  it("takes the album's own title, year, artist and cover, and nothing from the price fields", () => {
+    const m = normalizeMaster(masterPayloads[500], image)!;
+    expect(m).toEqual({
+      id: 500,
+      title: "Glass Harbor",
+      artist: "Cobalt Parade",
+      year: 2001,
+      thumb: "/proxy?u=https://i.discogs.com/m/500.jpg",
+      discogsUrl: "https://www.discogs.com/master/500-Cobalt-Parade-Glass-Harbor",
+    });
+    const json = JSON.stringify(m);
+    for (const k of MARKETPLACE_KEYS) expect(json).not.toContain(k);
+    expect(json).not.toContain("9.99");
+  });
+
+  it("copes with a master that has no image or an unknown year, and rejects garbage", () => {
+    expect(normalizeMaster({ ...masterPayloads[700], year: 0 }, image)).toMatchObject({ thumb: null, year: null });
+    expect(normalizeMaster({ title: "x" }, image)).toBeNull();
+    expect(normalizeMaster(null, image)).toBeNull();
   });
 });
 
@@ -98,7 +129,7 @@ describe("normalizeVersionsResponse", () => {
   const r = normalizeVersionsResponse(versionsPage, image);
 
   it("dedupes by id and keeps only whitelisted fields", () => {
-    expect(r.versions.map((v) => v.id)).toEqual([11, 12, 13]);
+    expect(r.versions.map((v) => v.id)).toEqual([11, 13, 14]); // the CD (12) is dropped
     expect(r.versions[0]).toMatchObject({
       title: "Glass Harbor",
       label: "Virgin",
@@ -107,7 +138,7 @@ describe("normalizeVersionsResponse", () => {
       released: "2001",
       discogsUrl: "https://www.discogs.com/release/11",
     });
-    expect(r.versions[0].formats).toEqual(["2xLP", "Album", "Vinyl"]);
+    expect(r.versions[0].formats).toEqual(["Vinyl", "2xLP", "Album"]); // medium first
     const json = JSON.stringify(r);
     for (const k of MARKETPLACE_KEYS) expect(json).not.toContain(k);
   });
@@ -116,10 +147,15 @@ describe("normalizeVersionsResponse", () => {
 describe("normalizeFacets", () => {
   it("keeps country, year and label options, sorted, ignoring other facets and bad values", () => {
     const f = normalizeVersionsResponse(versionsPage, image).facets;
-    expect(f.country).toEqual([{ value: "France", count: 1 }, { value: "Japan", count: 1 }, { value: "UK", count: 1 }]);
+    expect(f.country).toEqual([{ value: "Japan", count: 1 }, { value: "UK", count: 1 }, { value: "US", count: 1 }]);
     expect(f.released).toEqual([{ value: "2001", count: 2 }, { value: "2002", count: 1 }]);
     expect(f.label.map((x) => x.value)).toEqual(["Victor", "Virgin"]);
-    expect(JSON.stringify(f)).not.toContain("CD"); // the format facet is not one of ours
+    expect(JSON.stringify(f)).not.toContain("Vinyl"); // the format facet is not one of ours
+  });
+
+  it("decodes form-encoded values ('+' = space, %XX) and tolerates malformed ones", () => {
+    const f = normalizeFacets([{ id: "label", values: [{ value: "Polydor+Ltd.+%28Uk%29", title: "Polydor Ltd. (Uk)", count: 2 }, { value: "100%", title: "Odd", count: 1 }] }]);
+    expect(f.label.map((x) => x.value)).toEqual(["100%", "Polydor Ltd. (Uk)"]); // "100%" is not valid encoding: kept as is
   });
 
   it("is empty when Discogs sends none", () => {
@@ -173,10 +209,21 @@ describe("normalizeRelease", () => {
   });
 });
 
-describe("searchParamsFor", () => {
-  it("maps each mode to Discogs parameters", () => {
-    expect(searchParamsFor("track", "slow orbit")).toEqual({ track: "slow orbit", type: "release" });
-    expect(searchParamsFor("artist", "cobalt parade")).toEqual({ artist: "cobalt parade", type: "master" });
-    expect(searchParamsFor("master", "discovery")).toEqual({ q: "discovery", type: "master" });
+describe("searchParamsFor: always vinyl RELEASES", () => {
+  it("maps each mode to Discogs parameters, with type=release and format=Vinyl", () => {
+    expect(searchParamsFor("track", "slow orbit")).toEqual({ type: "release", format: "Vinyl", track: "slow orbit" });
+    expect(searchParamsFor("artist", "cobalt parade")).toEqual({ type: "release", format: "Vinyl", artist: "cobalt parade" });
+    expect(searchParamsFor("album", "discovery")).toEqual({ type: "release", format: "Vinyl", release_title: "discovery" });
+  });
+
+  it("narrows a track or album search to an artist, but never an artist search", () => {
+    expect(searchParamsFor("track", "neon static", "Mira Vale")).toEqual({ type: "release", format: "Vinyl", track: "neon static", artist: "Mira Vale" });
+    expect(searchParamsFor("album", "neon static", "Mira Vale")).toMatchObject({ release_title: "neon static", artist: "Mira Vale" });
+    expect(searchParamsFor("artist", "Mira Vale", "Someone Else")).toEqual({ type: "release", format: "Vinyl", artist: "Mira Vale" });
+    expect(searchParamsFor("track", "x", "")).not.toHaveProperty("artist");
+  });
+
+  it("never searches masters (a master's format is its main release's, so the medium cannot be filtered there)", () => {
+    for (const mode of ["track", "artist", "album"] as const) expect(searchParamsFor(mode, "x").type).toBe("release");
   });
 });

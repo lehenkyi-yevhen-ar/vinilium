@@ -9,7 +9,7 @@ export default async function globalTeardown() {
   try {
     // e2e users (their sessions, accounts and list items cascade)
     await pool.query("delete from \"user\" where email like 'e2e-%@example.test'");
-    await pool.query("delete from discogs_cache where key like 'v1|http://localhost:3201|%'");
+    await pool.query("delete from discogs_cache where key like 'v%|http://localhost:3201|%'");
     await pool.query("delete from discogs_bucket where id in ('api:localhost:3201', 'img:localhost:3201')");
     await pool.query("delete from rate_limit where key like 'app:%:ip:203.0.113.%'");
   } catch (error) {
