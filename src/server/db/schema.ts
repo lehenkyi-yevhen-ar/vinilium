@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { bigint, boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * Better Auth core tables (user, session, account, verification) + its database-backed
@@ -85,6 +85,39 @@ export const rateLimit = pgTable("rate_limit", {
   key: text("key").notNull().unique(),
   count: integer("count").notNull(),
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
+
+/**
+ * Discogs response cache. EVERY row is TTL-bound (`expires_at = fetched_at + DISCOGS_CACHE_TTL_SECONDS`)
+ * and is deleted by the purge job, so nothing here is a permanent copy of Discogs content.
+ * `payload` holds our own normalised, whitelisted shape (no price/marketplace fields), never the raw response.
+ */
+export const discogsCache = pgTable(
+  "discogs_cache",
+  {
+    key: text("key").primaryKey(),
+    payload: jsonb("payload").notNull(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("discogs_cache_expires_at_idx").on(t.expiresAt)],
+);
+
+/**
+ * Shared token bucket for outbound Discogs requests: one row per API origin, so every serverless
+ * instance draws from the same budget. `capacity`/`refill_per_sec` follow the limit Discogs reports in
+ * its X-Discogs-Ratelimit headers; `blocked_until` is set after a 429.
+ */
+export const discogsBucket = pgTable("discogs_bucket", {
+  id: text("id").primaryKey(),
+  tokens: doublePrecision("tokens").notNull(),
+  capacity: integer("capacity").notNull(),
+  refillPerSec: doublePrecision("refill_per_sec").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+  observedLimit: integer("observed_limit"),
+  observedRemaining: integer("observed_remaining"),
+  observedAt: timestamp("observed_at", { withTimezone: true }),
 });
 
 export const userRelations = relations(user, ({ many }) => ({

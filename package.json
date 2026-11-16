@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "discogs:smoke": "tsx --conditions=react-server scripts/discogs-smoke.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
@@ -28,6 +29,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@playwright/test": "^1.65.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19",

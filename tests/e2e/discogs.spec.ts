@@ -1,0 +1,248 @@
+import { expect, test, type APIRequestContext } from "@playwright/test";
+import { mergeGroups } from "../../src/lib/discogs/group";
+import type { ArtistGroup } from "../../src/lib/discogs/types";
+
+/**
+ * The Discogs flow end to end, against the MOCKED Discogs server (tests/mocks/discogs-mock.ts, FAKE credentials):
+ * search -> versions -> release -> image proxy, plus cache, throttling and our own limits.
+ * Needs a real Postgres (cache, token bucket and limiter live there): see playwright.config.ts.
+ */
+test.skip(!process.env.E2E_HAS_DB, "Needs DATABASE_URL (e.g. a throwaway Neon branch); the Discogs flow stores its cache and limits in Postgres.");
+test.describe.configure({ mode: "serial" });
+
+const MOCK = "http://localhost:3201";
+const RUN = Date.now().toString(36);
+const OCTET = 1 + Math.floor(Math.random() * 190);
+/** Each test uses its own client IP (documentation range 203.0.113.0/24), so limiter buckets never collide. */
+const ip = (n: number) => ({ "x-forwarded-for": `203.0.113.${OCTET + n}` });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const MARKETPLACE = ["lowest_price", "num_for_sale", "estimated_weight", "blocked_from_sale", "community", "\"price\""];
+
+const search = (request: APIRequestContext, q: string, n: number, extra = "") =>
+  request.get(`/api/discogs/search?q=${encodeURIComponent(q)}&mode=artist${extra}`, { headers: ip(n) });
+const mockLog = async (request: APIRequestContext) => (await request.get(`${MOCK}/__log`)).json() as Promise<Array<{ path: string; query: Record<string, string>; authorization: string | null; userAgent: string | null; status: number }>>;
+
+let thumb = "";
+let groupsPage1: ArtistGroup[] = [];
+const Q1 = `daft-${RUN}-a`;
+
+test.beforeAll(async ({ request }) => {
+  await request.post(`${MOCK}/__reset`);
+  await request.post(`${MOCK}/__control`, { data: { throttleNext: 0 } });
+});
+
+test("search groups by artist, dedupes, treats master_id 0 as standalone, and strips marketplace data", async ({ request }) => {
+  const res = await search(request, Q1, 1);
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.cached).toBe(false);
+
+  const groups: ArtistGroup[] = body.data.groups;
+  groupsPage1 = groups;
+  expect(groups.map((g) => g.artist)).toEqual(["Cobalt Parade", "Some Band", null]);
+
+  const discovery = groups[0].entries[0];
+  expect(discovery).toMatchObject({ key: "m:500", kind: "master", id: 500, mergedHits: 3 }); // 2 releases + the master -> ONE entry
+  expect(groups[1].entries[0]).toMatchObject({ key: "r:2001", kind: "release", mergedHits: 2 }); // master_id 0 = standalone, deduped by id
+
+  expect(body.data).toMatchObject({ page: 1, pages: 3, hasMore: true, incomplete: true }); // honest "may be incomplete"
+
+  const raw = JSON.stringify(body);
+  for (const k of MARKETPLACE) expect(raw).not.toContain(k);
+  expect(raw).not.toContain("42.5");
+
+  thumb = discovery.thumb!;
+  expect(thumb).toMatch(/^\/api\/discogs\/image\?u=/);
+  expect(new URL(thumb, "http://x").searchParams.get("u")).toBe(`${MOCK}/images/aaa/master500.jpg`);
+  expect(raw).not.toContain("i.discogs.com"); // the browser never sees an upstream image URL
+});
+
+test("an identical search is served from the cache (Discogs is not called again)", async ({ request }) => {
+  const res = await search(request, `  ${Q1.toUpperCase()}  `, 2); // same query after normalisation
+  const body = await res.json();
+  expect(body.cached).toBe(true);
+  const hits = (await mockLog(request)).filter((e) => e.path === "/database/search" && e.query.artist === Q1);
+  expect(hits).toHaveLength(1);
+});
+
+test("calls Discogs with the app's credentials and a descriptive User-Agent", async ({ request }) => {
+  const entry = (await mockLog(request)).find((e) => e.path === "/database/search" && e.query.artist === Q1)!;
+  expect(entry.authorization).toBe("Discogs key=test-key, secret=test-secret");
+  expect(entry.userAgent).toMatch(/^Vinilium\/0\.1 \(/);
+  expect(entry.query).toMatchObject({ type: "master", per_page: "50", page: "1" });
+});
+
+test("'load more' fetches page 2 and merges it without duplicating masters", async ({ request }) => {
+  const res = await search(request, Q1, 3, "&page=2");
+  const body = await res.json();
+  expect(body.data.page).toBe(2);
+  const merged = mergeGroups(groupsPage1, body.data.groups);
+  const daft = merged.find((g) => g.artist === "Cobalt Parade")!;
+  expect(daft.entries.map((e) => e.key)).toEqual(["m:500", "m:600", "m:700"]);
+  expect(daft.entries[0].mergedHits).toBe(4);
+});
+
+test("lists a master's versions, deduped and without prices", async ({ request }) => {
+  const res = await request.get("/api/discogs/masters/500/versions", { headers: ip(4) });
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.data.versions.map((v: { id: number }) => v.id)).toEqual([11, 12]);
+  expect(body.data).toMatchObject({ masterId: 500, hasMore: false, incomplete: false });
+  expect(body.data.versions[0].discogsUrl).toBe("https://www.discogs.com/release/11");
+  const raw = JSON.stringify(body);
+  for (const k of [...MARKETPLACE, "stats"]) expect(raw).not.toContain(k);
+});
+
+test("fetches a release, caches it, and strips marketplace data", async ({ request }) => {
+  const id = 1_000_000 + (Date.now() % 900_000);
+  const first = await request.get(`/api/discogs/releases/${id}`, { headers: ip(5) });
+  expect(first.status()).toBe(200);
+  const body = await first.json();
+  expect(body).toMatchObject({ cached: false, data: { id, title: "Glass Harbor", artist: "Cobalt Parade", masterId: 500 } });
+  expect(body.data.tracklist[0]).toMatchObject({ position: "A1", title: "Slow Orbit" });
+  expect(body.data.cover).toMatch(/^\/api\/discogs\/image\?u=/);
+  const raw = JSON.stringify(body);
+  for (const k of MARKETPLACE) expect(raw).not.toContain(k);
+
+  const second = await (await request.get(`/api/discogs/releases/${id}`, { headers: ip(5) })).json();
+  expect(second.cached).toBe(true);
+  expect((await mockLog(request)).filter((e) => e.path === `/releases/${id}`)).toHaveLength(1);
+});
+
+test("rejects bad input and maps 404", async ({ request }) => {
+  expect((await request.get("/api/discogs/releases/404404", { headers: ip(6) })).status()).toBe(404);
+  for (const path of [
+    "/api/discogs/releases/abc",
+    "/api/discogs/releases/0",
+    "/api/discogs/releases/1.5",
+    "/api/discogs/masters/0/versions",
+    "/api/discogs/search?mode=artist",
+    "/api/discogs/search?q=x&mode=bogus",
+    "/api/discogs/search?q=x&mode=artist&page=6", // beyond the page cap
+    "/api/discogs/search?q=&mode=artist",
+    `/api/discogs/search?q=${"x".repeat(101)}&mode=artist`,
+  ]) {
+    const res = await request.get(path, { headers: ip(6) });
+    expect(res.status(), path).toBe(400);
+    expect((await res.json()).error).toBe("bad_request");
+  }
+});
+
+test("image proxy streams an authenticated image with cache headers bounded by the TTL", async ({ request }) => {
+  const res = await request.get(thumb, { headers: ip(7) });
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toBe("image/png");
+  expect(res.headers()["cache-control"]).toBe("public, max-age=300, s-maxage=300");
+  expect(res.headers()["x-content-type-options"]).toBe("nosniff");
+  const buf = await res.body();
+  expect([...buf.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+
+  const img = (await mockLog(request)).find((e) => e.path === "/images/aaa/master500.jpg")!;
+  expect(img.authorization).toBe("Discogs key=test-key, secret=test-secret"); // image requests are authenticated
+});
+
+test("image proxy only fetches allow-listed Discogs image hosts (SSRF)", async ({ request }) => {
+  const before = (await mockLog(request)).length;
+  for (const u of [
+    "https://evil.example/x.png",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://localhost:3201.evil.example/x.png",
+    "http://localhost:3201@evil.example/x.png",
+    "http://user:pw@localhost:3201/images/x.png",
+    "http://127.0.0.1:3201/images/x.png",
+    "http://localhost:9999/images/x.png",
+    "file:///etc/passwd",
+    "https://i.discogs.com.evil.example/x.png",
+  ]) {
+    const res = await request.get(`/api/discogs/image?u=${encodeURIComponent(u)}`, { headers: ip(8) });
+    if (res.status() === 429) break; // our own limiter kicked in (that is fine, nothing was fetched either way)
+    expect(res.status(), u).toBe(400);
+  }
+  expect((await request.get("/api/discogs/image", { headers: ip(9) })).status()).toBe(400);
+  expect((await mockLog(request)).length).toBe(before); // nothing reached the "upstream"
+});
+
+test("image proxy handles upstream trouble gracefully", async ({ request }) => {
+  const notImage = await request.get(`/api/discogs/image?u=${encodeURIComponent(`${MOCK}/images/notimage.png`)}`, { headers: ip(10) });
+  expect(notImage.status()).toBe(502);
+  const missing = await request.get(`/api/discogs/image?u=${encodeURIComponent(`${MOCK}/images/missing.png`)}`, { headers: ip(10) });
+  expect(missing.status()).toBe(404);
+});
+
+test("image 429 from Discogs becomes a clean 'throttled' answer with retryAfter; API calls recover before images do", async ({ request }) => {
+  const res = await request.get(`/api/discogs/image?u=${encodeURIComponent(`${MOCK}/images/ratelimited.png`)}`, { headers: ip(11) });
+  expect(res.status()).toBe(429);
+  expect(res.headers()["retry-after"]).toBe("2");
+  expect(await res.json()).toMatchObject({ error: "throttled", scope: "discogs", retryAfter: 2 });
+
+  const during = await request.get(thumb, { headers: ip(12) }); // the shared block is honoured without calling Discogs
+  expect(during.status()).toBe(429);
+
+  await sleep(2600);
+  // After the block ends the bucket holds a single probe token. API calls may use it; images keep a reserve
+  // free for API calls, so they stay throttled (with a retryAfter) until the bucket refills.
+  const api = await search(request, `after-image-429-${RUN}`, 13);
+  expect(api.status()).toBe(200);
+  const image = await request.get(thumb, { headers: ip(13) });
+  expect(image.status()).toBe(429);
+  expect(Number(image.headers()["retry-after"])).toBeGreaterThanOrEqual(1);
+});
+
+test("a 429 from the API is retried with backoff and jitter, then succeeds", async ({ request }) => {
+  const q = `retry-${RUN}`;
+  await request.post(`${MOCK}/__control`, { data: { throttleNext: 1, retryAfter: 1 } });
+  const t0 = Date.now();
+  const res = await search(request, q, 14);
+  expect(res.status()).toBe(200);
+  expect(Date.now() - t0).toBeGreaterThanOrEqual(900); // it waited
+  const attempts = (await mockLog(request)).filter((e) => e.path === "/database/search" && e.query.artist === q);
+  expect(attempts.map((a) => a.status)).toEqual([429, 200]);
+});
+
+test("when Discogs says 'slow down' for long, the UI gets a 'throttled' state with retryAfter, then recovers", async ({ request }) => {
+  await request.post(`${MOCK}/__control`, { data: { throttleNext: 3, retryAfter: 4 } });
+  const q = `throttle-${RUN}`;
+  const res = await search(request, q, 15);
+  expect(res.status()).toBe(429);
+  expect(res.headers()["retry-after"]).toBe("4");
+  expect(await res.json()).toMatchObject({ error: "throttled", scope: "discogs", retryAfter: 4 });
+
+  // Every instance now shares the block: a different search is refused locally, without calling Discogs.
+  const before = (await mockLog(request)).length;
+  const second = await search(request, `${q}-2`, 16);
+  expect(second.status()).toBe(429);
+  expect(((await second.json()) as { retryAfter: number }).retryAfter).toBeGreaterThanOrEqual(1);
+  expect((await mockLog(request)).length).toBe(before);
+
+  await request.post(`${MOCK}/__control`, { data: { throttleNext: 0 } });
+  await sleep(4600);
+  const recovered = await search(request, `${q}-3`, 17);
+  expect(recovered.status()).toBe(200);
+});
+
+test("our own per-IP limit answers 429 'rate_limited' with Retry-After, and does not affect other IPs", async ({ request }) => {
+  const q = `limit-${RUN}`;
+  const statuses: number[] = [];
+  let last;
+  for (let i = 0; i < 10; i++) {
+    last = await search(request, q, 40);
+    statuses.push(last.status());
+  }
+  expect(statuses.slice(0, 8)).toEqual(Array(8).fill(200)); // RL_SEARCH_IP_PER_MIN = 8 in this server
+  expect(statuses.slice(8)).toEqual([429, 429]);
+  expect(await last!.json()).toMatchObject({ error: "rate_limited", scope: "app" });
+  expect(Number(last!.headers()["retry-after"])).toBeGreaterThanOrEqual(1);
+
+  expect((await search(request, q, 41)).status()).toBe(200); // another IP is fine
+});
+
+test("the purge endpoint requires the cron secret", async ({ request }) => {
+  expect((await request.get("/api/cron/purge")).status()).toBe(401);
+  expect((await request.get("/api/cron/purge", { headers: { authorization: "Bearer wrong" } })).status()).toBe(401);
+  const ok = await request.get("/api/cron/purge", { headers: { authorization: "Bearer e2e-cron-secret-0123456789" } });
+  expect(ok.status()).toBe(200);
+  const body = await ok.json();
+  expect(body).toMatchObject({ ok: true });
+  expect(typeof body.cacheRows).toBe("number");
+  expect(typeof body.rateLimitRows).toBe("number");
+});

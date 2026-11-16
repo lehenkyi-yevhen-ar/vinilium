@@ -9,5 +9,6 @@ export default defineConfig({
       "server-only": path.resolve(__dirname, "tests/stubs/server-only.ts"),
     },
   },
-  test: { include: ["tests/unit/**/*.test.ts"], environment: "node" },
+  // Generous timeouts: with many files in parallel, the first import of heavy modules (better-auth, PGlite) is slow.
+  test: { include: ["tests/unit/**/*.test.ts"], environment: "node", testTimeout: 30_000, hookTimeout: 60_000 },
 });

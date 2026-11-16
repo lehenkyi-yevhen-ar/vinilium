@@ -18,6 +18,10 @@ const eslintConfig = defineConfig([
     "drizzle/**",
   ]),
   {
+    // `_name` marks a deliberately unused parameter (e.g. to type a mock's call arguments).
+    rules: { "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }] },
+  },
+  {
     // The Ліс design system is served as static files from /public/ds on purpose (vendored, unmodified).
     files: ["src/app/[[]locale]/layout.tsx", "src/app/global-not-found.tsx"],
     rules: { "@next/next/no-css-tags": "off" },

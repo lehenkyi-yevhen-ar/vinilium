@@ -17,6 +17,17 @@ const serverSchema = z.object({
   DISCOGS_TOKEN: optional(z.string()),
   DISCOGS_CONSUMER_KEY: optional(z.string()),
   DISCOGS_CONSUMER_SECRET: optional(z.string()),
+  /** Only for tests (mock server). Leave unset in real environments. */
+  DISCOGS_API_BASE: optional(z.url()),
+  /** ONE TTL for everything we cache from Discogs (API data, and the image proxy's Cache-Control). 6 h by default. */
+  DISCOGS_CACHE_TTL_SECONDS: optional(z.coerce.number().int().min(1)),
+  /** Shared secret for the purge endpoint (Vercel Cron sends it as `Authorization: Bearer ...`). Endpoint is disabled without it. */
+  CRON_SECRET: optional(z.string().min(16, "CRON_SECRET must be at least 16 characters")),
+  // Our own per-minute request limits (defaults live in src/server/limits.ts). Mostly useful for tests.
+  RL_SEARCH_IP_PER_MIN: optional(z.coerce.number().int().min(1)),
+  RL_SEARCH_USER_PER_MIN: optional(z.coerce.number().int().min(1)),
+  RL_IMAGE_IP_PER_MIN: optional(z.coerce.number().int().min(1)),
+  RL_IMAGE_USER_PER_MIN: optional(z.coerce.number().int().min(1)),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;
