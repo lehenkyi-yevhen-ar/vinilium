@@ -1,0 +1,157 @@
+{
+  "meta": {
+    "description": "Finn vinylutgivelser, lag en ønskeliste og hold oversikt over samlingen din."
+  },
+  "common": {
+    "loading": "Laster…",
+    "save": "Lagre",
+    "cancel": "Avbryt",
+    "continue": "Fortsett",
+    "back": "Tilbake",
+    "optional": "valgfritt",
+    "or": "eller",
+    "skipToContent": "Hopp til innhold",
+    "genericError": "Noe gikk galt. Prøv igjen.",
+    "tooManyRequests": "For mange forsøk. Vent litt og prøv på nytt."
+  },
+  "nav": {
+    "primary": "Hovednavigasjon",
+    "home": "Hjem",
+    "account": "Konto",
+    "signIn": "Logg inn",
+    "signUp": "Opprett konto",
+    "signOut": "Logg ut",
+    "menu": "Meny",
+    "language": "Språk",
+    "userMenu": "Kontomeny"
+  },
+  "locales": {
+    "uk": "Українська",
+    "en": "English",
+    "nb": "Norsk bokmål"
+  },
+  "home": {
+    "eyebrow": "For vinylelskere",
+    "title": "Finn akkurat den utgivelsen.",
+    "lead": "Søk på et spor, velg artist og album, og sammenlign utgivelser etter land, år og plateselskap. Hold din egen ønskeliste og samling.",
+    "ctaSignUp": "Opprett en gratis konto",
+    "ctaSignIn": "Jeg har allerede en konto",
+    "welcomeBack": "Velkommen tilbake, {name}.",
+    "ctaAccount": "Åpne kontoen min",
+    "step1Title": "Start med et spor",
+    "step1Text": "Du trenger ikke huske albumet. Skriv inn en sang og se hvem som ga den ut på vinyl.",
+    "step2Title": "Sammenlign utgivelser",
+    "step2Text": "Filtrer på land, år og plateselskap for å finne den du eier, eller den du vil ha.",
+    "step3Title": "Hold dine lister",
+    "step3Text": "En ønskeliste og en samling, med egne notater og stand."
+  },
+  "auth": {
+    "email": "E-post",
+    "password": "Passord",
+    "name": "Navn",
+    "passwordHelp": "Minst 8 tegn.",
+    "showPassword": "Vis passord",
+    "hidePassword": "Skjul passord",
+    "continueWithGoogle": "Fortsett med Google",
+    "signInTitle": "Logg inn",
+    "signInLead": "Velkommen tilbake. Logg inn for å se listene dine.",
+    "signInSubmit": "Logg inn",
+    "forgotPassword": "Glemt passordet?",
+    "noAccount": "Ny her?",
+    "signUpLink": "Opprett en konto",
+    "signUpTitle": "Opprett kontoen din",
+    "signUpLead": "Gratis. Ønskelisten og samlingen din forblir din.",
+    "signUpSubmit": "Opprett konto",
+    "haveAccount": "Har du allerede en konto?",
+    "signInLink": "Logg inn",
+    "forgotTitle": "Tilbakestill passordet",
+    "forgotLead": "Skriv inn e-postadressen din, så sender vi en lenke for å velge nytt passord.",
+    "forgotSubmit": "Send lenke",
+    "forgotSent": "Hvis det finnes en konto med den e-postadressen, er en lenke på vei.",
+    "backToSignIn": "Tilbake til innlogging",
+    "resetTitle": "Velg nytt passord",
+    "resetSubmit": "Lagre nytt passord",
+    "newPassword": "Nytt passord",
+    "resetDone": "Passordet er endret. Du kan logge inn nå.",
+    "resetInvalid": "Denne lenken er ugyldig eller utløpt. Be om en ny.",
+    "verifyTitle": "Sjekk innboksen",
+    "verifyLead": "Vi har sendt en bekreftelseslenke til {email}. Åpne den for å aktivere kontoen.",
+    "verifyResend": "Send e-posten på nytt",
+    "verifyResent": "Bekreftelsesmeldingen er sendt.",
+    "verifyDone": "E-postadressen din er bekreftet.",
+    "verifyFailed": "Denne bekreftelseslenken er ugyldig eller utløpt.",
+    "notVerified": "Bekreft e-postadressen først. Vi har nettopp sendt deg en ny lenke.",
+    "errors": {
+      "INVALID_EMAIL_OR_PASSWORD": "Feil e-post eller passord.",
+      "INVALID_EMAIL": "Skriv inn en gyldig e-postadresse.",
+      "INVALID_PASSWORD": "Feil passord.",
+      "PASSWORD_TOO_SHORT": "Passordet må ha minst 8 tegn.",
+      "PASSWORD_TOO_LONG": "Passordet er for langt.",
+      "USER_ALREADY_EXISTS": "Det finnes allerede en konto med denne e-postadressen. Prøv å logge inn.",
+      "EMAIL_NOT_VERIFIED": "Bekreft e-postadressen først. Vi har nettopp sendt deg en ny lenke.",
+      "INVALID_TOKEN": "Denne lenken er ugyldig eller utløpt.",
+      "SESSION_EXPIRED": "Økten er for gammel for denne handlingen. Logg inn på nytt og prøv igjen."
+    },
+    "validation": {
+      "emailRequired": "Skriv inn e-postadressen din.",
+      "emailInvalid": "Skriv inn en gyldig adresse, for eksempel navn@eksempel.no.",
+      "passwordRequired": "Skriv inn passordet ditt.",
+      "passwordShort": "Bruk minst 8 tegn.",
+      "nameRequired": "Skriv inn navnet ditt."
+    }
+  },
+  "account": {
+    "title": "Kontoen din",
+    "profile": "Profil",
+    "emailLabel": "E-post",
+    "emailVerified": "Bekreftet",
+    "emailUnverified": "Ikke bekreftet",
+    "languageTitle": "Språk",
+    "languageHelp": "Brukes i grensesnittet og i e-postene vi sender deg.",
+    "dangerTitle": "Slett konto",
+    "dangerText": "Dette sletter kontoen, ønskelisten, samlingen og alle notater for godt. Det kan ikke angres.",
+    "dangerButton": "Slett kontoen min…",
+    "confirmTitle": "Slette kontoen?",
+    "confirmText": "Alt du har lagret blir fjernet for godt. Skriv inn passordet for å bekrefte.",
+    "confirmPasswordLabel": "Passord",
+    "confirmDelete": "Slett alt",
+    "keepAccount": "Behold kontoen",
+    "deleted": "Kontoen din og alle data er slettet."
+  },
+  "footer": {
+    "tagline": "Vinylutgivelser, ønskeliste og samling.",
+    "discogsNotice": "Utgivelsesdata og bilder leveres av Discogs. {appName} er ikke tilknyttet eller støttet av Discogs.",
+    "dataProvidedBy": "Data provided by Discogs",
+    "viewOnDiscogs": "Se på Discogs",
+    "fontsCredit": "Skrifter: Ermilov og KyivType Sans (CC BY-ND 4.0).",
+    "designSystem": "Grensesnitt: designsystemet «Ліс»."
+  },
+  "states": {
+    "emptyTitle": "Ingenting her ennå",
+    "errorTitle": "Noe gikk galt",
+    "throttledTitle": "Det er litt travelt akkurat nå",
+    "throttledText": "Mange søker samtidig. Prøv igjen om noen sekunder."
+  },
+  "notFound": {
+    "title": "Siden finnes ikke",
+    "text": "Den siden finnes ikke, eller den er flyttet.",
+    "home": "Tilbake til forsiden"
+  },
+  "email": {
+    "verify": {
+      "subject": "Bekreft e-posten din for {appName}",
+      "heading": "Bekreft e-postadressen",
+      "body": "Hei {name}! Trykk på knappen under for å bekrefte e-postadressen og fullføre oppsettet av kontoen.",
+      "button": "Bekreft e-post",
+      "ignore": "Hvis du ikke opprettet en konto, kan du se bort fra denne meldingen."
+    },
+    "reset": {
+      "subject": "Tilbakestill passordet ditt på {appName}",
+      "heading": "Velg nytt passord",
+      "body": "Hei {name}! Vi har mottatt en forespørsel om å tilbakestille passordet ditt. Lenken fungerer i én time.",
+      "button": "Tilbakestill passord",
+      "ignore": "Hvis du ikke ba om dette, kan du se bort fra meldingen. Passordet ditt forblir det samme."
+    },
+    "linkFallback": "Fungerer ikke knappen? Lim inn denne lenken i nettleseren:"
+  }
+}

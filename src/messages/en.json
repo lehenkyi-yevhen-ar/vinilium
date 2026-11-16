@@ -1,0 +1,157 @@
+{
+  "meta": {
+    "description": "Find vinyl pressings, keep a wishlist and track your collection."
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "back": "Back",
+    "optional": "optional",
+    "or": "or",
+    "skipToContent": "Skip to content",
+    "genericError": "Something went wrong. Please try again.",
+    "tooManyRequests": "Too many attempts. Please wait a moment and try again."
+  },
+  "nav": {
+    "primary": "Main navigation",
+    "home": "Home",
+    "account": "Account",
+    "signIn": "Sign in",
+    "signUp": "Create account",
+    "signOut": "Sign out",
+    "menu": "Menu",
+    "language": "Language",
+    "userMenu": "Account menu"
+  },
+  "locales": {
+    "uk": "Українська",
+    "en": "English",
+    "nb": "Norsk bokmål"
+  },
+  "home": {
+    "eyebrow": "For vinyl people",
+    "title": "Find the exact pressing.",
+    "lead": "Search by track, pick the artist and album, then compare pressings by country, year and label. Keep a wishlist and a collection of your own.",
+    "ctaSignUp": "Create a free account",
+    "ctaSignIn": "I already have an account",
+    "welcomeBack": "Welcome back, {name}.",
+    "ctaAccount": "Open my account",
+    "step1Title": "Start with a track",
+    "step1Text": "No need to remember the album. Type a song and see who pressed it on vinyl.",
+    "step2Title": "Compare pressings",
+    "step2Text": "Filter by country, year and label to find the one on your shelf, or the one you want.",
+    "step3Title": "Keep your lists",
+    "step3Text": "A wishlist and a collection, with your own notes and condition grading."
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "passwordHelp": "At least 8 characters.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "continueWithGoogle": "Continue with Google",
+    "signInTitle": "Sign in",
+    "signInLead": "Welcome back. Sign in to see your lists.",
+    "signInSubmit": "Sign in",
+    "forgotPassword": "Forgot your password?",
+    "noAccount": "New here?",
+    "signUpLink": "Create an account",
+    "signUpTitle": "Create your account",
+    "signUpLead": "Free. Your wishlist and collection stay yours.",
+    "signUpSubmit": "Create account",
+    "haveAccount": "Already have an account?",
+    "signInLink": "Sign in",
+    "forgotTitle": "Reset your password",
+    "forgotLead": "Enter your email and we will send you a link to choose a new password.",
+    "forgotSubmit": "Send reset link",
+    "forgotSent": "If an account exists for that email, a reset link is on its way.",
+    "backToSignIn": "Back to sign in",
+    "resetTitle": "Choose a new password",
+    "resetSubmit": "Save new password",
+    "newPassword": "New password",
+    "resetDone": "Your password was changed. You can sign in now.",
+    "resetInvalid": "This reset link is invalid or has expired. Request a new one.",
+    "verifyTitle": "Check your inbox",
+    "verifyLead": "We sent a verification link to {email}. Open it to activate your account.",
+    "verifyResend": "Send the email again",
+    "verifyResent": "Verification email sent.",
+    "verifyDone": "Your email is verified.",
+    "verifyFailed": "This verification link is invalid or has expired.",
+    "notVerified": "Please verify your email first. We have just sent you a new link.",
+    "errors": {
+      "INVALID_EMAIL_OR_PASSWORD": "Wrong email or password.",
+      "INVALID_EMAIL": "Enter a valid email address.",
+      "INVALID_PASSWORD": "Wrong password.",
+      "PASSWORD_TOO_SHORT": "Password must be at least 8 characters.",
+      "PASSWORD_TOO_LONG": "Password is too long.",
+      "USER_ALREADY_EXISTS": "An account with this email already exists. Try signing in.",
+      "EMAIL_NOT_VERIFIED": "Please verify your email first. We have just sent you a new link.",
+      "INVALID_TOKEN": "This link is invalid or has expired.",
+      "SESSION_EXPIRED": "Your session is too old for this action. Sign in again and retry."
+    },
+    "validation": {
+      "emailRequired": "Enter your email.",
+      "emailInvalid": "Enter a valid email address, like name@example.com.",
+      "passwordRequired": "Enter your password.",
+      "passwordShort": "Use at least 8 characters.",
+      "nameRequired": "Enter your name."
+    }
+  },
+  "account": {
+    "title": "Your account",
+    "profile": "Profile",
+    "emailLabel": "Email",
+    "emailVerified": "Verified",
+    "emailUnverified": "Not verified",
+    "languageTitle": "Language",
+    "languageHelp": "Used for the interface and the emails we send you.",
+    "dangerTitle": "Delete account",
+    "dangerText": "This permanently deletes your account, your wishlist, your collection and all notes. It cannot be undone.",
+    "dangerButton": "Delete my account…",
+    "confirmTitle": "Delete your account?",
+    "confirmText": "Everything you saved will be removed for good. Type your password to confirm.",
+    "confirmPasswordLabel": "Password",
+    "confirmDelete": "Delete everything",
+    "keepAccount": "Keep my account",
+    "deleted": "Your account and all your data were deleted."
+  },
+  "footer": {
+    "tagline": "Vinyl pressings, wishlist and collection.",
+    "discogsNotice": "Release data and images are provided by Discogs. {appName} is not affiliated with or endorsed by Discogs.",
+    "dataProvidedBy": "Data provided by Discogs",
+    "viewOnDiscogs": "View on Discogs",
+    "fontsCredit": "Fonts: Ermilov and KyivType Sans (CC BY-ND 4.0).",
+    "designSystem": "Interface: Ліс design system."
+  },
+  "states": {
+    "emptyTitle": "Nothing here yet",
+    "errorTitle": "Something went wrong",
+    "throttledTitle": "We are a little busy",
+    "throttledText": "Lots of people are searching right now. Try again in a few seconds."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "That page does not exist or was moved.",
+    "home": "Back to the home page"
+  },
+  "email": {
+    "verify": {
+      "subject": "Verify your email for {appName}",
+      "heading": "Confirm your email",
+      "body": "Hi {name}, tap the button below to verify your email and finish setting up your account.",
+      "button": "Verify email",
+      "ignore": "If you did not create an account, you can ignore this message."
+    },
+    "reset": {
+      "subject": "Reset your {appName} password",
+      "heading": "Choose a new password",
+      "body": "Hi {name}, we received a request to reset your password. The link works for one hour.",
+      "button": "Reset password",
+      "ignore": "If you did not ask for this, you can ignore this message. Your password stays the same."
+    },
+    "linkFallback": "Button not working? Paste this link into your browser:"
+  }
+}

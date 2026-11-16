@@ -1,0 +1,85 @@
+/*
+ * Additions on top of the Ліс design system. Rules:
+ *  - tokens only (no raw colours, sizes or radii); palette scales are never used directly.
+ *  - only for things the system does not provide (status messages, empty states, skip link, page shell).
+ * If the system later ships an equivalent component, delete the rule here and use the system one.
+ */
+
+body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; background: var(--color-bg); color: var(--color-text); font: var(--text-body-m); }
+.x-main { flex: 1 0 auto; padding-bottom: var(--space-16); }
+
+.x-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.x-skip {
+  position: absolute; left: var(--space-4); top: -100px; z-index: var(--z-toast);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  background: var(--color-primary); color: var(--color-on-primary); font: var(--text-label); text-decoration: none;
+}
+.x-skip:focus { top: var(--space-4); outline: var(--focus-ring-width) solid var(--color-focus); outline-offset: var(--focus-ring-offset); }
+
+.x-contents { display: contents; }
+.x-page { padding-top: var(--space-8); }
+.x-narrow { width: 100%; max-width: var(--container-sm); margin-inline: auto; }
+
+/* Auth / form pages */
+.x-card { background: var(--color-surface); border: var(--border-thin) solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-8); box-shadow: var(--elevation-1); }
+@media (max-width: 640px) { .x-card { padding: var(--space-5); } }
+.x-card h1 { font: var(--text-h2); margin: 0 0 var(--space-2); text-transform: var(--case-display); }
+.x-lead { color: var(--color-text-muted); margin: 0 0 var(--space-6); font: var(--text-body-m); }
+.x-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.x-divider { display: flex; align-items: center; gap: var(--space-3); color: var(--color-text-muted); font: var(--text-caption); margin: var(--space-2) 0; }
+.x-divider::before, .x-divider::after { content: ""; flex: 1; height: var(--border-thin); background: var(--color-border); }
+.x-foot { margin-top: var(--space-6); color: var(--color-text-muted); font: var(--text-body-s); display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Input with a trailing control (show/hide password) */
+.x-input-row { position: relative; }
+.x-input-row .input { width: 100%; }
+.x-input-trailing { position: absolute; inset-block: 0; inset-inline-end: 0; display: flex; align-items: center; padding-inline-end: var(--space-1); }
+.x-input-row:has(.x-input-trailing) .input { padding-inline-end: calc(var(--touch-target) + var(--space-1)); }
+
+/* Status message (info / success / warning / error / throttled) */
+.x-status { display: flex; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-surface-raised); border: var(--border-thin) solid var(--color-border); border-inline-start: var(--border-strong) solid var(--x-tone, var(--color-info)); }
+.x-status__icon { flex: none; width: var(--icon-lg); height: var(--icon-lg); color: var(--x-tone, var(--color-info)); }
+.x-status__body { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.x-status__title { margin: 0; font: var(--text-label); }
+.x-status__text { color: var(--color-text-muted); font: var(--text-body-s); }
+.x-status__actions { margin-top: var(--space-2); display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.x-status--info { --x-tone: var(--color-info); }
+.x-status--success { --x-tone: var(--color-success); }
+.x-status--warning, .x-status--throttled { --x-tone: var(--color-warning); }
+.x-status--error { --x-tone: var(--color-error); }
+
+/* Empty state */
+.x-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--space-3); padding: var(--space-16) var(--space-4); }
+.x-empty h2 { font: var(--text-h3); margin: 0; }
+.x-empty p { margin: 0; color: var(--color-text-muted); max-width: 48ch; }
+
+/* Home */
+.x-hero { padding-top: var(--space-12); max-width: 60ch; }
+.x-hero h1 { font: var(--text-h1); text-transform: var(--case-display); margin: var(--space-2) 0 var(--space-4); }
+.x-hero .x-actions { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-6); }
+.x-steps { display: grid; gap: var(--space-4); grid-template-columns: repeat(3, 1fr); margin-top: var(--space-12); }
+@media (max-width: 860px) { .x-steps { grid-template-columns: 1fr; } }
+.x-steps .x-card h2 { font: var(--text-h4); margin: 0 0 var(--space-2); }
+.x-steps .x-card p { margin: 0; color: var(--color-text-muted); font: var(--text-body-s); }
+
+/* Account */
+.x-section { margin-top: var(--space-6); }
+.x-section h2 { font: var(--text-h4); margin: 0 0 var(--space-2); }
+.x-kv { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.x-danger { border-color: var(--color-error); }
+
+/* Discogs attribution: shown next to every block of Discogs data, and in the footer */
+.x-source { font: var(--text-caption); color: var(--color-text-muted); margin: var(--space-2) 0 0; }
+
+/* Footer extras */
+.x-footer-notes { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-6); font: var(--text-caption); color: var(--color-text-muted); }
+
+/* Header actions that the mobile TabBar replaces (phones only) */
+/* Specific enough to beat the system's .btn { display: inline-flex } regardless of stylesheet order. */
+@media (max-width: 640px) { .navbar__actions > .x-hide-mobile { display: none; } }
+
+/* 44px touch targets for standalone links (the system's rule); inline links inside sentences are exempt. */
+.x-link-block, .x-foot a, .x-source a, .navbar .navbar__logo { display: inline-flex; align-items: center; min-height: var(--touch-target); }
+.x-skip { min-height: var(--touch-target); display: inline-flex; align-items: center; }
+.x-link-block { align-self: flex-start; }
+.x-foot { align-items: center; }
