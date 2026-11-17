@@ -22,7 +22,11 @@ const VINYL = "Vinyl";
 /** The most masters resolved in one call. Each costs one Discogs request when it is not cached yet. */
 export const MAX_MASTERS_PER_BATCH = 12;
 
-type Deps = Omit<ClientDeps, "db"> & { db: AppDb };
+type Deps = Omit<ClientDeps, "db"> & {
+  db: AppDb;
+  /** Takes one unit of the caller's cold-fetch allowance (see cold-limit.ts). Called before every upstream call a batch makes. */
+  coldLimit?: () => Promise<{ allowed: boolean; retryAfter: number }>;
+};
 
 /** Cache-through: fresh row -> return it; otherwise ask Discogs, normalise, store with the TTL. */
 async function cached<T>(
@@ -207,6 +211,14 @@ export async function batchCached<T>(
       if (retryAfter !== undefined || unconfigured) return; // being throttled: do not launch anything new
       const id = todo[cursor++];
       if (id === undefined) return;
+      if (deps.coldLimit) {
+        const allowance = await deps.coldLimit();
+        if (!allowance.allowed) {
+          // Over this person's allowance: stop launching, exactly like a Discogs throttle (the screen shows a countdown, not an error).
+          retryAfter = Math.max(retryAfter ?? 0, allowance.retryAfter);
+          return;
+        }
+      }
       const out = await discogsGet(spec.path(id), {}, deps);
       if (out.ok) {
         upstreamCalls++;

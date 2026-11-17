@@ -30,6 +30,8 @@ const serverSchema = z.object({
   /** Shared secret for the purge endpoint (Vercel Cron sends it as `Authorization: Bearer ...`). Endpoint is disabled without it. */
   CRON_SECRET: optional(z.string().min(16, "CRON_SECRET must be at least 16 characters")),
   // Our own per-minute request limits (defaults live in src/server/limits.ts). Mostly useful for tests.
+  /** Cold Discogs fetches one person may cause per minute (list pages, album covers). Default and rationale: src/server/limits.ts. */
+  RL_COLD_USER_PER_MIN: optional(z.coerce.number().int().min(1)),
   RL_SEARCH_IP_PER_MIN: optional(z.coerce.number().int().min(1)),
   RL_SEARCH_USER_PER_MIN: optional(z.coerce.number().int().min(1)),
   RL_IMAGE_IP_PER_MIN: optional(z.coerce.number().int().min(1)),

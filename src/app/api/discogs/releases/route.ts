@@ -1,5 +1,6 @@
 import { getDb } from "@/server/db";
-import { badRequest, guard, releaseIdsSchema, respond } from "@/server/discogs/http";
+import { coldLimiter } from "@/server/discogs/cold-limit";
+import { badRequest, guardUser, releaseIdsSchema, respond } from "@/server/discogs/http";
 import { getReleases } from "@/server/discogs/service";
 
 /**
@@ -11,8 +12,9 @@ export async function GET(request: Request) {
   const ids = releaseIdsSchema.safeParse(new URL(request.url).searchParams.get("ids") ?? "");
   if (!ids.success) return badRequest("Expected ids: 1 to 24 comma-separated release ids.");
 
-  const blocked = await guard(request, "search");
-  if (blocked) return blocked;
+  const g = await guardUser(request, "search");
+  if ("response" in g) return g.response;
 
-  return respond(await getReleases({ db: getDb() }, ids.data));
+  const db = getDb();
+  return respond(await getReleases({ db, coldLimit: coldLimiter(db, g.userId) }, ids.data));
 }

@@ -51,48 +51,81 @@ export type CardState =
   | { kind: "pending"; retryAfter?: number }
   | { kind: "error"; unconfigured?: boolean };
 
-/**
- * Card data for the ids of the visible page, from ONE `/api/discogs/releases?ids=` request (served from the TTL cache, so a
- * warm page costs Discogs nothing). Anything not resolved yet is reported per item. The old batch stays on screen while a new
- * one loads (a refill after a move, the 5.5-hour refresh), so cards never flash back to skeletons.
- */
-export function useReleaseCards(ids: string) {
-  const { state, retry } = useDiscogs<ReleasesBatch>(ids ? `/api/discogs/releases?ids=${ids}` : null);
+/** The first records of a page are asked for on their own, so a cold page shows its top cards early; the rest follow. */
+export const HEAD_SIZE = 4;
+
+interface Part {
+  ids: string[];
+  state: Fetched<ReleasesBatch>;
+  last: ReleasesBatch | null;
+  retry: () => void;
+}
+
+/** One request of up to 24 ids. `enabled` = false keeps it idle (the tail waits for the head to settle). */
+function useBatchPart(ids: string[], enabled: boolean): Part {
+  const key = ids.join(",");
+  const { state, retry } = useDiscogs<ReleasesBatch>(key && enabled ? `/api/discogs/releases?ids=${key}` : null);
   const [last, setLast] = useState<ReleasesBatch | null>(null);
   if (state.kind === "ok" && last !== state.data) setLast(state.data); // adjust-during-render (React's derived-state pattern)
+  return { ids, state, last, retry };
+}
 
-  const batch = state.kind === "ok" ? state.data : state.kind === "loading" ? last : null;
+function resolve(part: Part, id: number): CardState {
+  const { state } = part;
+  // While a new batch loads (a refill after a move, the 5.5-hour refresh) the previous one stays on screen.
+  const batch = state.kind === "ok" ? state.data : state.kind === "loading" ? part.last : null;
+  if (batch) {
+    const card = batch.releases.find((r) => r.id === id);
+    if (card) return { kind: "ok", card };
+    if (batch.gone.includes(id)) return { kind: "gone" };
+    if (state.kind === "ok") {
+      // Not resolved: either Discogs (or our own per-person allowance) asked us to slow down, or it failed for this one.
+      return batch.retryAfter !== undefined ? { kind: "pending", retryAfter: batch.retryAfter } : { kind: "error" };
+    }
+  }
+  switch (state.kind) {
+    case "idle":
+    case "loading":
+      return { kind: "loading" };
+    case "throttled":
+      return { kind: "pending", retryAfter: state.retryAfter };
+    case "unconfigured":
+      return { kind: "error", unconfigured: true };
+    default:
+      return { kind: "error" };
+  }
+}
 
-  const cardFor = useCallback(
-    (id: number): CardState => {
-      if (batch) {
-        const card = batch.releases.find((r) => r.id === id);
-        if (card) return { kind: "ok", card };
-        if (state.kind === "ok") {
-          if (batch.gone.includes(id)) return { kind: "gone" };
-          // Not resolved: either Discogs asked us to slow down (retry after a while) or it failed for this one.
-          return batch.retryAfter !== undefined ? { kind: "pending", retryAfter: batch.retryAfter } : { kind: "error" };
-        }
-        if (batch.gone.includes(id)) return { kind: "gone" };
-      }
-      switch (state.kind) {
-        case "idle":
-        case "loading":
-          return { kind: "loading" };
-        case "throttled":
-          return { kind: "pending", retryAfter: state.retryAfter };
-        case "unconfigured":
-          return { kind: "error", unconfigured: true };
-        default:
-          return { kind: "error" };
-      }
-    },
-    [batch, state],
+/**
+ * Card data for the ids of the visible page, from the TTL cache through /api/discogs/releases. Two requests, never more: the first
+ * HEAD_SIZE ids, then (once that has settled) the rest, so the top of a COLD page appears after a couple of seconds instead of
+ * after all 12 lookups. The Discogs calls are the same either way; a warm page costs none. Anything not resolved yet is
+ * reported per item, and the old batch stays on screen while a new one loads, so cards never flash back to skeletons.
+ */
+export function useReleaseCards(ids: string) {
+  const all = ids ? ids.split(",") : [];
+  const head = useBatchPart(all.slice(0, HEAD_SIZE), true);
+  const headSettled = head.ids.length === 0 || (head.state.kind !== "loading" && head.state.kind !== "idle");
+  const tail = useBatchPart(all.slice(HEAD_SIZE), headSettled);
+
+  const partOf = useCallback(
+    (id: number) => (head.ids.includes(String(id)) ? head : tail),
+    [head, tail],
   );
+  const cardFor = useCallback((id: number): CardState => resolve(partOf(id), id), [partOf]);
 
-  const missingCount = state.kind === "ok" ? state.data.missing.length : state.kind === "throttled" ? ids.split(",").filter(Boolean).length : 0;
-  const retryAfter = state.kind === "ok" ? state.data.retryAfter : state.kind === "throttled" ? state.retryAfter : undefined;
-  return { state, retry, cardFor, missingCount, retryAfter };
+  const loading = [head, tail].some((p) => p.ids.length > 0 && (p.state.kind === "loading" || p.state.kind === "idle"));
+  const missingCount = [head, tail].reduce(
+    (n, p) => n + (p.state.kind === "ok" ? p.state.data.missing.length : p.state.kind === "throttled" ? p.ids.length : 0),
+    0,
+  );
+  const retryAfters = [head, tail].map((p) => (p.state.kind === "ok" ? p.state.data.retryAfter : p.state.kind === "throttled" ? p.state.retryAfter : undefined)).filter((n): n is number => n !== undefined);
+  const retryAfter = retryAfters.length ? Math.max(...retryAfters) : undefined;
+  const retry = useCallback(() => {
+    head.retry();
+    tail.retry();
+  }, [head, tail]);
+  return { loading, retry, cardFor, missingCount, retryAfter };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

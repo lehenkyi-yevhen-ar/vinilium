@@ -20,12 +20,12 @@ export function errorResponse(status: number, body: ApiErrorBody): Response {
  * must be signed in, (3) our own limits, per IP AND per user. Returns a ready error response, or null to proceed.
  * Sign-in is required because the Terms forbid giving third parties access to the Content and the 60/min budget is shared.
  */
-export async function guard(request: Request, scope: "search" | "image"): Promise<Response | null> {
+export async function guardUser(request: Request, scope: "search" | "image"): Promise<{ response: Response } | { userId: string }> {
   if (isCrossSite(request)) {
-    return errorResponse(403, { error: "forbidden", message: "This endpoint is only available to this site's own pages." });
+    return { response: errorResponse(403, { error: "forbidden", message: "This endpoint is only available to this site's own pages." }) };
   }
   const userId = await getRequestUserId(request.headers);
-  if (!userId) return errorResponse(401, { error: "unauthorized", message: "Sign in to search." });
+  if (!userId) return { response: errorResponse(401, { error: "unauthorized", message: "Sign in to search." }) };
 
   const db = getDb();
   const cfg = limits();
@@ -33,7 +33,13 @@ export async function guard(request: Request, scope: "search" | "image"): Promis
   const byIp = await hit(db, { key: `${scope}:ip:${ip}`, limit: cfg[scope].ip, windowSec: cfg.windowSec });
   const byUser = await hit(db, { key: `${scope}:user:${userId}`, limit: cfg[scope].user, windowSec: cfg.windowSec });
   const blocked = [byIp, byUser].filter((r) => !r.allowed).sort((a, b) => b.retryAfter - a.retryAfter)[0];
-  return blocked ? errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: blocked.retryAfter }) : null;
+  return blocked ? { response: errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: blocked.retryAfter }) } : { userId };
+}
+
+/** Same checks, for endpoints that do not need the user id: a ready error response, or null to proceed. */
+export async function guard(request: Request, scope: "search" | "image"): Promise<Response | null> {
+  const g = await guardUser(request, scope);
+  return "response" in g ? g.response : null;
 }
 
 /** DiscogsResult -> HTTP. `throttled` carries `retryAfter` so the UI can show a countdown. */

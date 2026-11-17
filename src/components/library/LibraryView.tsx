@@ -148,7 +148,7 @@ export function LibraryView() {
   useDS(root);
 
   const { state, ids, mutate, refresh } = useStoredPage(apiUrl(view));
-  const { state: detailState, retry, cardFor, missingCount, retryAfter } = useReleaseCards(ids);
+  const { loading: detailsLoading, retry, cardFor, missingCount, retryAfter } = useReleaseCards(ids);
 
   const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
   const [problems, setProblems] = useState<Record<number, string>>({});
@@ -413,7 +413,7 @@ export function LibraryView() {
             {searching ? t("summaryFiltered", { count: total, q: data.q }) : t("summary", { count: total })}
           </p>
 
-          {missingCount > 0 && detailState.kind !== "loading" ? (
+          {missingCount > 0 && !detailsLoading ? (
             <StatusMessage
               tone="throttled"
               title={t("waitingTitle")}

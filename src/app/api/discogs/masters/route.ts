@@ -1,5 +1,6 @@
 import { getDb } from "@/server/db";
-import { badRequest, guard, masterIdsSchema, respond } from "@/server/discogs/http";
+import { coldLimiter } from "@/server/discogs/cold-limit";
+import { badRequest, guardUser, masterIdsSchema, respond } from "@/server/discogs/http";
 import { getMasters } from "@/server/discogs/service";
 
 /**
@@ -10,8 +11,9 @@ export async function GET(request: Request) {
   const ids = masterIdsSchema.safeParse(new URL(request.url).searchParams.get("ids") ?? "");
   if (!ids.success) return badRequest("Expected ids: 1 to 12 comma-separated master ids.");
 
-  const blocked = await guard(request, "search");
-  if (blocked) return blocked;
+  const g = await guardUser(request, "search");
+  if ("response" in g) return g.response;
 
-  return respond(await getMasters({ db: getDb() }, ids.data));
+  const db = getDb();
+  return respond(await getMasters({ db, coldLimit: coldLimiter(db, g.userId) }, ids.data));
 }
