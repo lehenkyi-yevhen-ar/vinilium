@@ -54,6 +54,9 @@ npm run dev                     # http://localhost:3000
 | `DISCOGS_CACHE_TTL_SECONDS` | no | The ONE TTL for everything cached from Discogs (cache rows and the image proxy's `Cache-Control`). Default `14400` (4 h); **maximum** `21600` (6 h): the Discogs Terms forbid showing older Content, so larger values are capped. |
 | `CRON_SECRET` | prod | 16+ chars. Protects `GET /api/cron/purge`; the endpoint is disabled without it. Vercel Cron sends it automatically. |
 | `RL_SEARCH_IP_PER_MIN`, `RL_SEARCH_USER_PER_MIN`, `RL_IMAGE_IP_PER_MIN`, `RL_IMAGE_USER_PER_MIN` | no | Our own request limits (defaults 30 / 60 / 300 / 600). |
+| `RL_COLD_USER_PER_MIN` | no | Cold (uncached) Discogs lookups one person may cause per minute (default **24**: two cold pages of 12). Over it the screen shows "Waiting for Discogs" with a countdown. Why 24: Discogs allows ~60/min for the whole app, so two heavy users leave a fifth for everyone else. |
+| `NEXT_PUBLIC_OPERATOR_NAME`, `NEXT_PUBLIC_OPERATOR_COUNTRY` | before launch | Who runs the service, shown in the privacy policy and terms. Unset = a visible `[... TO BE FILLED]` placeholder. |
+| `HSTS_MAX_AGE_SECONDS`, `HSTS_INCLUDE_SUBDOMAINS` | no | **Unset = no HSTS header.** Set only after the whole site is confirmed to work over HTTPS, and raise in steps (300, 86400, 31536000). `HSTS_INCLUDE_SUBDOMAINS=1` adds `includeSubDomains`. See [docs/operations.md](docs/operations.md). |
 | `DISCOGS_API_BASE` | never | Tests only: points the client at the mock server. Do not set in a real environment. |
 
 Only `NEXT_PUBLIC_*` variables reach the browser, and none of them is a secret. `.env*` is git-ignored except
@@ -124,6 +127,9 @@ reference schema), plus `user.locale` and a database-backed `rate_limit` table.
 ### Scripts
 
 `npm run dev | build | start | lint | typecheck | test | test:e2e | discogs:smoke`
+
+Also: `audit:prod` (fails on a high/critical advisory in production dependencies; used by CI), `audit:all`, `i18n:export` /
+`i18n:import` (native-speaker review package), `legal:checklist` (privacy/terms review gate).
 
 ## How it is put together
 
@@ -203,8 +209,9 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
   conservative 25. A 429 is retried with exponential backoff and jitter; if the wait is long the API answers
   `429 {"error":"throttled","scope":"discogs","retryAfter":N}` (plus a `Retry-After` header) so the UI can show a countdown.
   Anonymous callers get `401 unauthorized`. Our own per-IP / per-user limit answers `429 {"error":"rate_limited","scope":"app",...}`.
-* **Purge cadence**: `vercel.json` runs the purge hourly. **Vercel's Hobby plan only allows daily cron jobs**, so change
-  the schedule to once a day there (expired rows are never served either way, and every cache write also deletes expired rows).
+* **Purge cadence**: `vercel.json` runs the purge **once a day** (`17 3 * * *`), which is valid on Vercel's Hobby plan (Hobby rejects
+  anything more frequent). On the Pro plan you may change it to hourly. Expired rows are never served either way, and every cache write
+  also deletes expired rows. Functions run in `fra1` (Frankfurt), next to the Neon database in eu-central-1.
 * **Client IP** for the limiter comes from `x-vercel-forwarded-for` / `x-forwarded-for` / `x-real-ip` and only valid IPs
   are accepted. That is trustworthy behind Vercel; if you self-host, put a proxy in front that overwrites these headers.
 * **Local gotcha (Windows / some ISPs)**: if requests to `i.discogs.com` time out (`UND_ERR_CONNECT_TIMEOUT`) while
@@ -212,13 +219,36 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
 * **Real-API check**: `npm run discogs:smoke` makes one search, one release fetch and one image request with your real
   credentials, prints the rate-limit numbers Discogs reports, and deletes the cache rows it created.
 
+## Privacy policy, terms and account data (milestone 5)
+
+* `/<locale>/privacy` and `/<locale>/terms` (uk/en/nb, linked from the footer and the sign-up form) are **drafts**: anything that makes a
+  legal claim carries a visible `[NEEDS LEGAL REVIEW]` mark and a banner says so. The factual parts (what is stored, cookies, providers,
+  deletion, export) describe what the code actually does. Open items: [docs/legal-review-checklist.md](docs/legal-review-checklist.md).
+* **Google tokens are not stored.** Google sign-in uses only the basic profile; the OAuth access/refresh/ID tokens Better Auth would
+  otherwise keep in the `account` table are nulled by a database hook (`src/server/auth/oauth-tokens.ts`).
+* **Account data export**: Account > "Download my data" (`GET /api/account/export`): name, email, language, creation date and your lists.
+  Never a hash, session, IP address or token. Lists can also be exported as CSV or JSON on the lists page.
+* Only two cookies are used (sign-in session, language): both strictly necessary, no analytics. If that changes, revisit the policy first.
+
+## Security and accessibility (milestone 5)
+
+* **Headers** (`src/lib/security-headers.ts`, applied in `next.config.ts`): nosniff, frame denial, referrer and permissions policies, and a
+  **report-only** CSP whose reports land in the server log as `[csp-report]`. HSTS is opt-in (`HSTS_MAX_AGE_SECONDS`).
+* **Image proxy / SSRF**: exact host allow-list, https only, no credentials, ports or IP literals, redirects followed by hand for at most
+  2 hops with every hop re-validated, no SVG, 8 MB cap enforced while streaming. Covered by `tests/unit/discogs-image*.test.ts`.
+* **CI** (`.github/workflows/ci.yml`): typecheck, lint, unit tests and `npm run audit:prod`.
+* **Accessibility**: axe (WCAG 2.0-2.2 A/AA) runs over the main screens in the light and dark themes (desktop) and on a phone, plus
+  scripted keyboard tests. What a tool cannot judge is the manual checklist in [docs/operations.md](docs/operations.md).
+* **Operations runbook**: [docs/operations.md](docs/operations.md) (logs, rotating secrets, backups, Discogs throttling or revocation,
+  native-speaker review, HSTS and CSP rollout).
+
 ## Tests
 
 ```bash
 npm test            # unit tests (Vitest): messages, auth links, Discogs normalisation/grouping, token bucket,
                     # client backoff, cache TTL + purge, limiter, image host allow-list. Uses PGlite (embedded
                     # Postgres running the real migrations): no database or secrets needed.
-npm run test:e2e    # Playwright: shell smoke tests, the Discogs + lists APIs, and the finder UI (desktop and phone
+npm run test:e2e    # (adds the a11y-* axe projects and the keyboard project after the library projects) Playwright: shell smoke tests, the Discogs + lists APIs, and the finder UI (desktop and phone
                     # viewport) against a MOCKED Discogs server; a verified e2e user is created and deleted automatically
                     # (FAKE credentials, no real token). The Discogs flow needs a real Postgres: it uses DEV_DATABASE_URL ONLY
                     # (from .env.local, or a throwaway Neon branch in CI) and SKIPS when none is set. It removes its rows afterwards.

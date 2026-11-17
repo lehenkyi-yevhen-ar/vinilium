@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      # Unit tests run on an embedded Postgres (PGlite): no database or secrets needed.
+      - run: npm test
+
+  audit:
+    # Fails the build on a HIGH or CRITICAL advisory in anything that ships to production.
+    # Moderate findings in build-time tooling (drizzle-kit -> esbuild) are listed by `npm run audit:all` but do not block.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm run audit:prod

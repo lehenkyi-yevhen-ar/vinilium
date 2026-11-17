@@ -15,7 +15,12 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:studio": "tsx scripts/db-studio.ts",
     "discogs:smoke": "tsx --conditions=react-server scripts/discogs-smoke.ts",
-    "db:status": "tsx scripts/db-status.ts"
+    "db:status": "tsx scripts/db-status.ts",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "audit:all": "npm audit",
+    "i18n:export": "tsx scripts/i18n-export.ts",
+    "i18n:import": "tsx scripts/i18n-import.ts",
+    "legal:checklist": "tsx scripts/legal-checklist.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
@@ -30,6 +35,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@electric-sql/pglite": "^0.5.16",
     "@playwright/test": "^1.65.1",
     "@types/node": "^24.19.2",
