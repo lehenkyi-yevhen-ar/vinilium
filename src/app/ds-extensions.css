@@ -172,3 +172,41 @@ body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; bac
 .x-disclosure[open] > .x-disclosure__summary::before { transform: rotate(90deg); }
 .x-disclosure__summary:focus-visible { outline: var(--focus-ring-width) solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
 .x-disclosure > .x-note { margin: 0 0 var(--space-3); }
+
+/* ---- My lists (Wishlist / Collection) ---- */
+/* Route-driven tabs: the design system's tab look, on links (aria-current instead of aria-selected). */
+.x-tabs { margin-top: var(--space-2); }
+.tabs__tab[aria-current="page"] { color: var(--color-text); box-shadow: inset 0 calc(-1 * var(--border-strong)) 0 var(--color-primary); text-decoration: none; }
+a.tabs__tab { text-decoration: none; min-height: var(--touch-target); }
+
+.x-library-bar { display: grid; grid-template-columns: 1fr; gap: var(--space-3); align-items: end; }
+.x-library-bar__search { margin: 0; }
+@media (min-width: 720px) {
+  .x-library-bar { grid-template-columns: minmax(0, 2fr) auto; }
+  .x-library-bar__go { align-self: end; }
+  .x-library-bar > .field { margin: 0; }
+}
+.x-library-bar .btn svg { width: var(--icon-md); height: var(--icon-md); }
+
+.x-library-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); margin: 0; padding: 0; }
+@media (min-width: 900px) { .x-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.x-library-grid > li { min-width: 0; display: flex; }
+.x-library-grid > li > .card { flex: 1; }
+
+/* .card.x-item outranks the design system's .card regardless of stylesheet order */
+.card.x-item { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); min-width: 0; align-items: stretch; }
+.x-item__discogs { display: flex; gap: var(--space-4); align-items: flex-start; min-width: 0; }
+.x-item__discogs .x-status { width: 100%; }
+.x-item__own { display: flex; flex-direction: column; gap: var(--space-3); border-top: var(--border-thin) solid var(--color-border); padding-top: var(--space-3); }
+.x-item__notes { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.x-item__notes-text { margin: 0; flex: 1 1 12rem; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-body-m); }
+.x-item__edit { display: flex; flex-direction: column; gap: var(--space-2); }
+.x-item__edit .textarea { width: 100%; }
+.x-item__grades { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
+@media (min-width: 480px) { .x-item__grades { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.x-item__grade { margin: 0; }
+.x-item__gone .x-cover { opacity: 0.7; }
+.x-pager-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); margin-top: var(--space-4); }
+.x-export { border-top: var(--border-thin) solid var(--color-border); padding-top: var(--space-4); margin-top: var(--space-6); }
+.x-export .btn { text-decoration: none; }
+.x-empty__icon { width: var(--icon-xl, 40px); height: var(--icon-xl, 40px); color: var(--color-accent-text); }

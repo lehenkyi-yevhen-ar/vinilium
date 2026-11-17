@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
-import { HomeIcon, SearchIcon, UserIcon } from "@/ds/icons";
+import { HomeIcon, ListIcon, SearchIcon, UserIcon } from "@/ds/icons";
 
 /** Mobile bottom navigation (shown up to 640px by the design system). Sections are added per milestone. */
 export function TabBar({ signedIn }: { signedIn: boolean }) {
@@ -17,6 +17,7 @@ export function TabBar({ signedIn }: { signedIn: boolean }) {
       icon: <SearchIcon />,
       match: (p: string) => p.startsWith("/search") || p.startsWith("/master") || p.startsWith("/release"),
     },
+    ...(signedIn ? [{ href: "/lists", label: t("lists"), icon: <ListIcon />, match: (p: string) => p.startsWith("/lists") }] : []),
     signedIn
       ? { href: "/account", label: t("account"), icon: <UserIcon />, match: (p: string) => p.startsWith("/account") }
       : { href: "/sign-in", label: t("signIn"), icon: <UserIcon />, match: (p: string) => p.startsWith("/sign-") || p.startsWith("/forgot") },

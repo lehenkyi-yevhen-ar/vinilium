@@ -57,7 +57,7 @@ export function PanelSkeleton({ label }: { label: string }) {
   );
 }
 
-function Countdown({ seconds, onDone, children }: { seconds: number; onDone: () => void; children: (left: number) => React.ReactNode }) {
+export function Countdown({ seconds, onDone, children }: { seconds: number; onDone: () => void; children: (left: number) => React.ReactNode }) {
   // The component is mounted fresh for every throttled state, so a lazy initial deadline is enough.
   const [deadline] = useState(() => Date.now() + seconds * 1000);
   const [now, setNow] = useState(() => Date.now());
