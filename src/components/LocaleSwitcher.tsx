@@ -57,7 +57,8 @@ export function LocaleSwitcher({
     return (
       <div className="x-contents" ref={ref}>
         <div className="dd" data-dd data-value={locale}>
-          <button type="button" className="select dd__trigger" aria-label={t("language")}>
+          {/* The accessible name must CONTAIN the visible text (WCAG 2.5.3 Label in Name): voice control says "click English". */}
+          <button type="button" className="select dd__trigger" aria-label={`${t("language")}: ${tl(locale)}`}>
             <span className="dd__value">{tl(locale)}</span>
           </button>
           <div className="dd__menu glass-strong">{options}</div>
@@ -69,7 +70,8 @@ export function LocaleSwitcher({
   return (
     <div className="x-contents" ref={ref}>
       <div className="dd dd--right" data-dd="menu">
-        <button type="button" className="btn btn--ghost dd__trigger" aria-label={`${t("language")}: ${tl(locale)}`}>
+        {/* Visible text is the short code ("EN"): the accessible name starts with it (WCAG 2.5.3 Label in Name). */}
+        <button type="button" className="btn btn--ghost dd__trigger" aria-label={`${locale.toUpperCase()}, ${t("language")}: ${tl(locale)}`}>
           <GlobeIcon />
           <span aria-hidden="true">{locale.toUpperCase()}</span>
         </button>

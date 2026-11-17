@@ -112,7 +112,7 @@ test.afterAll(async ({ browser }) => {
   await ctx.close();
 });
 
-test("cold load: ONE batched Discogs request for the visible page only; a warm reload costs Discogs nothing", async ({ page }, testInfo) => {
+test("cold load: Discogs is asked for the visible page only, in two requests (first 4, then the rest); a warm reload costs Discogs nothing", async ({ page }, testInfo) => {
   await page.request.post(`${MOCK}/__reset`);
   const batches: string[] = [];
   page.on("request", (r) => r.url().includes("/api/discogs/releases?") && batches.push(r.url()));
@@ -122,25 +122,51 @@ test("cold load: ONE batched Discogs request for the visible page only; a warm r
   await expect(page.getByRole("heading", { level: 3, name: `Library Record ${BASE + 30}` })).toBeVisible();
   const cold = await upstreamReleaseCalls(page);
   expect(cold, "12 items on the page = 12 Discogs release calls, not 30").toBe(12);
-  expect(batches).toHaveLength(1);
-  const ids = new URL(batches[0]).searchParams.get("ids")!.split(",").map(Number);
-  expect(ids).toEqual(Array.from({ length: 12 }, (_, k) => BASE + 30 - k)); // exactly the visible page, in order
+  expect(batches).toHaveLength(2); // the head (first 4 cards), then the tail (the other 8)
+  const idsOf = (url: string) => new URL(url).searchParams.get("ids")!.split(",").map(Number);
+  expect(idsOf(batches[0])).toEqual(Array.from({ length: 4 }, (_, k) => BASE + 30 - k));
+  expect([...idsOf(batches[0]), ...idsOf(batches[1])]).toEqual(Array.from({ length: 12 }, (_, k) => BASE + 30 - k)); // exactly the visible page, in order
 
   await page.reload();
   await expect(titles(page)).toHaveCount(12);
   expect(await upstreamReleaseCalls(page), "warm reload").toBe(cold); // served from the TTL cache
-  expect(batches).toHaveLength(2); // still one batch request per page view
+  expect(batches).toHaveLength(4); // still just the two requests per page view
 
   // The next page asks Discogs only for ITS 12.
   await page.getByRole("button", { name: "Page 2" }).click();
   await expect(page).toHaveURL(/page=2/);
-  await expect(page.getByRole("heading", { level: 3, name: `Library Record ${BASE + 18}` })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: `Library Record ${BASE + 18}` })).toBeVisible(); // the head (first 4) arrives first
+  await expect(titles(page)).toHaveCount(12); // wait for the rest before counting what Discogs was asked
   expect(await upstreamReleaseCalls(page)).toBe(24);
   await page.getByRole("button", { name: "Page 1" }).click();
   await expect(titles(page)).toHaveCount(12);
   expect(await upstreamReleaseCalls(page), "going back is warm").toBe(24);
 
   testInfo.annotations.push({ type: "discogs-calls", description: `cold page: ${cold}, warm reload: 0, next page: +12, back: +0` });
+});
+
+test("a cold page shows its first cards early: the first 4 appear while the other 8 are still loading", async ({ page }) => {
+  // fresh ids, so everything is cold; hold back the second request (the tail) to see the page in between
+  const fresh = Array.from({ length: 12 }, (_, k): Row => ({ id: BASE + 2000 + k, list: "wishlist", at: hour(950 + k) }));
+  await seed(page, fresh);
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/discogs/releases?*", async (route) => {
+    const count = new URL(route.request().url()).searchParams.get("ids")!.split(",").length;
+    if (count > 4) await held; // the tail waits
+    await route.continue();
+  });
+
+  await open(page);
+  await expect(titles(page)).toHaveCount(4); // the head is on screen ...
+  await expect(page.getByRole("heading", { level: 3, name: `Library Record ${BASE + 2011}` })).toBeVisible(); // ... newest first
+  await expect(items(page)).toHaveCount(12); // ... and the page is complete with the rest still loading
+  await expect(page.getByRole("status", { name: "Loading details from Discogs…" })).toHaveCount(8);
+  await noOverflow(page);
+
+  release();
+  await expect(titles(page)).toHaveCount(12);
+  await expect(page.getByRole("status", { name: "Loading details from Discogs…" })).toHaveCount(0);
 });
 
 test("pagination: 12 or 24 per page, counts, a pager that knows where it is, and no horizontal overflow", async ({ page }) => {
@@ -497,7 +523,7 @@ test("the screen refreshes its Discogs data 5.5 hours after it was FETCHED, well
   expect(batches, "not yet: 5 h 28 min after the fetch").toHaveLength(settled);
 
   await page.clock.fastForward(240_000); // past 5.5 h of age
-  await expect.poll(() => batches.length, { message: "refetched at 5.5 h" }).toBe(settled + 1);
+  await expect.poll(() => batches.length, { message: "refetched at 5.5 h" }).toBe(settled + 2); // the first 4 and the rest each refresh
   await expect(titles(page)).toHaveCount(12); // cards stay on screen while the refresh runs
   expect(await upstreamReleaseCalls(page)).toBe(upstream); // the server cache still held them: Discogs was not asked again
 });

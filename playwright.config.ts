@@ -66,6 +66,41 @@ export default defineConfig({
       workers: 1,
       use: { ...devices["Pixel 7"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.212" } },
     },
+    // Accessibility audit (axe) in the light and dark themes (the theme follows the OS colour scheme) and on a phone; after the library
+    // projects because they share the mock server and the Discogs bucket.
+    {
+      name: "a11y-light",
+      testMatch: /a11y\.spec\.ts/,
+      dependencies: ["library-mobile"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"], colorScheme: "light", storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.213" } },
+    },
+    {
+      name: "a11y-dark",
+      testMatch: /a11y\.spec\.ts/,
+      dependencies: ["a11y-light"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"], colorScheme: "dark", storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.214" } },
+    },
+    {
+      name: "a11y-phone",
+      testMatch: /a11y\.spec\.ts/,
+      dependencies: ["a11y-dark"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Pixel 7"], colorScheme: "light", storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.215" } },
+    },
+    // Keyboard behaviour (focus order, skip link, dialogs, toggles), desktop.
+    {
+      name: "keyboard",
+      testMatch: /keyboard\.spec\.ts/,
+      dependencies: ["a11y-phone"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.216" } },
+    },
   ],
   webServer: [
     {
@@ -106,6 +141,9 @@ export default defineConfig({
         RL_SEARCH_IP_PER_MIN: "60",
         RL_SEARCH_USER_PER_MIN: "1000",
         RL_IMAGE_USER_PER_MIN: "5000",
+        // Likewise the per-person cold-fetch allowance (default 24/min): every project shares one signed-in user, and several tests
+        // cold-load whole pages. The cap itself is covered by tests/unit/cold-fetch-cap.test.ts.
+        RL_COLD_USER_PER_MIN: "5000",
       },
     },
   ],
