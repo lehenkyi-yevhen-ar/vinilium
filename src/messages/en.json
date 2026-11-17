@@ -240,7 +240,17 @@
     "byPlaceholder": "e.g. Lana Del Rey",
     "byHelp": "Narrows the search to one artist.",
     "withoutArtist": "search without the artist",
-    "showMoreAlbums": "Show more albums"
+    "showMoreAlbums": "Show more albums",
+    "types": {
+      "album": "Album",
+      "ep": "EP",
+      "single": "Single",
+      "compilation": "Compilation"
+    },
+    "otherPressingsTitle": "Other pressings without a master",
+    "otherPressingsCount": "{count, plural, one {# release} other {# releases}}",
+    "otherPressingsHint": "Vinyl releases Discogs has not grouped under an album. Often unofficial.",
+    "withoutMasterCount": "{count, plural, one {# without a master} other {# without a master}}"
   },
   "pressings": {
     "title": "Pick the pressing",

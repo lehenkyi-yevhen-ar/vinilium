@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DatabaseConfigError, describeTarget, evaluateGuard, parseDbUrl, resolveDatabase } from "@/lib/database-target";
+import { DatabaseConfigError, describeTarget, evaluateGuard, parseDbUrl, planGuard, resolveDatabase } from "@/lib/database-target";
 import { e2eDatabaseUrl } from "../helpers/e2e-db";
 
 // Fake, obviously-not-real values. The password is distinctive so a leak would be caught.
@@ -13,33 +13,41 @@ describe("which database a process uses", () => {
     expect(t).toMatchObject({ source: "DATABASE_URL", host: "ep-prod-1234-pooler.eu-central-1.aws.neon.tech", database: "proddb", isProduction: true });
   });
 
-  it("development and test: DEV_DATABASE_URL when it is set", () => {
+  it("development and test: DEV_DATABASE_URL, whether or not DATABASE_URL is also present", () => {
     for (const NODE_ENV of ["development", "test", undefined]) {
-      const t = resolveDatabase({ NODE_ENV, DATABASE_URL: PROD, DEV_DATABASE_URL: DEV });
-      expect(t, String(NODE_ENV)).toMatchObject({ source: "DEV_DATABASE_URL", database: "devdb", isProduction: false, devPointsAtProduction: false, pooled: true });
+      for (const DATABASE_URL of [PROD, undefined]) {
+        const t = resolveDatabase({ NODE_ENV, DATABASE_URL, DEV_DATABASE_URL: DEV });
+        expect(t, `${NODE_ENV} / prod var ${DATABASE_URL ? "set" : "unset"}`).toMatchObject({ source: "DEV_DATABASE_URL", database: "devdb", isProduction: false, devPointsAtProduction: false, pooled: true });
+      }
     }
   });
 
-  it("development without DEV_DATABASE_URL falls back to DATABASE_URL, and that counts as PRODUCTION", () => {
-    const t = resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD });
-    expect(t).toMatchObject({ source: "DATABASE_URL", isProduction: true });
-    expect(resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD, DEV_DATABASE_URL: "   " }).source).toBe("DATABASE_URL"); // blank = unset
+  it("development and test with NO DEV_DATABASE_URL REFUSE: there is no fallback to DATABASE_URL", () => {
+    for (const NODE_ENV of ["development", "test", undefined]) {
+      for (const dev of [undefined, "", "   "]) {
+        expect(() => resolveDatabase({ NODE_ENV, DATABASE_URL: PROD, DEV_DATABASE_URL: dev }), `${NODE_ENV} / ${JSON.stringify(dev)}`).toThrow(/^DEV_DATABASE_URL is not set\./);
+      }
+    }
+    // the message says what to do, and never contains a value
+    let message = "";
+    try {
+      resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD });
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toContain("never use DATABASE_URL");
+    expect(message).not.toContain(PW);
+    expect(message).not.toContain("prod_owner");
   });
 
-  it("a DEV_DATABASE_URL that points at the production server is still production", () => {
+  it("production runtime without DATABASE_URL refuses, naming the variable", () => {
+    expect(() => resolveDatabase({ NODE_ENV: "production", DEV_DATABASE_URL: DEV })).toThrow("DATABASE_URL is not set (production runtime).");
+  });
+
+  it("a DEV_DATABASE_URL that points at the production server is still treated as production", () => {
     const sameServerOtherDb = PROD.replace("/proddb", "/other");
     const t = resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD, DEV_DATABASE_URL: sameServerOtherDb });
     expect(t).toMatchObject({ source: "DEV_DATABASE_URL", isProduction: true, devPointsAtProduction: true });
-  });
-
-  it("works with only the dev variable in a local .env.local", () => {
-    expect(resolveDatabase({ NODE_ENV: "development", DEV_DATABASE_URL: DEV })).toMatchObject({ isProduction: false });
-  });
-
-  it("names the missing variable, never a value", () => {
-    expect(() => resolveDatabase({ NODE_ENV: "production", DEV_DATABASE_URL: DEV })).toThrow("DATABASE_URL is not set.");
-    expect(() => resolveDatabase({ NODE_ENV: "development" })).toThrow("DATABASE_URL is not set.");
-    expect(() => resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD, DEV_DATABASE_URL: undefined })).not.toThrow();
   });
 
   it("explains a malformed value without echoing it (the doubled '=' typo)", () => {
@@ -59,7 +67,7 @@ describe("which database a process uses", () => {
   });
 
   it("labels the target with an optional branch name", () => {
-    const t = resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD, DEV_DATABASE_URL: DEV, DEV_DATABASE_BRANCH: "dev", DATABASE_BRANCH: "production" });
+    const t = resolveDatabase({ NODE_ENV: "development", DEV_DATABASE_URL: DEV, DEV_DATABASE_BRANCH: "dev", DATABASE_BRANCH: "production" });
     expect(t.branchLabel).toBe("dev");
     expect(resolveDatabase({ NODE_ENV: "production", DATABASE_URL: PROD, DATABASE_BRANCH: "production" }).branchLabel).toBe("production");
     expect(resolveDatabase({ NODE_ENV: "development", DEV_DATABASE_URL: DEV }).branchLabel).toBeNull();
@@ -68,7 +76,7 @@ describe("which database a process uses", () => {
 
 describe("what is printed before touching a database", () => {
   it("shows host, database and variable: never the user, the password or the connection string", () => {
-    const text = describeTarget(resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD, DEV_DATABASE_URL: DEV, DEV_DATABASE_BRANCH: "dev" })).join("\n");
+    const text = describeTarget(resolveDatabase({ NODE_ENV: "development", DEV_DATABASE_URL: DEV, DEV_DATABASE_BRANCH: "dev" })).join("\n");
     expect(text).toContain("ep-dev-5678-pooler.eu-central-1.aws.neon.tech");
     expect(text).toContain("devdb");
     expect(text).toContain("DEV_DATABASE_URL");
@@ -78,16 +86,38 @@ describe("what is printed before touching a database", () => {
   });
 
   it("calls production by its name, and tells you how to name an unknown branch", () => {
-    const text = describeTarget(resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD })).join("\n");
+    const text = describeTarget(resolveDatabase({ NODE_ENV: "production", DATABASE_URL: PROD })).join("\n");
     expect(text).toContain("PRODUCTION");
     expect(text).toContain("DATABASE_BRANCH");
     expect(text).not.toContain(PW);
   });
 });
 
+describe("how a script chooses its target (planGuard)", () => {
+  const migrate = { purpose: "Apply database migrations", allowProduction: true };
+  const smoke = { purpose: "Real-API smoke test", allowProduction: false };
+
+  it("without --production it is always the dev database", () => {
+    expect(planGuard({}, [], migrate).nodeEnv).toBe("development");
+    expect(planGuard({ NODE_ENV: "development" }, ["--verbose"], smoke).nodeEnv).toBe("development");
+  });
+
+  it("--production selects production, but only for commands that may touch it", () => {
+    expect(planGuard({}, ["--production"], migrate).nodeEnv).toBe("production");
+    const refused = planGuard({}, ["--production"], smoke);
+    expect(refused.nodeEnv).toBeNull();
+    expect(refused.refusal).toContain("never touches production");
+  });
+
+  it("a command run with NODE_ENV=production counts as a production run too", () => {
+    expect(planGuard({ NODE_ENV: "production" }, [], migrate).nodeEnv).toBe("production"); // then evaluateGuard demands the flag
+    expect(planGuard({ NODE_ENV: "production" }, [], smoke).nodeEnv).toBeNull();
+  });
+});
+
 describe("the safety guard", () => {
-  const dev = resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD, DEV_DATABASE_URL: DEV });
-  const prod = resolveDatabase({ NODE_ENV: "development", DATABASE_URL: PROD });
+  const dev = resolveDatabase({ NODE_ENV: "development", DEV_DATABASE_URL: DEV });
+  const prod = resolveDatabase({ NODE_ENV: "production", DATABASE_URL: PROD });
 
   it("lets anything run against the dev database", () => {
     expect(evaluateGuard(dev, { purpose: "Apply database migrations", allowProduction: true, argv: [] }).allowed).toBe(true);
@@ -98,7 +128,7 @@ describe("the safety guard", () => {
     const refused = evaluateGuard(prod, { purpose: "Apply database migrations", allowProduction: true, argv: [] });
     expect(refused.allowed).toBe(false);
     expect(refused.message).toContain("--production");
-    expect(refused.message).toContain("DEV_DATABASE_URL"); // the usual cause: the dev variable is not set
+    expect(refused.message).toContain("DATABASE_URL");
 
     const confirmed = evaluateGuard(prod, { purpose: "Apply database migrations", allowProduction: true, argv: ["--production"] });
     expect(confirmed.allowed).toBe(true);
@@ -132,15 +162,17 @@ describe("the safety guard", () => {
 describe("e2e database helper: only the dev database, never DATABASE_URL", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("returns null (tests skip) when DEV_DATABASE_URL is not set, even though DATABASE_URL is", () => {
+  it("REFUSES (does not skip, does not fall back) when DEV_DATABASE_URL is not set, even though DATABASE_URL is", () => {
     vi.stubEnv("DATABASE_URL", PROD);
-    vi.stubEnv("DEV_DATABASE_URL", "");
-    expect(e2eDatabaseUrl()).toBeNull();
+    vi.stubEnv("DEV_DATABASE_URL", " "); // blank = unset (an empty string cannot be set on Windows)
+    expect(() => e2eDatabaseUrl()).toThrow(/e2e refuses to run: DEV_DATABASE_URL is not set/);
   });
 
-  it("returns the dev database when it is a different server", () => {
+  it("returns the dev database, with or without DATABASE_URL present", () => {
     vi.stubEnv("DATABASE_URL", PROD);
     vi.stubEnv("DEV_DATABASE_URL", DEV);
+    expect(e2eDatabaseUrl()).toBe(DEV);
+    vi.stubEnv("DATABASE_URL", " ");
     expect(e2eDatabaseUrl()).toBe(DEV);
   });
 

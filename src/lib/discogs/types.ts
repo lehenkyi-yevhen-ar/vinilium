@@ -6,6 +6,9 @@
 /** What the user types. All three search VINYL RELEASES (type=release, format=Vinyl) and group them by master. */
 export type SearchMode = "track" | "artist" | "album";
 
+/** What kind of release it is, derived ONLY from the format descriptors Discogs already sends with each hit. */
+export type ReleaseType = "album" | "ep" | "single" | "compilation";
+
 export interface SearchEntry {
   /** Stable key used for dedupe: `m:<masterId>` or `r:<releaseId>`. */
   key: string;
@@ -24,6 +27,8 @@ export interface SearchEntry {
   discogsUrl: string;
   /** How many raw search hits were merged into this entry (>= 1). */
   mergedHits: number;
+  /** Kinds seen across the merged releases (e.g. ["album"]); empty when the descriptors say nothing. Older cached rows may lack it. */
+  types: ReleaseType[];
   /** True when this entry's data comes from the master record itself (not from one of its releases). */
   fromMaster: boolean;
 }

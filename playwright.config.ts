@@ -10,8 +10,7 @@ const e2eDbUrl = e2eDatabaseUrl();
 const STORAGE_STATE = "tests/.auth/user.json";
 const PORT = 3200;
 const MOCK_PORT = 3201;
-const FAKE_DB = "postgresql://user:pass@127.0.0.1:1/none";
-const hasDb = e2eDbUrl !== null;
+const hasDb = true; // e2eDatabaseUrl() throws when there is no dev database, so a run that gets here has one
 // The Discogs flow needs a real Postgres (cache, token bucket, limiter). Without one its tests skip, loudly.
 process.env.E2E_HAS_DB = hasDb ? "1" : "";
 
@@ -69,7 +68,7 @@ export default defineConfig({
       env: {
         // The server runs in production mode, so it reads DATABASE_URL: hand it the DEV database under that name, and blank the
         // real variables so nothing in .env.local can leak through.
-        DATABASE_URL: e2eDbUrl ?? FAKE_DB,
+        DATABASE_URL: e2eDbUrl,
         DEV_DATABASE_URL: "",
         BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
         BETTER_AUTH_URL: `http://localhost:${PORT}`,

@@ -240,7 +240,17 @@
     "byPlaceholder": "наприклад, Lana Del Rey",
     "byHelp": "Звужує пошук до одного виконавця.",
     "withoutArtist": "шукати без виконавця",
-    "showMoreAlbums": "Показати ще альбоми"
+    "showMoreAlbums": "Показати ще альбоми",
+    "types": {
+      "album": "Альбом",
+      "ep": "EP",
+      "single": "Сингл",
+      "compilation": "Збірка"
+    },
+    "otherPressingsTitle": "Інші видання без мастер-релізу",
+    "otherPressingsCount": "{count, plural, one {# видання} few {# видання} many {# видань} other {# видання}}",
+    "otherPressingsHint": "Вінілові видання, які Discogs не об’єднав в альбом. Часто неофіційні.",
+    "withoutMasterCount": "{count, plural, one {# без мастер-релізу} few {# без мастер-релізу} many {# без мастер-релізу} other {# без мастер-релізу}}"
   },
   "pressings": {
     "title": "Оберіть видання",

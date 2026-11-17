@@ -51,6 +51,7 @@ test("track -> artist -> album -> pressing -> release card, with filters and lis
   // that must never be what the card says.
   await expect(page.getByRole("heading", { level: 3 })).toHaveText(["Glass Harbor", "Paper Tide"]);
   await expect(page.getByText("Glass Harbor (Remixes)")).toHaveCount(0);
+  await expect(page.locator("article.x-result").first().locator(".badge")).toHaveText("Album"); // derived from the format descriptors
   await expect(page.getByText("2001")).toBeVisible();
   // results exist, so there is no "try as artist / album" nudge
   await expect(page.getByRole("navigation", { name: "Not what you meant?" })).toHaveCount(0);
@@ -133,13 +134,65 @@ test("a long artist list can be narrowed by typing part of a name", async ({ pag
   const cards = page.locator("a.x-result--artist");
   const before = await cards.count();
   expect(before).toBeGreaterThanOrEqual(9);
-  await filter.fill("daft");
+  await filter.fill("cobalt");
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText("Cobalt Parade");
   await filter.fill("zzzz");
   await expect(page.getByText("No artist in these results matches.")).toBeVisible();
   await filter.fill("");
   await expect(cards).toHaveCount(before);
+});
+
+test("vinyl releases without a master come after the albums, in a section that is collapsed by default", async ({ page }) => {
+  await page.route("**/api/discogs/search**", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    const group = body.data.groups.find((g: ArtistGroup) => g.artist === "Cobalt Parade");
+    group.entries.push(
+      ...Array.from({ length: 3 }, (_, i) => ({ key: `r:70${i}`, kind: "release", id: 7000 + i, artist: "Cobalt Parade", title: `Odd Pressing ${i}`, year: 2020 + i, thumb: null, formats: ["Vinyl", '12"'], types: ["single"], country: null, discogsUrl: `https://www.discogs.com/release/${7000 + i}`, mergedHits: 1, fromMaster: false })),
+    );
+    await route.fulfill({ response: res, json: body });
+  });
+  await search(page, `others-${RUN}`);
+
+  // on the artist list: albums are counted apart from the ones without a master
+  await expect(page.getByRole("link", { name: /Cobalt Parade/ })).toContainText("2 albums · 3 without a master");
+  await page.getByRole("link", { name: /Cobalt Parade/ }).click();
+
+  const section = page.locator("details.x-disclosure");
+  await expect(page.getByRole("heading", { level: 3 }).first()).toHaveText("Glass Harbor"); // albums first
+  await expect(section.locator("summary")).toContainText("Other pressings without a master");
+  await expect(section.locator("summary .badge")).toHaveText("3 releases");
+  await expect(section).not.toHaveAttribute("open", ""); // collapsed by default
+  await expect(page.getByText("Odd Pressing 0")).toBeHidden();
+
+  await section.locator("summary").click();
+  await expect(section).toHaveAttribute("open", "");
+  await expect(page.getByText("Odd Pressing 0")).toBeVisible();
+  await expect(section.locator(".badge", { hasText: "Single" })).toHaveCount(3); // type label, derived from the descriptors
+  await expect(section.getByRole("link", { name: "Open release" }).first()).toHaveAttribute("href", /\/release\/7000$/);
+});
+
+test("an artist with ONLY releases without a master sees them straight away (nothing else to show)", async ({ page }) => {
+  await search(page, `onlyothers-${RUN}`);
+  await page.getByRole("link", { name: /Some Band/ }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Albums by Some Band" })).toBeVisible();
+  await expect(page.locator("details.x-disclosure")).toHaveAttribute("open", "");
+  await expect(page.getByRole("heading", { level: 3 })).toHaveText("Rare Single");
+});
+
+test("the four search steps stay on ONE line at 390px, and the current step keeps its label", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/en/search");
+  const items = page.getByRole("list", { name: "Search steps" }).getByRole("listitem");
+  await expect(items).toHaveCount(4);
+  const tops = await items.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size, `tops: ${tops}`).toBe(1); // one row, no wrapping
+  await expect(items.first().locator(".x-step__label")).toBeVisible(); // "Track" is the current step
+  await expect(items.nth(3).locator(".x-step__label")).toBeAttached(); // still there for screen readers
+  const widest = await page.getByRole("list", { name: "Search steps" }).evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(widest).toBeLessThanOrEqual(0); // and nothing is cut off
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
 });
 
 test("a track that exists only on CD gives an empty result, and THEN offers to search another way", async ({ page }) => {
@@ -183,8 +236,8 @@ test("albums appear 12 at a time, and only the visible ones have their master re
   await page.route("**/api/discogs/search**", async (route) => {
     const res = await route.fetch();
     const body = await res.json();
-    const daft = body.data.groups.find((g: ArtistGroup) => g.artist === "Cobalt Parade");
-    daft.entries.push(
+    const cobalt = body.data.groups.find((g: ArtistGroup) => g.artist === "Cobalt Parade");
+    cobalt.entries.push(
       ...Array.from({ length: 12 }, (_, i) => ({ key: `m:80${i}`, kind: "master", id: 8000 + i, artist: "Cobalt Parade", title: `Extra ${i}`, year: 2010 + i, thumb: null, formats: ["Vinyl", "LP"], country: null, discogsUrl: `https://www.discogs.com/master/${8000 + i}`, mergedHits: 1, fromMaster: false })),
     );
     await route.fulfill({ response: res, json: body });
@@ -197,13 +250,14 @@ test("albums appear 12 at a time, and only the visible ones have their master re
   await search(page, `many-${RUN}`);
   await page.getByRole("link", { name: /Cobalt Parade/ }).click();
   const cards = page.getByRole("heading", { level: 3 });
-  await expect(cards).toHaveCount(12); // 14 albums exist; 12 are shown
+  // Each of the 12 master records is a sequential lookup (a few round trips to the remote database each): allow for it.
+  await expect(cards).toHaveCount(12, { timeout: 40_000 }); // 14 albums exist; 12 are shown
   await expect(page.getByRole("button", { name: "Show more albums" })).toBeVisible();
   expect(askedIds).toHaveLength(1);
   expect(askedIds[0].length).toBeLessThanOrEqual(12);
 
   await page.getByRole("button", { name: "Show more albums" }).click();
-  await expect(cards).toHaveCount(14);
+  await expect(cards).toHaveCount(14, { timeout: 40_000 });
   await expect(page.getByRole("button", { name: "Show more albums" })).toHaveCount(0);
   expect(askedIds).toHaveLength(2); // the second view's masters, in a second call
   for (const ids of askedIds) expect(ids.length).toBeLessThanOrEqual(12);
@@ -255,7 +309,7 @@ test("the whole flow speaks Ukrainian", async ({ page }) => {
   await page.getByRole("button", { name: "Шукати", exact: true }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Оберіть виконавця" })).toBeVisible();
   await expect(page.getByText("2 альбоми")).toBeVisible(); // Ukrainian plural form (2 -> "few")
-  await expect(page.getByText("1 альбом").first()).toBeVisible(); // ... and "one"
+  await expect(page.getByText("1 без мастер-релізу").first()).toBeVisible(); // a group with only releases without a master
   await page.getByRole("link", { name: /Cobalt Parade/ }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Альбоми виконавця Cobalt Parade" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Переглянути видання" }).first()).toBeVisible();

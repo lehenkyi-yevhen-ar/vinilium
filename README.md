@@ -38,8 +38,8 @@ npm run dev                     # http://localhost:3000
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `DEV_DATABASE_URL` | local | Neon **pooled** connection string of the **dev branch**. Used by `npm run dev`, the e2e tests and all `db:*` scripts whenever it is set. See "Two databases" below. |
-| `DATABASE_URL` | production | Neon **pooled** connection string of the **production branch** (`...-pooler...`, `sslmode=require`). Used when `NODE_ENV=production`. |
+| `DEV_DATABASE_URL` | **local: required** | Neon **pooled** connection string of the **dev branch**. The ONLY database `npm run dev`, the e2e tests and the `db:*` scripts will use. Without it they refuse to start. See "Two databases" below. |
+| `DATABASE_URL` | production only | Neon **pooled** connection string of the **production branch**. Set it in **Vercel's environment variables**, NOT in your local `.env.local`. Used only when `NODE_ENV=production`. |
 | `DEV_DATABASE_BRANCH`, `DATABASE_BRANCH` | no | Names (not secret) the safety guard prints next to the host, e.g. `dev` / `production`. |
 | `BETTER_AUTH_SECRET` | yes | 32+ random chars: `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL` | yes | Public origin, no trailing slash. |
@@ -61,27 +61,51 @@ Only `NEXT_PUBLIC_*` variables reach the browser, and none of them is a secret. 
 
 ### Two databases: dev and production
 
-| Variable | Branch | Used by |
-| --- | --- | --- |
-| `DEV_DATABASE_URL` | **dev** | `npm run dev`, `npm test`'s helpers, **all e2e runs**, `db:migrate`, `db:studio`, the real-API smoke test |
-| `DATABASE_URL` | **production** | only when `NODE_ENV=production`: a deployed server, or a local `npm run build && npm start` |
+| Variable | Branch | Where it lives | Used by |
+| --- | --- | --- | --- |
+| `DEV_DATABASE_URL` | **dev** | local `.env.local` (and CI: a throwaway branch) | `npm run dev`, **all e2e runs**, `db:migrate`, `db:studio`, `db:status`, the real-API smoke test |
+| `DATABASE_URL` | **production** | **Vercel's environment variables only** | only when `NODE_ENV=production`: the deployed server (a deliberate production migration: see below) |
 
-The rule lives in `src/lib/database-target.ts`: in development and test the app uses `DEV_DATABASE_URL` if it is set, otherwise
-it falls back to `DATABASE_URL` (production) and **warns loudly**. Put only `DEV_DATABASE_URL` in your local `.env.local` if you
-can: then production is unreachable from your machine.
+**There is no fallback.** In development and test (`npm run dev`, `npm test`, e2e, every script) the database is
+`DEV_DATABASE_URL` and nothing else: if it is not set, the process refuses to start or run, with a message that names the
+variable. It never quietly uses `DATABASE_URL`. The rule lives in `src/lib/database-target.ts` and is shared by the app, the
+scripts, `drizzle.config.ts`, Playwright and the tests. Local development, unit tests and e2e all work with ONLY
+`DEV_DATABASE_URL` in `.env.local`, so production credentials never need to be on your machine.
+
+Warning: a local `npm run build && npm start` runs in production mode and therefore wants `DATABASE_URL`. Do not put the
+production string in `.env.local` for that: it fails with "DATABASE_URL is not set (production runtime)", which is the point.
 
 **Safety guard.** Every script that touches a database prints its target first (variable, host, database, branch; **never the
 user or password**) and then applies this rule:
 
 | Command | Dev database | Production |
 | --- | --- | --- |
-| `db:migrate`, `db:studio` | runs | refuses unless you pass `--production` (`npm run db:migrate -- --production`) |
-| e2e tests, `discogs:smoke` (create or delete test data) | runs | **refuses, always**; there is no flag. e2e uses `DEV_DATABASE_URL` only and skips if it is unset. |
-| `db:status` | reads | reads (read-only) |
+| `db:migrate`, `db:studio` | runs | only with `--production` AND `DATABASE_URL` supplied for that one command (below) |
+| e2e tests, `discogs:smoke` (create or delete test data) | runs | **refuses, always**; there is no flag |
+| `db:status` | reads | reads (read-only), if `DATABASE_URL` is supplied |
 
-A bare `npx drizzle-kit migrate` cannot reach production either: `drizzle.config.ts` gives it an unreachable address unless a
-guarded script has confirmed the target. If `DEV_DATABASE_URL` points at the same server as `DATABASE_URL`, everything refuses.
+A bare `npx drizzle-kit migrate` can only ever reach the dev database: `drizzle.config.ts` uses `DEV_DATABASE_URL` or, without
+it, an address that cannot connect. If `DEV_DATABASE_URL` points at the same server as `DATABASE_URL`, everything refuses.
 CI: set `DEV_DATABASE_URL` to a throwaway Neon branch; never give CI the production string.
+
+**A deliberate production migration** (rare; take the string from Vercel's environment variables, and run the command in a shell
+that is then closed or cleared). The guard prints the target (host, database, branch, never the password) and the
+`--production` flag is the confirmation:
+
+```powershell
+# PowerShell
+$env:DATABASE_URL = "<the production connection string>"
+npm run db:migrate -- --production
+Remove-Item Env:DATABASE_URL
+```
+
+```bash
+# bash
+DATABASE_URL="<the production connection string>" npm run db:migrate -- --production
+```
+
+Without `--production` the command targets the dev database (and stops if `DEV_DATABASE_URL` is missing); with `--production`
+but without `DATABASE_URL` it stops with "DATABASE_URL is not set".
 
 ### Database and migrations
 
@@ -89,8 +113,8 @@ Schema lives in `src/server/db/schema.ts`; migrations are committed in `drizzle/
 
 ```bash
 npm run db:generate   # after changing the schema: writes a new SQL migration
-npm run db:migrate    # applies pending migrations to the DEV database; add -- --production for production
-npm run db:status     # READ-ONLY report on both databases: migrations applied, row counts (no hosts, no e-mails)
+npm run db:migrate    # applies pending migrations to the DEV database (a production run is deliberate: see above)
+npm run db:status     # READ-ONLY report: migrations applied and row counts (no hosts, no e-mails); production only if DATABASE_URL is supplied
 npm run db:studio     # optional: browse data (guarded like db:migrate)
 ```
 
@@ -178,8 +202,8 @@ npm run test:e2e    # Playwright: shell smoke tests, the Discogs + lists APIs, a
 
 ## Deploying to Vercel + Neon (summary; full walkthrough in milestone 5)
 
-1. In Neon, use your **production branch**: copy its **pooled** connection string into `DATABASE_URL` (Vercel, Production).
-2. Run `npm run db:migrate -- --production` once against it (it prints the target and needs the flag).
+1. In Neon, use your **production branch**: copy its **pooled** connection string into `DATABASE_URL` in **Vercel's environment variables** (Production), and nowhere else.
+2. Apply migrations with a deliberate production run (see "A deliberate production migration" above).
 3. Import the repo into Vercel; set the variables above for Production (and Preview if wanted).
 4. Set `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` to the production origin and add the Google redirect URI.
 5. Verify a sending domain in Resend and set `EMAIL_FROM` and `RESEND_API_KEY`.

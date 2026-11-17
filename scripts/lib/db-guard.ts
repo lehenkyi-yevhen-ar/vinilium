@@ -1,6 +1,6 @@
 import { config } from "dotenv";
 import { Pool } from "@neondatabase/serverless";
-import { describeTarget, DatabaseConfigError, evaluateGuard, resolveDatabase, type DbTarget } from "../../src/lib/database-target";
+import { describeTarget, DatabaseConfigError, evaluateGuard, planGuard, resolveDatabase, type DbTarget } from "../../src/lib/database-target";
 
 /** Same files and order Next.js uses for local development. */
 export function loadEnvFiles() {
@@ -27,11 +27,16 @@ async function detectBranch(target: DbTarget): Promise<string | null> {
  */
 export async function guardDatabase(opts: { purpose: string; allowProduction: boolean }): Promise<DbTarget> {
   loadEnvFiles();
+  const plan = planGuard(process.env, process.argv.slice(2), opts);
+  if (plan.nodeEnv === null) {
+    console.error(`\n${plan.refusal}\n`);
+    process.exit(1);
+  }
   let target: DbTarget;
   try {
-    target = resolveDatabase({ ...process.env, NODE_ENV: process.env.NODE_ENV === "production" ? "production" : "development" });
+    target = resolveDatabase({ ...process.env, NODE_ENV: plan.nodeEnv });
   } catch (e) {
-    console.error(`\n${e instanceof DatabaseConfigError ? e.message : "Could not choose a database."}`);
+    console.error(`\n${e instanceof DatabaseConfigError ? e.message : "Could not choose a database."}\n`);
     process.exit(1);
   }
   console.log(`\n${opts.purpose}`);

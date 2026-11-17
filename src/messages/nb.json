@@ -240,7 +240,17 @@
     "byPlaceholder": "f.eks. Lana Del Rey",
     "byHelp": "Snevrer inn søket til én artist.",
     "withoutArtist": "søk uten artist",
-    "showMoreAlbums": "Vis flere album"
+    "showMoreAlbums": "Vis flere album",
+    "types": {
+      "album": "Album",
+      "ep": "EP",
+      "single": "Singel",
+      "compilation": "Samling"
+    },
+    "otherPressingsTitle": "Andre utgivelser uten master",
+    "otherPressingsCount": "{count, plural, one {# utgivelse} other {# utgivelser}}",
+    "otherPressingsHint": "Vinylutgivelser Discogs ikke har samlet under et album. Ofte uoffisielle.",
+    "withoutMasterCount": "{count, plural, one {# uten master} other {# uten master}}"
   },
   "pressings": {
     "title": "Velg utgivelse",

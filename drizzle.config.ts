@@ -6,17 +6,17 @@ import { resolveDatabase } from "./src/lib/database-target";
 config({ path: ".env.local", quiet: true });
 config({ quiet: true });
 
-// drizzle-kit connects to whatever this file says, with no safety questions asked. So: the dev database by default, and the
-// production host only when a guarded script (scripts/db-*.ts) has confirmed it with --production. A bare
-// `npx drizzle-kit migrate` therefore cannot reach production: it gets an address that cannot connect.
+// drizzle-kit connects to whatever this file says, with no safety questions asked. So: the DEV database, or the exact URL a
+// guarded script (scripts/db-*.ts) has confirmed and handed over. A bare `npx drizzle-kit migrate` can therefore only ever
+// reach the dev database; with no DEV_DATABASE_URL it gets an address that cannot connect.
 const BLOCKED = "postgresql://blocked.invalid/blocked";
-let url = BLOCKED;
-try {
-  const target = resolveDatabase({ ...process.env, NODE_ENV: "development" });
-  if (!target.isProduction || process.env.DRIZZLE_TARGET_CONFIRMED === target.host) url = target.url;
-  else console.warn("[drizzle.config] production is not confirmed: use `npm run db:migrate -- --production`. Connecting is blocked.");
-} catch (e) {
-  console.warn(`[drizzle.config] ${e instanceof Error ? e.message : "no database configured"}`);
+let url = process.env.DRIZZLE_DATABASE_URL || BLOCKED;
+if (url === BLOCKED) {
+  try {
+    url = resolveDatabase({ ...process.env, NODE_ENV: "development" }).url;
+  } catch (e) {
+    console.warn(`[drizzle.config] ${e instanceof Error ? e.message : "no database configured"}`);
+  }
 }
 
 export default defineConfig({

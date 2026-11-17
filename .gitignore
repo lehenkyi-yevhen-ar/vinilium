@@ -48,3 +48,6 @@ next-env.d.ts
 
 # e2e signed-in session (created by tests/e2e/auth.setup.ts)
 /tests/.auth/
+
+# Recordings of REAL Discogs responses stay on this machine only (the repo uses synthetic fixtures: tests/fixtures/vinyl.ts)
+/tests/fixtures/_local-recordings/

@@ -19,7 +19,7 @@ setup("create a verified e2e user and sign in", async ({ request, baseURL }) => 
   expect(up.ok(), "sign-up").toBe(true);
 
   const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl()! });
+  const pool = new Pool({ connectionString: e2eDatabaseUrl() });
   try {
     await pool.query('update "user" set email_verified = true where email = $1', [email]);
   } finally {

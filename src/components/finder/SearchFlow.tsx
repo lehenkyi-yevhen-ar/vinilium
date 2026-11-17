@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { mergeGroups } from "@/lib/discogs/group";
-import { artistKey } from "@/lib/discogs/normalize";
+import { artistKey, primaryType } from "@/lib/discogs/normalize";
 import type { ArtistGroup, MasterSummary, MastersBatch, SearchEntry, SearchPage } from "@/lib/discogs/types";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Button } from "@/ds/Button";
@@ -123,6 +123,7 @@ function AlbumCard({ entry, master, resolving, query }: { entry: SearchEntry; ma
     ? { pathname: `/master/${entry.id}`, query: { ...query, ...((master?.artist ?? entry.artist) ? { a: (master?.artist ?? entry.artist)! } : {}), t: title } }
     : { pathname: `/release/${entry.id}` };
   const waiting = isMaster && resolving && !master;
+  const kind = primaryType(entry.types); // Album / EP / Single / Compilation, only when the format descriptors say so
 
   return (
     <article className="card x-result" aria-busy={waiting || undefined}>
@@ -145,7 +146,7 @@ function AlbumCard({ entry, master, resolving, query }: { entry: SearchEntry; ma
               {/* Medium and physical format only ("Vinyl, LP"): the rest (Test Pressing, Promo, ...) describes one release, not the album. */}
               {entry.formats.length ? ` · ${entry.formats.slice(0, 2).join(", ")}` : ""}
             </p>
-            {!isMaster ? <span className="badge">{t("standalone")}</span> : null}
+            {kind ? <span className="badge">{t(`types.${kind}`)}</span> : null}
             <Link href={href} className="x-result__cta link">
               {isMaster ? t("seePressings") : t("openRelease")}
             </Link>
@@ -186,23 +187,48 @@ function AlbumPage({ entries, query }: { entries: SearchEntry[]; query: Record<s
   );
 }
 
-/** Step 3. Albums of one artist, ALBUMS_PER_VIEW at a time; "show more" reveals (and resolves) the next view. */
+/**
+ * Step 3. Albums (masters) of one artist, ALBUMS_PER_VIEW at a time; "show more" reveals (and resolves) the next view.
+ * Vinyl releases Discogs has not grouped under a master come AFTER, in a section that is collapsed by default (open only
+ * when there is nothing else to show).
+ */
 function AlbumList({ group, query }: { group: ArtistGroup; query: Record<string, string> }) {
   const t = useTranslations("finder");
   const [views, setViews] = useState(1);
-  const shown = group.entries.slice(0, views * ALBUMS_PER_VIEW);
+  const masters = group.entries.filter((e) => e.kind === "master");
+  const others = group.entries.filter((e) => e.kind === "release");
+  const [openOthers] = useState(masters.length === 0);
+
+  const shown = masters.slice(0, views * ALBUMS_PER_VIEW);
   const pages = Array.from({ length: views }, (_, i) => shown.slice(i * ALBUMS_PER_VIEW, (i + 1) * ALBUMS_PER_VIEW)).filter((p) => p.length);
   return (
     <>
-      <div className="x-result-grid">
-        {pages.map((entries) => (
-          <AlbumPage key={entries[0].key} entries={entries} query={query} />
-        ))}
-      </div>
-      {shown.length < group.entries.length ? (
+      {masters.length ? (
+        <div className="x-result-grid">
+          {pages.map((entries) => (
+            <AlbumPage key={entries[0].key} entries={entries} query={query} />
+          ))}
+        </div>
+      ) : null}
+      {shown.length < masters.length ? (
         <Button variant="outline" onClick={() => setViews((v) => v + 1)}>
           {t("showMoreAlbums")}
         </Button>
+      ) : null}
+
+      {others.length ? (
+        <details className="x-disclosure" open={openOthers}>
+          <summary className="x-disclosure__summary">
+            <span>{t("otherPressingsTitle")}</span>
+            <span className="badge">{t("otherPressingsCount", { count: others.length })}</span>
+          </summary>
+          <p className="x-note">{t("otherPressingsHint")}</p>
+          <div className="x-result-grid">
+            {others.map((e) => (
+              <AlbumCard key={e.key} entry={e} resolving={false} query={query} />
+            ))}
+          </div>
+        </details>
       ) : null}
     </>
   );
@@ -211,6 +237,12 @@ function AlbumList({ group, query }: { group: ArtistGroup; query: Record<string,
 /** Step 2. A common title can match dozens of artists, so a long list can be narrowed by typing part of a name. */
 function ArtistList({ groups, mode, q, by }: { groups: ArtistGroup[]; mode: Mode; q: string; by: string }) {
   const t = useTranslations("finder");
+  /** "6 albums · 10 without a master": albums are masters; the rest are vinyl releases without one. */
+  const counts = (g: ArtistGroup) => {
+    const albums = g.entries.filter((e) => e.kind === "master").length;
+    const rest = g.entries.length - albums;
+    return [albums ? t("albumCount", { count: albums }) : null, rest ? t("withoutMasterCount", { count: rest }) : null].filter(Boolean).join(" · ");
+  };
   const [filter, setFilter] = useState("");
   const needle = artistKey(filter);
   const visible = needle ? groups.filter((g) => artistKey(g.artist).includes(needle)) : groups;
@@ -235,7 +267,7 @@ function ArtistList({ groups, mode, q, by }: { groups: ArtistGroup[]; mode: Mode
                 <Cover src={g.entries.find((e) => e.thumb)?.thumb ?? null} />
                 <span className="x-result__body">
                   <span className="x-result__title">{g.artist ?? t("unknownArtist")}</span>
-                  <span className="x-result__meta">{t("albumCount", { count: g.entries.length })}</span>
+                  <span className="x-result__meta">{counts(g)}</span>
                 </span>
               </Link>
             </li>

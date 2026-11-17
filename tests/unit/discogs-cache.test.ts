@@ -25,7 +25,7 @@ const T0 = 2_000_000_000_000;
 describe("cacheKey", () => {
   it("is canonical: param order, spacing and query case do not matter", async () => {
     const { cacheKey } = await import("@/server/discogs/cache");
-    const a = cacheKey("https://api.discogs.com", "search", { mode: "artist", q: "  Daft   Punk ", page: 1 });
+    const a = cacheKey("https://api.discogs.com", "search", { mode: "artist", q: "  Cobalt   Parade ", page: 1 });
     const b = cacheKey("https://api.discogs.com", "search", { page: 1, q: "cobalt parade", mode: "artist" });
     expect(a).toBe(b);
     expect(cacheKey("https://api.discogs.com", "search", { mode: "artist", q: "cobalt parade", page: 2 })).not.toBe(a);
@@ -159,7 +159,7 @@ describe("service: cache-through", () => {
 
   it("search: groups, dedupes and flags an honest 'incomplete' state", async () => {
     const s = await svc([json(searchPage1)]);
-    const r = await s.searchDiscogs({ mode: "artist", query: "  Daft   Punk ", page: 1 });
+    const r = await s.searchDiscogs({ mode: "artist", query: "  Cobalt   Parade ", page: 1 });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.data.query).toBe("Cobalt Parade");

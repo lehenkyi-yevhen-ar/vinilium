@@ -1,4 +1,4 @@
-import type { FacetValue, MasterSummary, ReleaseDetail, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
+import type { FacetValue, MasterSummary, ReleaseDetail, ReleaseType, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
 
 /**
  * Raw Discogs JSON -> our shapes. This is a WHITELIST: only the fields copied below survive, so price and
@@ -66,6 +66,29 @@ export function artistKey(artist: string | null): string {
 /** True when a release's format list (names and descriptions) includes Vinyl. */
 export const isVinyl = (formats: readonly string[]) => formats.some((f) => f.toLowerCase() === "vinyl");
 
+const TYPE_BY_DESCRIPTOR: Record<string, ReleaseType> = {
+  album: "album",
+  "mini-album": "ep",
+  ep: "ep",
+  single: "single",
+  "maxi-single": "single",
+  compilation: "compilation",
+};
+const TYPE_PRIORITY: ReleaseType[] = ["album", "ep", "single", "compilation"];
+
+/** Release kinds named by a hit's format descriptors ("LP, Album" -> ["album"]). */
+export function releaseTypes(formats: readonly string[]): ReleaseType[] {
+  const found = new Set<ReleaseType>();
+  for (const f of formats) {
+    const t = TYPE_BY_DESCRIPTOR[f.toLowerCase()];
+    if (t) found.add(t);
+  }
+  return TYPE_PRIORITY.filter((t) => found.has(t));
+}
+
+/** The one label to show for an album card: an album beats an EP beats a single beats a compilation. */
+export const primaryType = (types: readonly ReleaseType[] | undefined): ReleaseType | null => TYPE_PRIORITY.find((t) => types?.includes(t)) ?? null;
+
 /** One raw search hit -> a (not yet deduped) entry, or null if it is unusable OR not vinyl. */
 export function normalizeSearchHit(raw: unknown, image: ImageMapper): SearchEntry | null {
   if (!isObj(raw)) return null;
@@ -96,6 +119,7 @@ export function normalizeSearchHit(raw: unknown, image: ImageMapper): SearchEntr
     country: str(raw.country),
     discogsUrl: asMaster ? discogsUrlFor("master", masterId, type === "master" ? raw.uri : undefined) : discogsUrlFor("release", id, raw.uri),
     mergedHits: 1,
+    types: releaseTypes(allFormats),
     fromMaster: type === "master",
   };
 }

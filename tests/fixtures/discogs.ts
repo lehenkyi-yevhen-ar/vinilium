@@ -3,7 +3,7 @@
 /**
  * Synthetic Discogs-shaped payloads for unit tests AND the mock server. Searches are VINYL RELEASE searches (that is
  * what the app asks for), so every hit is a release; one CD hit is mixed in on purpose to prove it is dropped.
- * Marketplace fields are included on purpose to prove they never survive. Real recorded responses live in ./real.
+ * Marketplace fields are included on purpose to prove they never survive. Real recordings are kept OUT of git; see tests/fixtures/vinyl.ts for the synthetic regression data.
  */
 export const searchPage1 = {
   pagination: { page: 1, pages: 3, per_page: 50, items: 120 },

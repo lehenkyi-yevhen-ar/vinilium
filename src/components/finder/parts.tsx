@@ -134,7 +134,7 @@ export function Stepper({ current, label, steps }: { current: number; label: str
     <ol className="steps x-steps-bar" aria-label={label}>
       {steps.map((s, i) => (
         <li key={s} className={i < current ? "is-done" : i === current ? "is-current" : undefined} aria-current={i === current ? "step" : undefined}>
-          {s}
+          <span className="x-step__label">{s}</span>
         </li>
       ))}
     </ol>

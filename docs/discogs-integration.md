@@ -78,35 +78,37 @@ Thumbnails are fetched through `/api/discogs/image` from a separate token bucket
 the per-IP and per-user limits), so a page of 50 thumbnails never uses up the 60-per-minute API allowance. A 429 from the
 image host blocks images only. The image host sends no `X-Discogs-Ratelimit*` headers (observed 2026-11-16).
 
-## Why vinyl releases, grouped by master (evidence, real API, 2026-11-16)
+## Why vinyl releases, grouped by master (evidence from the real API, 2026-11-16)
 
-Bug report: searching the track "neon static" and choosing Mira Vale showed ONE card, "Neon Static, 2014, CDr, Single,
-Promo", and not the album. What the real API returned:
+Bug report: a popular track exists both as a SINGLE and on an ALBUM by the same artist. Searching it and choosing the artist
+showed ONE card, a CDr promo single, and not the album. What the real API returned (counts are real; names are left out):
 
 | Query | Result | Finding |
 | --- | --- | --- |
-| `type=release&track=neon static` (the old query) | 804 hits, 17 pages. Page 1: 50 releases, 40 not vinyl. 9 by Mira Vale, **all in master 910002 (the single)**. | No vinyl filter, and the album's master is not on page 1. The card's data came from the first release (a CDr promo). |
-| `type=release&track=neon static&artist=Mira Vale&format=Vinyl` | 21 hits, 21 vinyl, 4 masters incl. **910001 (the album)**. | The release-level format filter is reliable. |
-| `type=release&track=neon static&format=Vinyl` | 173 hits, all vinyl (Mira Vale's album included). | Works without the artist too. |
-| `type=master&q=neon static&format=Vinyl` | 33 masters, **none by Mira Vale**. | A master's `format` is its main release's (the album's is an MP3), so masters cannot be filtered by medium. |
-| `type=master&track=...` | works, but its `format` is the same unreliable field. | Not used. |
-| `/masters/910001` | title, year, artists, images, and also `lowest_price`/`num_for_sale`. | Authoritative album data; the price fields are stripped by the whitelist. |
-| `/masters/910001/versions?format=Vinyl` | 14 pressings (one is a Box Set, which can contain LPs). | The versions filter is reliable. |
+| `type=release&track=<track>` (the old query) | 804 hits, 17 pages. Page 1: 50 releases, 40 not vinyl. 9 by the artist, **all in the single's master**. | No vinyl filter, and the album's master is not on page 1. The card's data came from the first release (a CDr promo). |
+| `type=release&track=<track>&artist=<artist>&format=Vinyl` | 21 hits, 21 vinyl, 4 masters including **the album's**. | The release-level format filter is reliable. |
+| `type=release&track=<track>&format=Vinyl` | 173 hits over 4 pages, all vinyl (the album included). | Works without the artist too. |
+| `type=master&q=<title>&format=Vinyl` | 33 masters, **none by that artist**. | A master's `format` is its main release's (the album's was a digital release), so masters cannot be filtered by medium. |
+| `type=master&track=<track>` | works, but its `format` is the same unreliable field. | Not used. |
+| `/masters/{id}` | title, year, artists, images, and also `lowest_price` / `num_for_sale`. | Authoritative album data; the price fields are stripped by the whitelist. |
+| `/masters/{id}/versions?format=Vinyl` | 14 pressings (one is a Box Set, which can contain LPs). | The versions filter is reliable. |
+| artist search, vinyl releases | 394 hits over 8 pages; page 1 holds 26 distinct masters and 5 standalone releases. | Enough to list albums; "load more" and the incomplete note cover the rest. |
 
 So: all three modes use vinyl RELEASE searches grouped by master, the response is also checked client-side (a hit without
 Vinyl in its format list is dropped), album titles come from the master record, and versions are always `format=Vinyl`.
-Facet values arrive form-encoded (`Germany%2C+Austria%2C+%26+Switzerland`) and are decoded for display and for the filter.
+Facet values arrive form-encoded (`Port+Esme%2C+Calder%2C+%26+Vane` style) and are decoded for display and for the filter.
 
-Typical cost of the corrected flow, track `neon static`, artist chosen from the list: 1 search + 2 masters (Mira Vale's two
-albums) + 1 versions + 1 release = **5 Discogs calls** (6 with a filter change). Track "slow orbit" with artist "Cobalt Parade":
-1 search + 3 masters (the first 12 albums contain 3 masters) + 1 versions = 5. Cached results cost nothing for 4 hours.
+Typical cost of the corrected flow with the artist chosen from the list: 1 search + 2 masters (the artist's two albums) +
+1 versions + 1 release = **5 Discogs calls** (6 with a filter change). With an artist typed and 3 masters among the first 12
+albums: 1 search + 3 masters + 1 versions = 5. Cached results cost nothing for 4 hours.
 
 Honest limits: a search page holds 50 releases, so a very common title can match more artists than the first pages show
-(`incomplete`, "load more", the artist field and the artist filter exist for that). Standalone vinyl releases without a master
-(often unofficial) are listed as single pressings.
+(`incomplete`, "load more", the artist field and the artist filter exist for that). Vinyl releases without a master (often
+unofficial) are listed apart, in a collapsed section after the albums.
 
 ## Test fixtures
 
-`tests/fixtures/real/` holds responses recorded from the real API on 2026-11-16 for the regression tests. They are trimmed to the
-CC0 data fields the tests need (ids, titles, years, formats, countries): no images or thumbnails, no community statistics, no
-user data, and the price fields of the master record replaced by synthetic values. See the README there.
+Everything in `tests/fixtures` is **synthetic**: invented artists, titles, ids, years, formats and countries, with the SHAPE
+of the real responses (`vinyl.ts` models the bug above with an invented artist, a single and an album). No Discogs response
+is stored in git. If you record real responses for your own investigation, keep them in `tests/fixtures/_local-recordings/`,
+which is git-ignored.

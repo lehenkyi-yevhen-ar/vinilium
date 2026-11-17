@@ -6,7 +6,7 @@ guardDatabase({ purpose: "Open Drizzle Studio", allowProduction: true }).then((t
   const child = spawn("npx", ["drizzle-kit", "studio"], {
     stdio: "inherit",
     shell: true,
-    env: { ...process.env, DRIZZLE_TARGET_CONFIRMED: target.host },
+    env: { ...process.env, DRIZZLE_DATABASE_URL: target.url },
   });
   child.on("exit", (code) => process.exit(code ?? 0));
 });

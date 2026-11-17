@@ -132,8 +132,8 @@ describe("input schemas", () => {
 
   it("normalises and bounds search input", async () => {
     const { searchQuerySchema } = await import("@/server/discogs/http");
-    expect(searchQuerySchema.parse({ q: "  daft   punk ", mode: "artist" })).toEqual({ q: "cobalt parade", mode: "artist", by: undefined, page: 1 });
-    expect(searchQuerySchema.parse({ q: "neon static", mode: "track", by: "  Lana   Del Rey " })).toEqual({ q: "neon static", mode: "track", by: "Mira Vale", page: 1 });
+    expect(searchQuerySchema.parse({ q: "  cobalt   parade ", mode: "artist" })).toEqual({ q: "cobalt parade", mode: "artist", by: undefined, page: 1 });
+    expect(searchQuerySchema.parse({ q: "neon static", mode: "track", by: "  Mira   Vale " })).toEqual({ q: "neon static", mode: "track", by: "Mira Vale", page: 1 });
     expect(searchQuerySchema.parse({ q: "x", mode: "album", by: "" }).by).toBeUndefined();
     expect(searchQuerySchema.safeParse({ q: "x", mode: "track", by: "y".repeat(101) }).success).toBe(false);
     expect(searchQuerySchema.safeParse({ q: "x", mode: "master" }).success).toBe(false); // masters are not searched

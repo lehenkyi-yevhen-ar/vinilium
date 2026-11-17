@@ -3,7 +3,6 @@ import { e2eDatabaseUrl } from "../helpers/e2e-db";
 /** Removes the rows the Discogs e2e tests created (they live under the mock's origin), so the database stays clean. */
 export default async function globalTeardown() {
   const url = e2eDatabaseUrl();
-  if (!url) return;
   const { Pool } = await import("@neondatabase/serverless");
   const pool = new Pool({ connectionString: url });
   try {

@@ -3,6 +3,8 @@ import { groupByArtist, mergeGroups } from "@/lib/discogs/group";
 import {
   artistKey,
   normalizeFacets,
+  primaryType,
+  releaseTypes,
   normalizeMaster,
   normalizeRelease,
   normalizeSearchResponse,
@@ -26,7 +28,7 @@ describe("splitArtistTitle / artistKey", () => {
 
   it("normalises case, diacritics and spacing but keeps Discogs' '(2)' disambiguation", () => {
     expect(artistKey("Beyoncé")).toBe(artistKey("BEYONCE"));
-    expect(artistKey("  Daft   Punk ")).toBe("cobalt parade");
+    expect(artistKey("  Cobalt   Parade ")).toBe("cobalt parade");
     expect(artistKey("Nirvana (2)")).not.toBe(artistKey("Nirvana"));
     expect(artistKey(null)).toBe("");
   });
@@ -60,7 +62,7 @@ describe("normalizeSearchResponse + groupByArtist (vinyl releases grouped by mas
   });
 
   it("keeps a release's own title only as a FALLBACK: the album title comes from the master record later", () => {
-    // The first hit is a remix. This is the real failure mode (Mira Vale - Neon Static): the entry's title is a
+    // The first hit is a remix. This is the real failure mode (a single and an album with the same title): the entry's title is a
     // release's, so the UI resolves /masters/{id} for the real one.
     expect(groups[0].entries[0].title).toBe("Glass Harbor (Remixes)");
   });
@@ -95,9 +97,9 @@ describe("mergeGroups (load more)", () => {
     const p2 = groupByArtist(normalizeSearchResponse(searchPage2, image).entries);
     const merged = mergeGroups(p1, p2);
 
-    const daft = merged.find((g) => g.artist === "Cobalt Parade")!;
-    expect(daft.entries.map((e) => e.key)).toEqual(["m:500", "m:600", "m:700"]);
-    expect(daft.entries[0].mergedHits).toBe(3); // 2 vinyl releases from page 1 + 1 from page 2
+    const cobalt = merged.find((g) => g.artist === "Cobalt Parade")!;
+    expect(cobalt.entries.map((e) => e.key)).toEqual(["m:500", "m:600", "m:700"]);
+    expect(cobalt.entries[0].mergedHits).toBe(3); // 2 vinyl releases from page 1 + 1 from page 2
     expect(merged.map((g) => g.artist)).toEqual(["Cobalt Parade", "Some Band", null]);
   });
 });
@@ -225,5 +227,41 @@ describe("searchParamsFor: always vinyl RELEASES", () => {
 
   it("never searches masters (a master's format is its main release's, so the medium cannot be filtered there)", () => {
     for (const mode of ["track", "artist", "album"] as const) expect(searchParamsFor(mode, "x").type).toBe("release");
+  });
+});
+
+describe("release type label (derived only from the format descriptors we already receive)", () => {
+  it("reads Album / EP / Single / Compilation from the descriptors", () => {
+    expect(releaseTypes(["Vinyl", "LP", "Album"])).toEqual(["album"]);
+    expect(releaseTypes(["Vinyl", '12"', "EP"])).toEqual(["ep"]);
+    expect(releaseTypes(["Vinyl", "Mini-Album"])).toEqual(["ep"]);
+    expect(releaseTypes(["Vinyl", '7"', "Single"])).toEqual(["single"]);
+    expect(releaseTypes(["Vinyl", '12"', "Maxi-Single"])).toEqual(["single"]);
+    expect(releaseTypes(["Vinyl", "LP", "Compilation", "Unofficial Release"])).toEqual(["compilation"]);
+  });
+
+  it("says nothing when the descriptors say nothing (then no label is shown)", () => {
+    expect(releaseTypes(["Vinyl", '12"', "45 RPM"])).toEqual([]);
+    expect(primaryType([])).toBeNull();
+    expect(primaryType(undefined)).toBeNull(); // rows cached before this field existed
+  });
+
+  it("an album beats an EP beats a single beats a compilation", () => {
+    expect(primaryType(["single", "album"])).toBe("album");
+    expect(primaryType(["compilation", "single"])).toBe("single");
+    expect(primaryType(["compilation", "ep", "single"])).toBe("ep");
+  });
+
+  it("is carried on search entries and unioned when releases of one master merge", () => {
+    const entries = normalizeSearchResponse(searchPage1, image).entries;
+    expect(entries.find((e) => e.key === "m:500")!.types).toEqual(["album"]);
+    expect(entries.find((e) => e.key === "r:2001")!.types).toEqual(["single"]);
+    expect(entries.find((e) => e.key === "r:3001")!.types).toEqual([]);
+    const merged = groupByArtist([
+      { ...entries[0], types: ["single"], mergedHits: 1 },
+      { ...entries[0], types: ["album"], mergedHits: 1 },
+    ])[0].entries[0];
+    expect(merged.types.sort()).toEqual(["album", "single"]);
+    expect(primaryType(merged.types)).toBe("album");
   });
 });

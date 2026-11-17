@@ -3,10 +3,11 @@
  * scripts, drizzle.config.ts, Playwright and the unit tests all share ONE rule.
  *
  *   production runtime (NODE_ENV=production) : DATABASE_URL
- *   development and test                      : DEV_DATABASE_URL if it is set, otherwise DATABASE_URL
+ *   development and test                      : DEV_DATABASE_URL, and ONLY that. If it is not set the process refuses to
+ *                                               start or run: there is NO fallback to DATABASE_URL.
  *
- * DATABASE_URL is, by definition, the PRODUCTION database. Falling back to it in development is kept for convenience,
- * but it is treated as production by every guard, and the app warns loudly.
+ * DATABASE_URL is, by definition, the PRODUCTION database, and a development or test process can never reach it by accident.
+ * A deliberate production run (a migration) passes DATABASE_URL for that one command plus --production (see planGuard).
  *
  * Nothing in this file ever puts a connection string, user name or password into a message or return value that is meant
  * to be printed (`host` and `database` are the only parts shown, by design).
@@ -54,17 +55,19 @@ export function parseDbUrl(name: string, raw: string): { host: string; database:
   return { host: u.hostname.toLowerCase(), database: decodeURIComponent(u.pathname.replace(/^\//, "")) || "(default)", pooled: u.hostname.includes("-pooler") };
 }
 
-/** Choose the database for this process. `env.NODE_ENV` decides production vs development/test. */
+/** Choose the database for this process. `env.NODE_ENV` decides production vs development/test. No fallback. */
 export function resolveDatabase(env: Env): DbTarget {
   const production = env.NODE_ENV === "production";
   const prodUrl = clean(env.DATABASE_URL);
   const devUrl = clean(env.DEV_DATABASE_URL);
 
-  const source: DbSource = !production && devUrl ? "DEV_DATABASE_URL" : "DATABASE_URL";
-  const url = source === "DEV_DATABASE_URL" ? devUrl : prodUrl;
+  const source: DbSource = production ? "DATABASE_URL" : "DEV_DATABASE_URL";
+  const url = production ? prodUrl : devUrl;
   if (!url) {
     throw new DatabaseConfigError(
-      source === "DATABASE_URL" ? "DATABASE_URL is not set." : "DEV_DATABASE_URL is not set.",
+      production
+        ? "DATABASE_URL is not set (production runtime)."
+        : "DEV_DATABASE_URL is not set. Development and tests never use DATABASE_URL (production): add the connection string of your Neon dev branch as DEV_DATABASE_URL in .env.local.",
     );
   }
   const parsed = parseDbUrl(source, url);
@@ -75,9 +78,10 @@ export function resolveDatabase(env: Env): DbTarget {
     url,
     source,
     ...parsed,
-    branchLabel: clean(source === "DEV_DATABASE_URL" ? env.DEV_DATABASE_BRANCH : env.DATABASE_BRANCH) ?? null,
-    isProduction: source === "DATABASE_URL" || sameServer,
-    devPointsAtProduction: source === "DEV_DATABASE_URL" && sameServer,
+    branchLabel: clean(production ? env.DATABASE_BRANCH : env.DEV_DATABASE_BRANCH) ?? null,
+    // Production when it is the production variable, or when the dev variable points at the production server.
+    isProduction: production || sameServer,
+    devPointsAtProduction: !production && sameServer,
   };
 }
 
@@ -99,6 +103,26 @@ export function describeTarget(t: DbTarget, detectedBranch?: string | null): str
     `  database : ${t.database}`,
     `  branch   : ${t.branchLabel ?? detectedBranch ?? "unknown (set " + (t.source === "DEV_DATABASE_URL" ? "DEV_DATABASE_BRANCH" : "DATABASE_BRANCH") + " to show a name)"}`,
   ];
+}
+
+export interface GuardPlan {
+  /** NODE_ENV to resolve the database with, or null when the command must refuse right away. */
+  nodeEnv: "development" | "production" | null;
+  refusal?: string;
+}
+
+/**
+ * How a script picks its target from its arguments. Without `--production` it is ALWAYS the dev database. With it, and only
+ * if the command allows production at all, it is the production database: DATABASE_URL, which a local .env.local does not
+ * contain, so it has to be passed for that one command.
+ */
+export function planGuard(env: Env, argv: readonly string[], opts: { purpose: string; allowProduction: boolean }): GuardPlan {
+  const wantsProduction = argv.includes("--production") || env.NODE_ENV === "production";
+  if (!wantsProduction) return { nodeEnv: "development" };
+  if (!opts.allowProduction) {
+    return { nodeEnv: null, refusal: `Refusing to run "${opts.purpose}" against the PRODUCTION database. This command never touches production, with or without a flag.` };
+  }
+  return { nodeEnv: "production" };
 }
 
 export interface GuardDecision {
@@ -127,7 +151,7 @@ export function evaluateGuard(target: DbTarget, opts: { purpose: string; allowPr
       allowed: false,
       message:
         `Refusing to run "${opts.purpose}" against the PRODUCTION database. This command never touches production, with or without a flag.\n` +
-        (target.source === "DATABASE_URL" ? "Set DEV_DATABASE_URL (your dev branch) in .env.local and try again." : ""),
+        (target.source === "DATABASE_URL" ? "Use DEV_DATABASE_URL (your dev branch) instead." : "Fix DEV_DATABASE_URL: it points at production."),
     };
   }
   if (!opts.argv.includes("--production")) {
@@ -135,8 +159,7 @@ export function evaluateGuard(target: DbTarget, opts: { purpose: string; allowPr
       allowed: false,
       message:
         `Refusing to run "${opts.purpose}" against the PRODUCTION database without --production.\n` +
-        (target.source === "DATABASE_URL" ? "Did you mean the dev branch? Set DEV_DATABASE_URL in .env.local.\n" : "") +
-        "To really target production, pass --production (e.g. npm run db:migrate -- --production).",
+        "To really target production, pass --production AND DATABASE_URL for that one command (see the README).",
     };
   }
   return { allowed: true, message: `!!! --production given: "${opts.purpose}" will run against the PRODUCTION database. !!!` };

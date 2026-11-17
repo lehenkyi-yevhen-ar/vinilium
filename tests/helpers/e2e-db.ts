@@ -2,13 +2,12 @@ import { config } from "dotenv";
 import { DatabaseConfigError, resolveDatabase } from "../../src/lib/database-target";
 
 /**
- * The database the e2e run may use. ONLY DEV_DATABASE_URL: e2e creates and deletes users, sessions and cache rows, so it
- * never falls back to DATABASE_URL (production). Returns null (the Discogs / finder tests then skip, loudly) when it is not
- * set, and throws if it somehow resolves to the production server.
+ * The database the e2e run uses: DEV_DATABASE_URL, and nothing else. e2e creates and deletes users, sessions and cache rows,
+ * so there is no fallback to DATABASE_URL (production). Without DEV_DATABASE_URL the run REFUSES to start; and if it somehow
+ * points at the production server, it refuses too.
  */
-export function e2eDatabaseUrl(): string | null {
+export function e2eDatabaseUrl(): string {
   config({ path: ".env.local", quiet: true });
-  if (!process.env.DEV_DATABASE_URL?.trim()) return null;
   try {
     const target = resolveDatabase({ ...process.env, NODE_ENV: "test" });
     if (target.isProduction) {
@@ -16,7 +15,7 @@ export function e2eDatabaseUrl(): string | null {
     }
     return target.url;
   } catch (e) {
-    if (e instanceof DatabaseConfigError) throw new Error(`e2e cannot start: ${e.message}`);
+    if (e instanceof DatabaseConfigError) throw new Error(`e2e refuses to run: ${e.message}`);
     throw e;
   }
 }

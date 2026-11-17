@@ -24,7 +24,7 @@ const mockLog = async (request: APIRequestContext) => (await request.get(`${MOCK
 
 let thumb = "";
 let groupsPage1: ArtistGroup[] = [];
-const Q1 = `daft-${RUN}-a`;
+const Q1 = `cobalt-${RUN}-a`;
 
 test.beforeAll(async ({ request }) => {
   await request.post(`${MOCK}/__reset`);
@@ -79,9 +79,9 @@ test("'load more' fetches page 2 and merges it without duplicating masters", asy
   const body = await res.json();
   expect(body.data.page).toBe(2);
   const merged = mergeGroups(groupsPage1, body.data.groups);
-  const daft = merged.find((g) => g.artist === "Cobalt Parade")!;
-  expect(daft.entries.map((e) => e.key)).toEqual(["m:500", "m:600", "m:700"]);
-  expect(daft.entries[0].mergedHits).toBe(3); // 2 vinyl releases on page 1 + 1 on page 2
+  const cobalt = merged.find((g) => g.artist === "Cobalt Parade")!;
+  expect(cobalt.entries.map((e) => e.key)).toEqual(["m:500", "m:600", "m:700"]);
+  expect(cobalt.entries[0].mergedHits).toBe(3); // 2 vinyl releases on page 1 + 1 on page 2
 });
 
 test("lists a master's VINYL versions, deduped and without prices", async ({ request }) => {
@@ -289,7 +289,7 @@ test.describe("signed out", () => {
 
   test("search, versions, release, image and lists all answer 401 'unauthorized'", async ({ request }) => {
     for (const path of [
-      `/api/discogs/search?q=daft&mode=artist`,
+      `/api/discogs/search?q=cobalt&mode=artist`,
       "/api/discogs/masters/500/versions",
       "/api/discogs/masters?ids=500",
       "/api/discogs/releases/123",
