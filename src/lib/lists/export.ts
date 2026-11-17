@@ -6,7 +6,7 @@ import type { StoredItemJson } from "./rules";
  */
 export const EXPORT_COLUMNS = ["discogs_release_id", "list", "notes", "condition_media", "condition_sleeve", "added_at", "updated_at"] as const;
 
-const row = (i: StoredItemJson): Record<(typeof EXPORT_COLUMNS)[number], string | number | null> => ({
+export const exportRow = (i: StoredItemJson): Record<(typeof EXPORT_COLUMNS)[number], string | number | null> => ({
   discogs_release_id: i.releaseId,
   list: i.list,
   notes: i.notes,
@@ -30,12 +30,12 @@ export function csvCell(value: string | number | null): string {
 export function toCsv(items: StoredItemJson[]): string {
   const lines = [EXPORT_COLUMNS.join(",")];
   for (const i of items) {
-    const r = row(i);
+    const r = exportRow(i);
     lines.push(EXPORT_COLUMNS.map((c) => csvCell(r[c])).join(","));
   }
   return lines.join("\r\n") + "\r\n";
 }
 
 export function toJson(items: StoredItemJson[], exportedAt = new Date()): string {
-  return JSON.stringify({ exportedAt: exportedAt.toISOString(), columns: EXPORT_COLUMNS, items: items.map(row) }, null, 2) + "\n";
+  return JSON.stringify({ exportedAt: exportedAt.toISOString(), columns: EXPORT_COLUMNS, items: items.map(exportRow) }, null, 2) + "\n";
 }

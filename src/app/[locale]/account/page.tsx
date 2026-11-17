@@ -6,6 +6,7 @@ import { redirect } from "@/i18n/navigation";
 import { getDb, schema } from "@/server/db";
 import { getSession } from "@/server/auth/session";
 import { DeleteAccount } from "@/components/DeleteAccount";
+import { Link } from "@/i18n/navigation";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { SignOutButton } from "@/components/SignOutButton";
 
@@ -51,6 +52,19 @@ export default async function AccountPage({ params }: PageProps<"/[locale]/accou
           <h2 id="lang-h">{t("languageTitle")}</h2>
           <p className="x-lead">{t("languageHelp")}</p>
           <LocaleSwitcher signedIn variant="select" />
+        </section>
+
+        <section className="x-card x-section" aria-labelledby="export-h">
+          <h2 id="export-h">{t("exportTitle")}</h2>
+          <p className="x-lead">{t("exportText")}</p>
+          <div className="x-actions">
+            <a className="btn btn--outline" href="/api/account/export" download>
+              {t("exportButton")}
+            </a>
+            <Link className="link" href="/lists">
+              {t("exportListsLink")}
+            </Link>
+          </div>
         </section>
 
         <section className="x-card x-section x-danger" aria-labelledby="danger-h">

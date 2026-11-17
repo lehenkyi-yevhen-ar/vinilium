@@ -23,6 +23,12 @@ export function SiteFooter() {
           <Link className="link link--quiet" href="/contact">
             {t("contact")}
           </Link>
+          <Link className="link link--quiet" href="/privacy">
+            {t("privacy")}
+          </Link>
+          <Link className="link link--quiet" href="/terms">
+            {t("terms")}
+          </Link>
         </nav>
         <div className="footer__legal">
           <span>

@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { z } from "zod";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/ds/Button";
 import { Field } from "@/ds/Field";
@@ -15,6 +15,7 @@ import { fieldErrors, useAuthError } from "./use-auth-error";
 export function SignUpForm({ googleEnabled }: { googleEnabled: boolean }) {
   const t = useTranslations("auth");
   const c = useTranslations("common");
+  const consent = useTranslations("signUpConsent");
   const locale = useLocale();
   const router = useRouter();
   const authError = useAuthError();
@@ -56,6 +57,17 @@ export function SignUpForm({ googleEnabled }: { googleEnabled: boolean }) {
       <Field name="name" label={t("name")} autoComplete="name" error={errors.name} />
       <Field name="email" type="email" label={t("email")} autoComplete="email" inputMode="email" error={errors.email} />
       <PasswordField name="password" label={t("password")} help={t("passwordHelp")} autoComplete="new-password" error={errors.password} />
+      <p className="x-note">
+        {consent("consentPrefix")}{" "}
+        <Link className="link" href="/terms">
+          {consent("consentTerms")}
+        </Link>{" "}
+        {consent("consentAnd")}{" "}
+        <Link className="link" href="/privacy">
+          {consent("consentPrivacy")}
+        </Link>
+        .
+      </p>
       <Button type="submit" block loading={pending}>
         {t("signUpSubmit")}
       </Button>

@@ -219,3 +219,9 @@ a.tabs__tab { text-decoration: none; min-height: var(--touch-target); }
   .btn.x-library-filters__toggle { display: inline-flex; }
   .x-library-filters:not([data-open]) > .x-library-bar { display: none; }
 }
+
+/* Legal pages: a visible mark for text that still needs legal review, and the draft banner */
+.x-legal h1 { margin-bottom: var(--space-1); }
+.x-legal .x-section h2 { font: var(--text-h4); }
+.x-legal-mark { background: color-mix(in srgb, var(--color-warning) 22%, transparent); color: var(--color-text); padding: 0 var(--space-1); border-radius: var(--radius-sm); font-weight: 600; }
+.x-legal-banner { margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); border: var(--border-thin) solid var(--color-warning); border-inline-start-width: var(--border-strong); border-radius: var(--radius-md); }
