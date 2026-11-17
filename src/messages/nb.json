@@ -325,6 +325,8 @@
     "lead": "Ønskelisten og samlingen din. Notater, stand og datoer er dine egne; opplysningene om platen kommer fra Discogs.",
     "tabsLabel": "Lister",
     "tabCount": "{name} ({count})",
+    "filters": "Filtre",
+    "filtersActive": "Filtre · {count}",
     "wishlist": "Ønskeliste",
     "collection": "Samling",
     "searchLabel": "Søk i notatene dine",

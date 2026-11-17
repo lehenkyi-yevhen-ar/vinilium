@@ -21,7 +21,7 @@ import {
 import { Link, useRouter } from "@/i18n/navigation";
 import { Button } from "@/ds/Button";
 import { ButtonLink } from "@/ds/ButtonLink";
-import { DiscIcon, SearchIcon, XIcon } from "@/ds/icons";
+import { DiscIcon, FilterIcon, SearchIcon, XIcon } from "@/ds/icons";
 import { useDS } from "@/ds/use-ds";
 import { StatusMessage } from "@/ds/StatusMessage";
 import { Countdown } from "../finder/parts";
@@ -156,6 +156,8 @@ export function LibraryView() {
   const [signedOut, setSignedOut] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ id: number; title: string } | null>(null);
   const [retries, setRetries] = useState({ ids: "", n: 0 });
+  // Phones: search, sort and page size sit behind a "Filters" toggle so the first card is on screen. Desktop shows them always (CSS).
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftQ, setDraftQ] = useState<{ from: string; value: string }>({ from: view.q, value: view.q });
   const [counts, setCounts] = useState<Record<ListName, number> | null>(null);
 
@@ -258,7 +260,9 @@ export function LibraryView() {
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
     go({ q: draftQ.value.trim() });
+    setFiltersOpen(false); // on a phone, show the results; the toggle says how many filters are on
   };
+  const activeFilters = (view.q ? 1 : 0) + (view.sort !== "added" || view.dir !== "desc" ? 1 : 0) + (view.size !== DEFAULT_PAGE_SIZE ? 1 : 0);
 
   const autoRetries = retries.ids === ids ? retries.n : 0;
   const titleFor = (id: number) => {
@@ -298,78 +302,89 @@ export function LibraryView() {
 
       {signedOut ? <SignInRequired expired compact next="/lists" /> : null}
 
-      <form className="x-library-bar" onSubmit={onSearch} role="search">
-        <div className="field x-library-bar__search">
-          <label className="field__label" htmlFor="library-q">
-            {t("searchLabel")}
-          </label>
-          <input
-            id="library-q"
-            className="input"
-            type="search"
-            name="q"
-            value={draftQ.value}
-            maxLength={100}
-            placeholder={t("searchPlaceholder")}
-            aria-describedby="library-q-help"
-            onChange={(e) => setDraftQ({ from: view.q, value: e.target.value })}
-          />
-          <div className="field__help" id="library-q-help">
-            {t("searchHelp")}
+      <div className="x-library-filters" data-open={filtersOpen || undefined}>
+        <Button
+          variant="outline"
+          className="x-library-filters__toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="library-filters"
+          onClick={() => setFiltersOpen((o) => !o)}
+        >
+          <FilterIcon /> {activeFilters ? t("filtersActive", { count: activeFilters }) : t("filters")}
+        </Button>
+        <form id="library-filters" className="x-library-bar" onSubmit={onSearch} role="search">
+          <div className="field x-library-bar__search">
+            <label className="field__label" htmlFor="library-q">
+              {t("searchLabel")}
+            </label>
+            <input
+              id="library-q"
+              className="input"
+              type="search"
+              name="q"
+              value={draftQ.value}
+              maxLength={100}
+              placeholder={t("searchPlaceholder")}
+              aria-describedby="library-q-help"
+              onChange={(e) => setDraftQ({ from: view.q, value: e.target.value })}
+            />
+            <div className="field__help" id="library-q-help">
+              {t("searchHelp")}
+            </div>
           </div>
-        </div>
-        <div className="x-actions x-library-bar__go">
-          <Button type="submit">
-            <SearchIcon /> {t("searchButton")}
-          </Button>
-          {view.q ? (
-            <Button variant="ghost" onClick={() => go({ q: "" })}>
-              <XIcon /> {t("clearSearch")}
+          <div className="x-actions x-library-bar__go">
+            <Button type="submit">
+              <SearchIcon /> {t("searchButton")}
             </Button>
-          ) : null}
-        </div>
-        <div className="field">
-          <label className="field__label" htmlFor="library-sort">
-            {t("sortLabel")}
-          </label>
-          <div className="select-wrap">
-            <select
-              id="library-sort"
-              className="select"
-              value={`${data?.sort ?? view.sort}:${data?.dir ?? view.dir}`}
-              onChange={(e) => {
-                const [sort, dir] = e.target.value.split(":") as [SortKey, SortDir];
-                go({ sort, dir });
-              }}
-            >
-              <option value="added:desc">{t("sort.addedDesc")}</option>
-              <option value="added:asc">{t("sort.addedAsc")}</option>
-              <option value="notes:asc">{t("sort.notesAsc")}</option>
-              <option value="notes:desc">{t("sort.notesDesc")}</option>
-              {list === "collection" ? (
-                <>
-                  <option value="condition:asc">{t("sort.conditionBest")}</option>
-                  <option value="condition:desc">{t("sort.conditionWorst")}</option>
-                </>
-              ) : null}
-            </select>
+            {view.q ? (
+              <Button variant="ghost" onClick={() => go({ q: "" })}>
+                <XIcon /> {t("clearSearch")}
+              </Button>
+            ) : null}
           </div>
-        </div>
-        <div className="field">
-          <label className="field__label" htmlFor="library-size">
-            {t("pageSizeLabel")}
-          </label>
-          <div className="select-wrap">
-            <select id="library-size" className="select" value={view.size} onChange={(e) => go({ size: Number(e.target.value) })}>
-              {PAGE_SIZES.map((n) => (
-                <option key={n} value={n}>
-                  {t("perPage", { n })}
-                </option>
-              ))}
-            </select>
+          <div className="field">
+            <label className="field__label" htmlFor="library-sort">
+              {t("sortLabel")}
+            </label>
+            <div className="select-wrap">
+              <select
+                id="library-sort"
+                className="select"
+                value={`${data?.sort ?? view.sort}:${data?.dir ?? view.dir}`}
+                onChange={(e) => {
+                  const [sort, dir] = e.target.value.split(":") as [SortKey, SortDir];
+                  go({ sort, dir });
+                }}
+              >
+                <option value="added:desc">{t("sort.addedDesc")}</option>
+                <option value="added:asc">{t("sort.addedAsc")}</option>
+                <option value="notes:asc">{t("sort.notesAsc")}</option>
+                <option value="notes:desc">{t("sort.notesDesc")}</option>
+                {list === "collection" ? (
+                  <>
+                    <option value="condition:asc">{t("sort.conditionBest")}</option>
+                    <option value="condition:desc">{t("sort.conditionWorst")}</option>
+                  </>
+                ) : null}
+              </select>
+            </div>
           </div>
-        </div>
-      </form>
+          <div className="field">
+            <label className="field__label" htmlFor="library-size">
+              {t("pageSizeLabel")}
+            </label>
+            <div className="select-wrap">
+              <select id="library-size" className="select" value={view.size} onChange={(e) => go({ size: Number(e.target.value) })}>
+                {PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>
+                    {t("perPage", { n })}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </form>
+      </div>
 
       <p className="x-note" role="status" aria-live="polite" data-testid="library-notice">
         {notice}

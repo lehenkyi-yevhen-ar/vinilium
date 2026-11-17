@@ -325,6 +325,8 @@
     "lead": "Your Wishlist and Collection. Notes, condition and dates are yours; the record details come from Discogs.",
     "tabsLabel": "Lists",
     "tabCount": "{name} ({count})",
+    "filters": "Filters",
+    "filtersActive": "Filters · {count}",
     "wishlist": "Wishlist",
     "collection": "Collection",
     "searchLabel": "Search your notes",

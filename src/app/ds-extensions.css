@@ -210,3 +210,12 @@ a.tabs__tab { text-decoration: none; min-height: var(--touch-target); }
 .x-export { border-top: var(--border-thin) solid var(--color-border); padding-top: var(--space-4); margin-top: var(--space-6); }
 .x-export .btn { text-decoration: none; }
 .x-empty__icon { width: var(--icon-xl, 40px); height: var(--icon-xl, 40px); color: var(--color-accent-text); }
+
+/* Phones: search / sort / page size collapse behind a "Filters" toggle. Desktop is unchanged (the toggle is hidden). */
+.x-library-filters { display: flex; flex-direction: column; gap: var(--space-3); }
+.btn.x-library-filters__toggle { display: none; align-self: flex-start; } /* .btn.x-... outranks the design system's .btn { display } */
+.x-library-filters__toggle svg { width: var(--icon-md); height: var(--icon-md); }
+@media (max-width: 640px) {
+  .btn.x-library-filters__toggle { display: inline-flex; }
+  .x-library-filters:not([data-open]) > .x-library-bar { display: none; }
+}

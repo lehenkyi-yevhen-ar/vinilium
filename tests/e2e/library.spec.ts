@@ -83,6 +83,11 @@ const open = async (page: Page, query = "") => {
   await expect(page.getByRole("heading", { level: 1, name: "My lists" })).toBeVisible();
 };
 const summary = (page: Page) => page.getByTestId("library-summary");
+/** On a phone the search / sort / page-size controls sit behind a "Filters" toggle; on desktop there is no toggle. Idempotent. */
+const showFilters = async (page: Page) => {
+  const toggle = page.getByRole("button", { name: /^Filters/ });
+  if ((await toggle.isVisible()) && (await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+};
 
 /** Make every write of one kind fail after a short delay, so the optimistic state can be seen before it is rolled back. */
 async function failWrites(page: Page, method: "PATCH" | "PUT" | "DELETE") {
@@ -157,6 +162,7 @@ test("pagination: 12 or 24 per page, counts, a pager that knows where it is, and
   await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
   await noOverflow(page);
 
+  await showFilters(page);
   await page.getByLabel("Per page").selectOption("24");
   await expect(page).toHaveURL(/size=24/);
   await expect(page).not.toHaveURL(/page=/); // changing the size starts at page 1
@@ -175,9 +181,11 @@ test("sort: by added date and by notes on the Wishlist; by condition only on the
   await expect(page.getByLabel("Sort by").locator("option")).toHaveText(["Added: newest first", "Added: oldest first", "Notes: A to Z", "Notes: Z to A"]); // no condition sort here
   await expect(items(page).first()).toHaveAttribute("data-release-id", String(BASE + 30));
 
+  await showFilters(page);
   await page.getByLabel("Sort by").selectOption("added:asc");
   await expect(items(page).first()).toHaveAttribute("data-release-id", String(BASE + 1));
 
+  await showFilters(page);
   await page.getByLabel("Sort by").selectOption("notes:asc");
   await expect(page).toHaveURL(/sort=notes/);
   await expect(page.getByTestId("item-notes").nth(0)).toHaveText("100% club mint");
@@ -185,6 +193,7 @@ test("sort: by added date and by notes on the Wishlist; by condition only on the
   await expect(page.getByTestId("item-notes").nth(2)).toHaveText("Zulu pressing");
   await expect(page.getByTestId("item-notes").nth(3)).toHaveText("No notes yet."); // items without notes come last
 
+  await showFilters(page);
   await page.getByLabel("Sort by").selectOption("notes:desc");
   await expect(page.getByTestId("item-notes").nth(0)).toHaveText("Zulu pressing");
 
@@ -199,10 +208,12 @@ test("sort: by added date and by notes on the Wishlist; by condition only on the
     "Condition: best first",
     "Condition: worst first",
   ]);
+  await showFilters(page);
   await page.getByLabel("Sort by").selectOption("condition:asc");
   await expect(items(page).nth(0)).toHaveAttribute("data-release-id", String(BASE + 102)); // M / M
   await expect(items(page).nth(1)).toHaveAttribute("data-release-id", String(BASE + 101)); // NM / VG
   await expect(items(page).nth(2)).toHaveAttribute("data-release-id", String(BASE + 103)); // VG+ / G
+  await showFilters(page);
   await page.getByLabel("Sort by").selectOption("condition:desc");
   await expect(items(page).nth(0)).not.toHaveAttribute("data-release-id", String(BASE + 102));
   await expect(items(page).nth(4)).toHaveAttribute("data-release-id", String(BASE + 102));
@@ -210,6 +221,7 @@ test("sort: by added date and by notes on the Wishlist; by condition only on the
 
 test("search works on the user's own fields only (notes, condition); % is text; clearing brings everything back", async ({ page }) => {
   await open(page);
+  await showFilters(page);
   await page.getByLabel("Search your notes").fill("alpha");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page).toHaveURL(/q=alpha/);
@@ -217,12 +229,14 @@ test("search works on the user's own fields only (notes, condition); % is text; 
   await expect(summary(page)).toHaveText("1 record for “alpha”");
   await expect(item(page, BASE + 2)).toBeVisible();
 
+  await showFilters(page);
   await page.getByLabel("Search your notes").fill("%");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(items(page)).toHaveCount(1); // a wildcard would have matched all 30
   await expect(item(page, BASE + 3)).toBeVisible();
 
   // Titles and artists live on Discogs: they are not searchable here.
+  await showFilters(page);
   await page.getByLabel("Search your notes").fill("Library Record");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByTestId("library-empty")).toContainText("Nothing matches");
@@ -232,6 +246,7 @@ test("search works on the user's own fields only (notes, condition); % is text; 
 
   // a grade finds Collection items graded that
   await open(page, "?list=collection");
+  await showFilters(page);
   await page.getByLabel("Search your notes").fill("vg+");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(items(page)).toHaveCount(1);
@@ -454,22 +469,30 @@ test("empty lists say so and link to the search; a signed-out visitor is asked t
   await anon.close();
 });
 
-test("the screen refreshes its Discogs data after 5.5 hours, well inside the 6-hour display limit", async ({ page }) => {
+test("the screen refreshes its Discogs data 5.5 hours after it was FETCHED, well inside the 6-hour display limit", async ({ page }) => {
+  // Fresh ids, so this page's Discogs data is fetched now (not left over from an earlier test): the 5.5 h clock starts at that fetch.
+  const fresh = Array.from({ length: 12 }, (_, k): Row => ({ id: BASE + 1000 + k, list: "wishlist", at: hour(900 + k) }));
+  await seed(page, fresh);
   await page.clock.install({ time: new Date() });
   const batches: string[] = [];
   page.on("request", (r) => r.url().includes("/api/discogs/releases?") && batches.push(r.url()));
+  const firstBatch = page.waitForResponse((r) => r.url().includes("/api/discogs/releases?"));
 
   await open(page);
+  const { fetchedAt } = (await (await firstBatch).json()) as { fetchedAt: string };
   await expect(titles(page)).toHaveCount(12);
   expect(batches).toHaveLength(1);
   const upstream = await upstreamReleaseCalls(page);
+  const ageMs = Date.now() - Date.parse(fetchedAt);
+  expect(ageMs, "the data was fetched just now").toBeLessThan(120_000);
+  const untilRefresh = 5.5 * 3_600_000 - ageMs;
 
-  await page.clock.fastForward("05:29:00");
+  await page.clock.fastForward(untilRefresh - 120_000); // two minutes short of 5.5 h of age
   await page.waitForTimeout(500);
-  expect(batches, "not yet: 5h29m").toHaveLength(1);
+  expect(batches, "not yet: 5 h 28 min after the fetch").toHaveLength(1);
 
-  await page.clock.fastForward("00:02:00");
-  await expect.poll(() => batches.length, { message: "refetched after 5.5h" }).toBe(2);
+  await page.clock.fastForward(240_000); // past 5.5 h of age
+  await expect.poll(() => batches.length, { message: "refetched at 5.5 h" }).toBe(2);
   await expect(titles(page)).toHaveCount(12); // cards stay on screen while the refresh runs
   expect(await upstreamReleaseCalls(page)).toBe(upstream); // the server cache still held them: Discogs was not asked again
 });
@@ -483,4 +506,51 @@ test("a phone-sized page has no horizontal overflow and the actions are reachabl
     const box = await b.boundingBox();
     expect(box && box.height >= 32, "tap target height").toBeTruthy();
   }
+});
+
+test("phones: search, sort and page size collapse behind a Filters toggle and the first card is on screen; desktop keeps them open", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const toggle = page.getByRole("button", { name: /^Filters/ });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByLabel("Search your notes")).toBeHidden();
+  await expect(page.getByLabel("Sort by")).toBeHidden();
+  await expect(page.getByLabel("Per page")).toBeHidden();
+
+  // the first card is visible without scrolling (above the bottom tab bar, ~80px)
+  const firstTitle = titles(page).first();
+  await expect(firstTitle).toBeVisible();
+  const box = await firstTitle.boundingBox();
+  expect(box, "first card title has a box").not.toBeNull();
+  expect(box!.y, "title is below the top of the page").toBeGreaterThan(0);
+  expect(box!.y + box!.height, "title is above the tab bar, without scrolling").toBeLessThan(844 - 80);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await noOverflow(page);
+
+  // the toggle opens and closes the controls, and is operable by keyboard
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByLabel("Search your notes")).toBeVisible();
+  await expect(page.getByLabel("Sort by")).toBeVisible();
+  await expect(page.getByLabel("Per page")).toBeVisible();
+  await noOverflow(page);
+
+  // applying a search closes the panel to show the results; the toggle counts what is on
+  await page.getByLabel("Search your notes").fill("alpha");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(items(page)).toHaveCount(1);
+  await expect(page.getByLabel("Search your notes")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Filters · 1" })).toBeVisible();
+  await expect(summary(page)).toHaveText("1 record for “alpha”");
+  await expect(titles(page).first()).toBeInViewport();
+
+  // desktop width: no toggle, everything shown
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page);
+  await expect(page.getByRole("button", { name: /^Filters/ })).toBeHidden();
+  await expect(page.getByLabel("Search your notes")).toBeVisible();
+  await expect(page.getByLabel("Sort by")).toBeVisible();
+  await expect(page.getByLabel("Per page")).toBeVisible();
 });

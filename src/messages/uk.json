@@ -325,6 +325,8 @@
     "lead": "Ваші Бажанки та Колекція. Нотатки, стан і дати – ваші; дані про платівку приходять із Discogs.",
     "tabsLabel": "Списки",
     "tabCount": "{name} ({count})",
+    "filters": "Фільтри",
+    "filtersActive": "Фільтри · {count}",
     "wishlist": "Бажанки",
     "collection": "Колекція",
     "searchLabel": "Пошук у нотатках",
