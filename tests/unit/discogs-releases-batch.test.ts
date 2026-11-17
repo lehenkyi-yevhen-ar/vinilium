@@ -109,6 +109,24 @@ describe("getReleases", () => {
     expect(s.fetchImpl.mock.calls.length).toBeLessThan(8); // it stopped launching new requests
   });
 
+  it("saves each answer as it arrives: a batch cut off halfway (platform time limit) does not waste the calls already made", async () => {
+    // Releases 1 and 2 answer; 3 and 4 never do (the "function" is abandoned while they hang), as when a time limit kills it.
+    const s = await svc((id) => json(release(id)));
+    const hang = new Promise<Response>(() => {});
+    const fetchImpl = vi.fn((u: URL) => (Number(u.pathname.split("/").pop()) <= 2 ? Promise.resolve(json(release(Number(u.pathname.split("/").pop())))) : hang));
+    const cut = s.getReleases({ ...s.deps, fetchImpl: fetchImpl as unknown as typeof fetch }, [1, 2, 3, 4]);
+    await Promise.race([cut, new Promise((r) => setTimeout(r, 400))]); // never finishes: we walk away, like the platform does
+    const rows = await db.select().from(discogsCache);
+    expect(rows).toHaveLength(2);
+
+    // The retry only asks Discogs for what is still missing.
+    const retry = await svc((id) => json(release(id)));
+    const r = await retry.getReleases(retry.deps, [1, 2, 3, 4]);
+    if (!r.ok) throw new Error("failed");
+    expect(r.data.releases.map((c) => c.id)).toEqual([1, 2, 3, 4]);
+    expect(retry.fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("is bounded: at most 24 releases per call, each asked once, duplicates collapsed", async () => {
     const s = await svc((id) => json(release(id)));
     const wanted = Array.from({ length: 40 }, (_, i) => 100 + i);

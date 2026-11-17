@@ -199,7 +199,20 @@ export async function batchCached<T>(
     } else todo.push(id);
   }
 
-  const fresh: Array<{ key: string; payload: unknown; ttlSeconds: number }> = [];
+  // Every answer is written to the cache THE MOMENT it arrives, not once at the end: if the function is cut off by a platform
+  // time limit halfway through a cold batch, the Discogs calls already made are not wasted (the next request finds them cached).
+  // `now` stays the batch's start time, as before: TTLs are measured from there, so nothing is ever kept longer than before.
+  type Entry = { key: string; payload: unknown; ttlSeconds: number };
+  const unsaved: Entry[] = []; // writes that failed; tried once more together at the end
+  let saved = 0;
+  async function persist(entry: Entry) {
+    try {
+      await putCachedMany(deps.db, [entry], now);
+      saved++;
+    } catch {
+      unsaved.push(entry);
+    }
+  }
   const failed = new Set<number>();
   let retryAfter: number | undefined;
   let unconfigured = false;
@@ -226,12 +239,12 @@ export async function batchCached<T>(
         if (built === null) failed.add(id);
         else {
           found.set(id, built);
-          fresh.push({ key: key(id), payload: built, ttlSeconds: cacheTtlSeconds() });
+          await persist({ key: key(id), payload: built, ttlSeconds: cacheTtlSeconds() });
         }
       } else if (out.kind === "not_found") {
         upstreamCalls++;
         gone.add(id);
-        fresh.push({ key: goneKey(id), payload: { gone: true }, ttlSeconds: Math.min(GONE_TTL_SECONDS, cacheTtlSeconds()) });
+        await persist({ key: goneKey(id), payload: { gone: true }, ttlSeconds: Math.min(GONE_TTL_SECONDS, cacheTtlSeconds()) });
       } else if (out.kind === "throttled") {
         retryAfter = Math.max(retryAfter ?? 0, out.retryAfter);
       } else if (out.kind === "unconfigured") {
@@ -241,8 +254,12 @@ export async function batchCached<T>(
   }
   await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, todo.length) }, worker));
 
-  const fetchedAt = fresh.length ? await putCachedMany(deps.db, fresh, now) : new Date(now);
-  if (fresh.length) {
+  if (unsaved.length) {
+    await putCachedMany(deps.db, unsaved, now); // as before, a cache that cannot be written at all fails the request
+    saved += unsaved.length;
+  }
+  const fetchedAt = new Date(now);
+  if (saved) {
     oldest = Math.min(oldest, fetchedAt.getTime());
     await purgeExpiredCache(deps.db, now).catch(() => {});
   }
