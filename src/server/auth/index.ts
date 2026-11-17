@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { emailPasswordEnabled } from "@/lib/auth-flags";
 import { googleEnabled, serverEnv } from "@/lib/env";
 import { getDb, schema } from "@/server/db";
 import { stripOAuthTokens } from "./oauth-tokens";
@@ -29,7 +30,8 @@ function create() {
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
 
     emailAndPassword: {
-      enabled: true,
+      // The route guard (guard.ts) already refuses these endpoints when the flag is off; this is the second lock.
+      enabled: emailPasswordEnabled(),
       minPasswordLength: 8,
       requireEmailVerification: true,
       resetPasswordTokenExpiresIn: 60 * 60,

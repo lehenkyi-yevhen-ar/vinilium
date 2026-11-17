@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/ds/Button";
 import { Field } from "@/ds/Field";
 import { StatusMessage } from "@/ds/StatusMessage";
+import { EmailNotArrived } from "./EmailNotArrived";
 import { fieldErrors, useAuthError } from "./use-auth-error";
 
 export function ForgotPasswordForm() {
@@ -42,7 +43,14 @@ export function ForgotPasswordForm() {
     setSent(true);
   }
 
-  if (sent) return <StatusMessage tone="success">{t("forgotSent")}</StatusMessage>;
+  if (sent) {
+    return (
+      <div className="x-form">
+        <StatusMessage tone="success">{t("forgotSent")}</StatusMessage>
+        <EmailNotArrived />
+      </div>
+    );
+  }
 
   return (
     <form className="x-form" onSubmit={onSubmit} noValidate>

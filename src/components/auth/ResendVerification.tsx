@@ -5,6 +5,7 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/ds/Button";
 import { StatusMessage } from "@/ds/StatusMessage";
+import { EmailNotArrived } from "./EmailNotArrived";
 import { useAuthError } from "./use-auth-error";
 
 export function ResendVerification({ email }: { email: string }) {
@@ -29,6 +30,7 @@ export function ResendVerification({ email }: { email: string }) {
     <div className="x-form">
       {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
       {state === "sent" ? <StatusMessage tone="success">{t("verifyResent")}</StatusMessage> : null}
+      <EmailNotArrived />
       <Button variant="outline" block loading={state === "pending"} onClick={onClick}>
         {t("verifyResend")}
       </Button>
