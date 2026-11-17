@@ -164,6 +164,29 @@ body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; bac
 .x-signin-required .x-actions { margin-top: var(--space-4); }
 
 /* "Other pressings without a master": a native <details>, collapsed by default */
+/* ---- Phone menus in the header (language and theme) ----
+   At 640px and below the design system opens a .dd menu as a BOTTOM SHEET: position: fixed against the screen, with a scrim just under it
+   (--z-overlay - 1). Two things in our header broke that (measured in tests/e2e/phone-menus.spec.ts):
+   1. .navbar.glass has a backdrop-filter, and a backdrop-filter makes its element the containing block of fixed descendants. The sheet's
+      "bottom" was measured from the navbar, not the screen: it opened ABOVE the trigger, partly off the top of the screen.
+   2. .site-header is sticky with a z-index (a stacking context at --z-sticky), below the scrim: the scrim painted over the whole menu.
+   While a menu is open we drop the navbar's blur (the scrim blurs the page anyway) and lift the header above the scrim. Nothing under
+   public/ds/ is changed. */
+/* Theme switcher: the trigger shows the icon of the theme that is on screen (read from <html data-theme>, so the server markup never
+   disagrees with the browser). No attribute yet = the design system's default, dark. */
+.x-theme .x-theme__sun { display: none; }
+[data-theme="light"] .x-theme .x-theme__moon { display: none; }
+[data-theme="light"] .x-theme .x-theme__sun { display: inline; }
+.x-theme .dd__opt small { display: block; }
+
+/* The current choice in a MENU (language, theme; a select already has the design system's check) is marked by a check mark and weight, not by colour alone. */
+.dd[data-dd="menu"] .dd__opt[aria-current="true"] { font-weight: 600; }
+.dd[data-dd="menu"] .dd__opt[aria-current="true"]::after { content: "✓"; margin-left: auto; color: var(--color-primary); font-weight: 700; }
+@media (max-width: 640px) {
+  .navbar.glass:has(.dd.is-open) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .site-header:has(.dd.is-open) { z-index: var(--z-overlay); }
+}
+
 /* "How to search": the same native <details> look as the disclosure above, with its own class (tests tell the two apart) */
 .x-help { border: var(--border-thin) solid var(--color-border); border-radius: var(--radius-md); padding: 0 var(--space-4) var(--space-4); margin: var(--space-4) 0; }
 .x-help:not([open]) { padding-bottom: 0; }

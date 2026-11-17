@@ -11,11 +11,10 @@ test.describe("app shell", () => {
     await expect(page.getByRole("navigation", { name: "Головна навігація" }).first()).toBeVisible();
   });
 
-  test("language switcher changes the URL, <html lang> and remembers the choice", async ({ page, isMobile }) => {
-    test.skip(isMobile, "covered on desktop; the mobile layout uses the same component");
+  test("language switcher changes the URL, <html lang> and remembers the choice (desktop AND phone: the phone opens a bottom sheet)", async ({ page }) => {
     await page.goto("/en");
     await page.getByRole("button", { name: /Language/ }).click();
-    await page.getByRole("menuitem", { name: "Norsk bokmål" }).click();
+    await page.getByRole("menuitem", { name: "Norsk bokmål" }).click(); // Playwright refuses a click when another element covers the target
     await expect(page).toHaveURL(/\/nb$/);
     await expect(page.locator("html")).toHaveAttribute("lang", "nb");
     expect((await page.context().cookies()).find((c) => c.name === "NEXT_LOCALE")?.value).toBe("nb");
