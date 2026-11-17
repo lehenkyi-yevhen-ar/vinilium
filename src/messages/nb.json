@@ -27,6 +27,13 @@
     "search": "Søk",
     "lists": "Mine lister"
   },
+  "theme": {
+    "label": "Tema",
+    "dark": "Mørk",
+    "light": "Lys",
+    "system": "System",
+    "systemHint": "Følger enheten din"
+  },
   "locales": {
     "uk": "Українська",
     "en": "English",
@@ -493,8 +500,8 @@
       "s4P1": "Platedetaljer (titler, artister, omslag, sporlister) kommer fra Discogs. Serveren vår henter dem; nettleseren din kontakter ikke Discogs for dette. En kortvarig hurtigbuffer (høyst 6 timer) holder dataene for alle brukere samlet og inneholder ingenting om deg. Lenker til discogs.com fører til Discogs’ eget nettsted, som har egne regler. Vinilium er ikke tilknyttet Discogs.",
       "s5Title": "Informasjonskapsler",
       "s5P1": "Vi bruker to informasjonskapsler, begge strengt nødvendige: innloggingsøkten og en som husker språket ditt. Det finnes ingen analyse- eller reklamekapsler, så det er ikke noe banner. Hvis det endres, endres denne siden og et varsel først.",
-      "s5P3": "Nettleseren din lagrer også én liten innstilling i lokal lagring, ikke i en informasjonskapsel: om du har lukket hjelpen «Slik søker du» på søkesiden. Den blir værende på enheten din og sendes aldri til oss.",
-      "s5P2": "[NEEDS LEGAL REVIEW] Om denne tilnærmingen til informasjonskapsler oppfyller reglene som gjelder i operatørens land og i brukernes land.",
+      "s5P3": "Nettleseren din kan også lagre opptil to små innstillinger i lokal lagring (ikke i informasjonskapsler): om du har lukket hjelpen «Slik søker du» på søkesiden, og fargetemaet du valgte (mørkt, lyst eller system). De blir værende på enheten din og sendes aldri til oss.",
+      "s5P2": "[NEEDS LEGAL REVIEW] Om denne tilnærmingen til informasjonskapsler og lokal lagring oppfyller reglene som gjelder i operatørens land og i brukernes land.",
       "s6Title": "Hvem andre som er involvert",
       "s6Intro": "Tjenester vi bruker for å drive Vinilium:",
       "s6Hosting": "Vercel: drift av nettstedet og serverkoden.",

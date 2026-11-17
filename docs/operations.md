@@ -136,6 +136,12 @@ update account set access_token = null, refresh_token = null, id_token = null,
   which writes `[csp-report]` lines to the Vercel logs. Watch the logs for a few weeks. Real findings come from the site's own
   pages; one-off reports from browser extensions are noise. The policy still allows inline scripts and styles (Next.js and the design
   system need them). The next step is an enforcing, nonce-based policy once the reports are clean.
+* **The theme script and an enforcing CSP.** The page has one small inline script in `<head>` (`themeInitScript` in `src/lib/theme.ts`) that
+  applies the person's colour theme before the first paint. If the CSP is ever enforced without `'unsafe-inline'`, an inline script needs a
+  nonce or a hash. It is a static string, so a hash works: `'sha256-E8wGxUp1TXGpSP78ZT2mM7vN1sh3jeS0BcVvwoD8h/U='` (a unit test pins this value and
+  fails when the script changes, as a reminder to update it here). Next.js's own inline scripts need nonces anyway, so the choice will be
+  made once, for all of them. Do **not** add the hash to the report-only policy while it still has `'unsafe-inline'`: browsers then ignore
+  `'unsafe-inline'` and report Next's scripts as violations.
 * **HSTS is off until you set `HSTS_MAX_AGE_SECONDS`.** Only do that after you have confirmed the whole site works over HTTPS
   (every page, sign-in, the Google redirect and email links). Roll out in steps: `300`, then `86400`, then `31536000`. Add
   `HSTS_INCLUDE_SUBDOMAINS=1` only if every subdomain is HTTPS too. A browser remembers HSTS for the full period, so do not jump to a
@@ -225,7 +231,7 @@ Replies therefore reach your real inbox. If `NEXT_PUBLIC_CONTACT_EMAIL` is unset
 **By-hand deliverability test:** [email-deliverability-test.md](email-deliverability-test.md).
 
 
-## 16. Finder URLs, the search help and the "nothing arrived?" note
+## 16. Finder URLs, the search help, the theme and the "nothing arrived?" note
 
 * **The finder keeps its state in the address**, so Back links, the browser's Back button, a reload and a copied link return to the same
   step: `mode`, `q`, `by` (search), `g` (artist), `n` (albums shown), `sp` (result pages loaded), `o` (other pressings open), `a` and `t`
@@ -234,5 +240,12 @@ Replies therefore reach your real inbox. If `NEXT_PUBLIC_CONTACT_EMAIL` is unset
   Going back re-asks for the pages that were loaded; each is a search request, and the search limiter (30 a minute per IP) counts them.
 * **"How to search" keeps one setting in the browser's local storage** (`vinilium:search-help` = `closed`; not a cookie, never sent to
   us). The privacy page says so (section "Cookies"). If other things are ever stored on the device, change that sentence too.
+* **The theme switcher** (header, every screen): dark (the design system's default), light, or system. One local-storage key,
+  `vinilium:theme` = `dark` | `light` | `system`; nothing stored means dark. It sets `data-theme` on `<html>`, which is how the design system
+  switches themes. To make "follow the device" the default for first-time visitors instead, change `DEFAULT_THEME` in `src/lib/theme.ts`.
+  The privacy page lists this key and the search-help key; add any new key there too.
+* **The phone menus** (language and theme) use the design system's bottom sheet. Two rules in `src/app/ds-extensions.css` keep the header
+  from trapping it (the navbar's backdrop-filter and the sticky header's stacking context); do not give a header ancestor of a `.dd` a
+  `transform`, `filter` or `backdrop-filter` without checking `tests/e2e/phone-menus.spec.ts`.
 * **The "nothing arrived?" note** (`auth.emailNotArrived`) says the message may be in spam or junk because the sender address is not
   authenticated. **When you buy a domain and authenticate it in Brevo, revisit that wording** (and `docs/email-deliverability-test.md`).

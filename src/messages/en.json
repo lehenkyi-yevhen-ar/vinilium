@@ -27,6 +27,13 @@
     "search": "Search",
     "lists": "My lists"
   },
+  "theme": {
+    "label": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System",
+    "systemHint": "Follows your device"
+  },
   "locales": {
     "uk": "Українська",
     "en": "English",
@@ -493,8 +500,8 @@
       "s4P1": "Record details (titles, artists, covers, track lists) come from Discogs. Our server asks Discogs for them; your browser does not contact Discogs for them. A short-lived cache (at most 6 hours) holds that data for all users together and contains nothing about you. Links to discogs.com lead to Discogs’ own site, which has its own policies. Vinilium is not affiliated with Discogs.",
       "s5Title": "Cookies",
       "s5P1": "We use two cookies, both strictly necessary: the sign-in session cookie, and a cookie that remembers your language. There are no analytics or advertising cookies, so there is no cookie banner. If that ever changes, this page and a notice will change first.",
-      "s5P3": "Your browser also keeps one small setting in its local storage, not a cookie: whether you closed the “How to search” help on the search page. It stays on your device and is never sent to us.",
-      "s5P2": "[NEEDS LEGAL REVIEW] Whether this cookie approach satisfies the rules that apply in the operator’s country and to the users’ countries.",
+      "s5P3": "Your browser may also keep up to two small settings in its local storage (not in cookies): whether you closed the “How to search” help on the search page, and the colour theme you chose (dark, light or system). They stay on your device and are never sent to us.",
+      "s5P2": "[NEEDS LEGAL REVIEW] Whether this approach to cookies and local storage satisfies the rules that apply in the operator’s country and to the users’ countries.",
       "s6Title": "Who else is involved",
       "s6Intro": "Services we use to run Vinilium:",
       "s6Hosting": "Vercel: hosting of the website and its server code.",

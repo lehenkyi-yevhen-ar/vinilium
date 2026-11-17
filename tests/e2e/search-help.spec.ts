@@ -153,8 +153,8 @@ for (const [locale, title, hint, example, empty] of [
 }
 
 // Opt-in: E2E_SHOTS=<folder> saves screenshots of the help for a visual check (not an assertion; nothing runs without the variable).
+if (process.env.E2E_SHOTS)
 test("screenshots of the help (only with E2E_SHOTS)", async ({ page }, testInfo) => {
-  test.skip(!process.env.E2E_SHOTS, "set E2E_SHOTS=<folder> to save screenshots");
   const dir = process.env.E2E_SHOTS!;
   const tag = testInfo.project.name;
   await page.goto("/en/search");

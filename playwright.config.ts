@@ -63,11 +63,34 @@ export default defineConfig({
       dependencies: ["finder-nav-desktop"],
       use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 }, storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.204" } },
     },
+    // Phone menus (language switcher, theme switcher, modals): every test builds its own phone-sized contexts. After the finder specs
+    // (shared mock and limiter); E2E_NAV_ONLY=1 runs it right after the sign-in setup.
+    {
+      name: "phone-menus",
+      testMatch: /phone-menus.*\.spec\.ts/,
+      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["finder-nav-390"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    // The theme switcher on every screen: desktop, then 390 px wide. Builds its own contexts; E2E_NAV_ONLY=1 runs it after the setup only.
+    {
+      name: "theme-desktop",
+      testMatch: /theme\.spec\.ts/,
+      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["phone-menus"],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "theme-390",
+      testMatch: /theme\.spec\.ts/,
+      dependencies: ["theme-desktop"],
+      use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
+    },
     // The Wishlist / Collection screens (milestone 4). After the finder, one after the other: the same mock and Discogs bucket.
     {
       name: "library-desktop",
       testMatch: /library\.spec\.ts/,
-      dependencies: ["finder-nav-390"],
+      dependencies: ["theme-390"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.211" } },

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { site } from "@/config/site";
 import { routing } from "@/i18n/routing";
+import { themeInitScript } from "@/lib/theme";
 import en from "@/messages/en.json";
 import nb from "@/messages/nb.json";
 import uk from "@/messages/uk.json";
@@ -14,7 +15,6 @@ import "./ds-extensions.css";
 export const metadata: Metadata = { title: `404 · ${site.name}` };
 
 const messages = { uk, en, nb } as const;
-const themeScript = `try{document.documentElement.dataset.theme=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"}catch(e){}`;
 
 export default function GlobalNotFound() {
   return (
@@ -22,7 +22,7 @@ export default function GlobalNotFound() {
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="color-scheme" content="dark light" />
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <link rel="stylesheet" href="/ds/tokens.css" />
         <link rel="stylesheet" href="/ds/components/bundle.css" />
       </head>
