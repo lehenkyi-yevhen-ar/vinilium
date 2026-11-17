@@ -475,24 +475,29 @@ test("the screen refreshes its Discogs data 5.5 hours after it was FETCHED, well
   await seed(page, fresh);
   await page.clock.install({ time: new Date() });
   const batches: string[] = [];
+  const fetchedAts: string[] = [];
   page.on("request", (r) => r.url().includes("/api/discogs/releases?") && batches.push(r.url()));
-  const firstBatch = page.waitForResponse((r) => r.url().includes("/api/discogs/releases?"));
+  page.on("response", async (r) => {
+    if (r.url().includes("/api/discogs/releases?") && r.ok()) fetchedAts.push(((await r.json().catch(() => ({}))) as { fetchedAt?: string }).fetchedAt ?? "");
+  });
 
   await open(page);
-  const { fetchedAt } = (await (await firstBatch).json()) as { fetchedAt: string };
   await expect(titles(page)).toHaveCount(12);
-  expect(batches).toHaveLength(1);
+  // If the shared Discogs budget is low, the first batch can come back partial and the screen retries by itself: count from the settled state.
+  await page.waitForTimeout(500);
+  const settled = batches.length;
   const upstream = await upstreamReleaseCalls(page);
+  const fetchedAt = fetchedAts.filter(Boolean).at(-1)!; // the batch that completed the page
   const ageMs = Date.now() - Date.parse(fetchedAt);
   expect(ageMs, "the data was fetched just now").toBeLessThan(120_000);
   const untilRefresh = 5.5 * 3_600_000 - ageMs;
 
   await page.clock.fastForward(untilRefresh - 120_000); // two minutes short of 5.5 h of age
   await page.waitForTimeout(500);
-  expect(batches, "not yet: 5 h 28 min after the fetch").toHaveLength(1);
+  expect(batches, "not yet: 5 h 28 min after the fetch").toHaveLength(settled);
 
   await page.clock.fastForward(240_000); // past 5.5 h of age
-  await expect.poll(() => batches.length, { message: "refetched at 5.5 h" }).toBe(2);
+  await expect.poll(() => batches.length, { message: "refetched at 5.5 h" }).toBe(settled + 1);
   await expect(titles(page)).toHaveCount(12); // cards stay on screen while the refresh runs
   expect(await upstreamReleaseCalls(page)).toBe(upstream); // the server cache still held them: Discogs was not asked again
 });
