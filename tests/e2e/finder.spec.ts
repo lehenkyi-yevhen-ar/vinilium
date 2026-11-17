@@ -170,7 +170,7 @@ test("vinyl releases without a master come after the albums, in a section that i
   await expect(section).toHaveAttribute("open", "");
   await expect(page.getByText("Odd Pressing 0")).toBeVisible();
   await expect(section.locator(".badge", { hasText: "Single" })).toHaveCount(3); // type label, derived from the descriptors
-  await expect(section.getByRole("link", { name: "Open release" }).first()).toHaveAttribute("href", /\/release\/7000$/);
+  await expect(section.getByRole("link", { name: "Open release" }).first()).toHaveAttribute("href", /\/release\/7000\?.*q=others-.*g=cobalt\+parade/); // carries where it came from, so Back returns here
 });
 
 test("an artist with ONLY releases without a master sees them straight away (nothing else to show)", async ({ page }) => {
