@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { googleEnabled, serverEnv } from "@/lib/env";
 import { getDb, schema } from "@/server/db";
+import { stripOAuthTokens } from "./oauth-tokens";
 import { normalizeLocale, queueAuthEmail } from "@/server/email";
 
 /**
@@ -79,6 +80,11 @@ function create() {
     },
 
     databaseHooks: {
+      // Google tokens are never stored: we only use the basic profile (see oauth-tokens.ts).
+      account: {
+        create: { before: async (a) => ({ data: stripOAuthTokens(a as Record<string, unknown>) as typeof a }) },
+        update: { before: async (a) => ({ data: stripOAuthTokens(a as Record<string, unknown>) as typeof a }) },
+      },
       user: {
         create: {
           before: async (u) => ({ data: { ...u, locale: normalizeLocale((u as { locale?: unknown }).locale) } }),
