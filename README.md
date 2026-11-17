@@ -17,9 +17,9 @@ Everything below is a **placeholder** and is flagged here on purpose:
 | Public domain | `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_URL` | `http://localhost:3000` |
 | Contact for Discogs (`User-Agent`) | `APP_CONTACT` | `https://example.com/contact` |
 | Public contact email / Telegram (contact page, privacy policy) | `NEXT_PUBLIC_CONTACT_EMAIL`, `NEXT_PUBLIC_CONTACT_TELEGRAM` | `contact@example.com` / `https://t.me/your_handle` (set in `.env.local`, never in the repo) |
-| Email sender | `EMAIL_FROM` | `Vinilium <onboarding@resend.dev>` (Resend sandbox: only delivers to your own Resend account email) |
+| Email sender | `EMAIL_FROM` | Your validated sender address. With **Brevo** and a free-mail sender, Brevo replaces the From address with its own (`brevosend.com`); replies are steered to `NEXT_PUBLIC_CONTACT_EMAIL` |
 | Translations | `src/messages/{uk,nb}.json` | Written by an AI model; have a native speaker review them |
-| Legal pages (privacy, terms) | not written yet | Planned for milestone 5; footer carries Discogs attribution only |
+| Legal pages (privacy, terms) | `src/messages/*.json` > `legal.*` | **Drafts.** Passages marked `[NEEDS LEGAL REVIEW]` need a lawyer (list: `docs/legal-review-checklist.md`). The operator is shown as a private individual under `NEXT_PUBLIC_OPERATOR_NAME` (a project name or nickname), in `NEXT_PUBLIC_OPERATOR_COUNTRY` |
 
 ## Requirements
 
@@ -44,8 +44,13 @@ npm run dev                     # http://localhost:3000
 | `BETTER_AUTH_SECRET` | yes | 32+ random chars: `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL` | yes | Public origin, no trailing slash. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | When both are set, the Google button appears. Redirect URI: `{BETTER_AUTH_URL}/api/auth/callback/google`. |
-| `RESEND_API_KEY` | prod | Empty in dev: verification and reset links are **printed to the server console**. In production, a missing key throws. |
-| `EMAIL_FROM` | no | Needs a verified domain in Resend before launch. |
+| `EMAIL_PROVIDER` | no | `brevo` or `resend`. Unset = whichever key below is set (Brevo first). With no key at all, development **prints verification and reset links to the server console**; in production the send fails (logged as `[email] ... FAILED`, never printing the link). |
+| `BREVO_API_KEY` | prod (Brevo) | Brevo transactional API key (server-only). Brevo is called over HTTPS (`api.brevo.com/v3/smtp/email`); no SMTP and no extra package. In Brevo, **do not enable the authorised-IP list**: Vercel's IP addresses change. |
+| `RESEND_API_KEY` | prod (Resend) | Only if you switch to Resend (`EMAIL_PROVIDER=resend`), which needs a verified domain. |
+| `EMAIL_FROM` | prod | The sender address, plain (`you@example.com`) or `Name <you@example.com>`. For Brevo it must be a sender you validated in Brevo; the app refuses to guess one. |
+| `EMAIL_FROM_NAME` | no | Display name of the sender (default: the app name). |
+| `AUTH_EMAIL_PASSWORD_ENABLED` | no | Default `true`. **`false` = Google sign-in only**: email + password sign-up, sign-in, verification resend and password reset are hidden and refused (`403 EMAIL_PASSWORD_DISABLED`); no emails are sent; the privacy and terms text follow. Use exactly `false`. Changing it needs a **Redeploy** in Vercel. |
+| `AUTH_SIGNUP_ALLOWLIST` | no | Comma-separated emails. When set, only these can **sign up with email + password** (`403 SIGNUP_INVITE_ONLY` for anyone else). A brake on abuse: every sign-up sends an email and the free Brevo plan has a daily cap. Does not affect sign-in or Google. |
 | `APP_CONTACT` | no | Sent to Discogs in the `User-Agent`. **Once the production domain exists, set it to the URL of the contact page: `https://<domain>/en/contact`** (the English page: Discogs staff read English, and every locale serves the same page). Until then it stays a placeholder. |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | yes (before launch) | Public contact address shown on `/<locale>/contact` and used by the privacy policy as the contact for personal-data requests. Visible in the browser by design. If missing or invalid, the page says contact details are not set up. |
 | `NEXT_PUBLIC_CONTACT_TELEGRAM` | no | `@handle` or a `t.me` link. Invalid values are dropped. **Unset = the Telegram line is hidden.** |
@@ -260,7 +265,7 @@ npm run test:e2e    # (adds the a11y-* axe projects and the keyboard project aft
 2. Apply migrations with a deliberate production run (see "A deliberate production migration" above).
 3. Import the repo into Vercel; set the variables above for Production (and Preview if wanted).
 4. Set `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` to the production origin and add the Google redirect URI.
-5. Verify a sending domain in Resend and set `EMAIL_FROM` and `RESEND_API_KEY`.
+5. Email: validate your sender in Brevo and set `BREVO_API_KEY`, `EMAIL_FROM`, `EMAIL_FROM_NAME` and `EMAIL_PROVIDER=brevo`; run the hand test in [docs/email-deliverability-test.md](docs/email-deliverability-test.md) before inviting anyone.
 6. Set `NEXT_PUBLIC_CONTACT_EMAIL` (and optionally `_TELEGRAM`), then set `APP_CONTACT=https://<domain>/en/contact`.
 7. Google Cloud console > Google Auth Platform > Branding: use the same address as **User support email** (it must be an
    address on your Google account or a Google Group you manage; if your project address is neither, create a Group with that

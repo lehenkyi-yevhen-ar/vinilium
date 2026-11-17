@@ -12,7 +12,7 @@ Related: [README](../README.md) (setup, environment variables), [Discogs complia
 | --- | --- |
 | Website and server code | Vercel project (Production environment holds the real variables) |
 | Database | Neon: the **production** branch is used by the deployed site only; the **dev** branch by your machine and CI |
-| Email (verification, password reset) | Resend (needs a verified sending domain) |
+| Email (verification, password reset) | Brevo transactional API (free plan: 300 emails a day), sender = a validated address, Reply-To = `NEXT_PUBLIC_CONTACT_EMAIL`. Resend is supported behind `EMAIL_PROVIDER=resend` but needs a verified domain |
 | Google sign-in | Google Cloud console > Google Auth Platform |
 | Record data | Discogs API (key + secret in Vercel); the service is not affiliated with Discogs |
 
@@ -22,7 +22,7 @@ Vercel dashboard > your project > **Logs** (runtime logs). Set the time range, a
 
 | Search for | Meaning | What to do |
 | --- | --- | --- |
-| `[email]` and `failed` | A verification or reset email was not sent (`RESEND_API_KEY` missing, domain not verified, Resend refused) | Check the key in Vercel and the domain status in Resend; people cannot finish sign-up until fixed |
+| `[email]` and `FAILED` | A verification or reset email was not sent. The line says `provider=`, `reason=` and sometimes `status=` / `code=` (never an address, key or link): see section 15 for each reason | Fix the cause; people cannot finish sign-up until you do |
 | `Invalid environment variables` | A required variable is missing or malformed (the message names it, never its value) | Fix it in Vercel > Settings > Environment Variables, then redeploy |
 | `DatabaseConfigError` / `DATABASE_URL is not set` | The database target is wrong | Check `DATABASE_URL` for the Production environment |
 | `[csp-report]` | The report-only Content-Security-Policy saw something it would block | See section 10; a handful from browser extensions is normal |
@@ -41,7 +41,8 @@ is no gap.
 | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | New random value (`openssl rand -base64 32`) | **Everyone is signed out** (sessions no longer verify); no data is lost |
 | `GOOGLE_CLIENT_SECRET` | Google Cloud > Credentials > your OAuth client > add a new secret, put it in Vercel, redeploy, then delete the old secret | None for users |
-| `RESEND_API_KEY` | Resend > API Keys > create a new key, update Vercel, redeploy, delete the old key | None; emails resume |
+| `BREVO_API_KEY` | Brevo > your name (top right) > **SMTP & API** > **API keys** > generate a new key, put it in Vercel, redeploy, then delete the old key | None; emails resume |
+| `RESEND_API_KEY` (only if you use Resend) | Resend > API Keys > create a new key, update Vercel, redeploy, delete the old key | None |
 | `DISCOGS_CONSUMER_KEY` / `_SECRET` | Discogs > Settings > Developers > your application | Until updated, record details show the "not set up" or error states |
 | `CRON_SECRET` | New random value of 16+ characters in Vercel, redeploy | Vercel Cron picks it up automatically |
 | `DATABASE_URL` | Neon > Roles > reset the password of the role, copy the new **pooled** connection string into Vercel, redeploy | Brief errors until the redeploy finishes |
@@ -50,8 +51,8 @@ If a secret may have leaked (committed, pasted, logged): rotate it at once, then
 
 ## 4. Helping someone who cannot sign in
 
-1. Normal path: **Forgot password** sends a reset link (valid 1 hour). If it does not arrive, check the Resend dashboard (delivered /
-   bounced) and section 2.
+1. Normal path: **Forgot password** sends a reset link (valid 1 hour). If it does not arrive, check the Brevo logs (section 15) and
+   section 2.
 2. Their email address is unverified: signing in re-sends the verification email.
 3. There is no admin screen and no way for you to set someone's password. Last resort, after you have satisfied yourself about who is
    asking: let them export what they can, then delete the account row so they can sign up again (their lists go with it). Run in the
@@ -179,3 +180,46 @@ notice must be revisited first, and the new tool added to the list of providers.
 
 They can do it themselves in Account (immediate). On request by email, ask them to do that, or use the SQL in section 4. Remember
 that backups age out on their own (state the period in the privacy policy).
+
+## 15. Email (Brevo): logs, limits, switches
+
+**Reading the logs.** In Vercel logs search `[email]`. A failure looks like `[email] verify email FAILED provider=brevo reason=rate_limited status=429`.
+
+| `reason` | Meaning | What to do |
+| --- | --- | --- |
+| `misconfigured` with `code=no_provider` | No provider key is set in this environment | Set `BREVO_API_KEY` (and `EMAIL_FROM`), then Redeploy |
+| `misconfigured` with `code=sender_setting` | `EMAIL_FROM` is missing or not an address | Set it to your validated sender, then Redeploy |
+| `misconfigured` with `code=provider_setting` | `EMAIL_PROVIDER` names a provider whose key is missing, or is not `brevo`/`resend` | Fix the variable |
+| `auth` (401/403) | Brevo refused the key: wrong, revoked, or **the key is limited to listed IP addresses** | Create a new key; in Brevo Security, **do not enable authorised IPs** (Vercel's addresses change) |
+| `rate_limited` (429/402) | The free plan's **daily limit (300 emails)** or a per-second limit | See "At the limit" below |
+| `rejected` (400/404...) | Brevo refused this message: sender not validated, an invalid address, a blocked contact | Check the sender in Brevo; for one address, see Brevo's logs |
+| `unavailable` (5xx), `timeout`, `network` | Brevo is down or slow (our call times out after 8 s) | Wait; check Brevo's status page |
+
+**Reading Brevo's own logs.** Brevo dashboard > **Transactional** > **Logs** (and **Statistics**): per message status (delivered, soft
+bounce, hard bounce, blocked, spam report). Look here first when one person says "nothing arrived".
+
+**At the limit (300 a day).** Every sign-up, verification resend and password-reset request sends one email. Past the limit Brevo
+answers 429; the app **keeps working**: the account is still created, the person sees the same "nothing arrived? check your spam
+folder, or contact us" note as everyone else (it must not say "we could not email you": that would reveal whether an address has an
+account), and you see `reason=rate_limited` in the logs. The limit resets by itself. If you are near it often, switch to Google-only or
+invite-only below, or move to a paid plan. (The 300/day figure is the free-plan limit you told me about; confirm it in your Brevo account.)
+
+**Flipping the switches** (Vercel > your project > **Settings** > **Environment Variables**, scope **Production**): add or edit the
+variable, **Save**, then **Deployments** > the latest deployment > **...** > **Redeploy**. A changed variable only reaches new deployments.
+
+| Goal | Variable | Value |
+| --- | --- | --- |
+| Google sign-in only (no email at all) | `AUTH_EMAIL_PASSWORD_ENABLED` | `false` (use exactly that; anything unrecognised is ignored and the default `true` stays) |
+| Back to email + password | `AUTH_EMAIL_PASSWORD_ENABLED` | `true`, or delete the variable |
+| Invite-only sign-up with email + password | `AUTH_SIGNUP_ALLOWLIST` | `a@example.com,b@example.com` (to open sign-up again, delete the variable) |
+| Switch to Resend | `EMAIL_PROVIDER` | `resend` (and set `RESEND_API_KEY`, `EMAIL_FROM` on a verified domain) |
+
+What Google-only mode does: the sign-in, sign-up, forgot-password, reset-password and verify-email pages show a plain message and the
+Google button; the API refuses those endpoints with `403 EMAIL_PASSWORD_DISABLED`; the privacy and terms text drop the password and
+email lines. **People who only have a password account cannot sign in while it is off**; whether they can get back in through Google with the
+same email depends on Better Auth's account linking, which has **not been tested** here. Existing sessions and account deletion keep working.
+
+**Reply-To.** Every email carries `Reply-To: NEXT_PUBLIC_CONTACT_EMAIL` (display name "<app name> contact"), because Brevo replaces a free-mail From address.
+Replies therefore reach your real inbox. If `NEXT_PUBLIC_CONTACT_EMAIL` is unset there is no Reply-To (it is never invented).
+
+**By-hand deliverability test:** [email-deliverability-test.md](email-deliverability-test.md).
