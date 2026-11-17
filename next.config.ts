@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { securityHeaders } from "./src/lib/security-headers";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
@@ -14,6 +15,15 @@ const nextConfig: NextConfig = {
   experimental: { globalNotFound: true },
   async headers() {
     return [
+      {
+        // Every response (pages, API, static). HSTS appears only when HSTS_MAX_AGE_SECONDS is set (see security-headers.ts).
+        source: "/:path*",
+        headers: securityHeaders({
+          dev: process.env.NODE_ENV !== "production",
+          hstsMaxAgeSeconds: process.env.HSTS_MAX_AGE_SECONDS,
+          hstsIncludeSubdomains: process.env.HSTS_INCLUDE_SUBDOMAINS === "1",
+        }),
+      },
       {
         // Vendored design-system files: cache for a day, revalidate in the background.
         source: "/ds/:path*",
