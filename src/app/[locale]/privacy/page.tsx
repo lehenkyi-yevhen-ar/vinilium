@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { site } from "@/config/site";
+import { emailPasswordEnabled } from "@/lib/auth-flags";
 import { LegalDocument } from "@/components/legal/LegalDocument";
 import { buildSections } from "@/components/legal/build-sections";
 import { resolveLocale } from "@/i18n/locale";
@@ -11,6 +12,9 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/privacy"
   return { title: t("title"), description: t("metaDescription") };
 }
 
+/** Read per request: the text follows AUTH_EMAIL_PASSWORD_ENABLED (no password or email lines in Google-only mode). */
+export const dynamic = "force-dynamic";
+
 /** Public. A DRAFT: passages marked [NEEDS LEGAL REVIEW] need a lawyer (see docs/legal-review-checklist.md). */
 export default async function PrivacyPage({ params }: PageProps<"/[locale]/privacy">) {
   const locale = await resolveLocale(params);
@@ -19,13 +23,14 @@ export default async function PrivacyPage({ params }: PageProps<"/[locale]/priva
   const tp = ((k: string, v?: Record<string, string>) => p(k as never, v as never)) as (k: string, v?: Record<string, string>) => string;
   const tl = ((k: string, v?: Record<string, string>) => l(k as never, v as never)) as (k: string, v?: Record<string, string>) => string;
 
+  const withPasswords = emailPasswordEnabled();
   const sections = buildSections(tp, [
     { id: "s1", paragraphs: ["P1", "P2"] },
-    { id: "s2", intro: true, items: ["Account", "Sessions", "Lists", "Counters", "Emails"] },
+    { id: "s2", intro: true, items: withPasswords ? ["Account", "Sessions", "Lists", "Counters", "Emails"] : ["AccountGoogleOnly", "Sessions", "Lists", "Counters"] },
     { id: "s3", paragraphs: ["P1"] },
     { id: "s4", paragraphs: ["P1"] },
     { id: "s5", paragraphs: ["P1", "P2"] },
-    { id: "s6", intro: true, items: ["Hosting", "Database", "Email", "Google", "Discogs"], paragraphs: ["P1"] },
+    { id: "s6", intro: true, items: withPasswords ? ["Hosting", "Database", "Email", "Google", "Discogs"] : ["Hosting", "Database", "Google", "Discogs"], paragraphs: ["P1"] },
     { id: "s7", paragraphs: ["P1", "P2"] },
     { id: "s8", items: ["Delete", "Export", "Correct"], paragraphs: ["P1"] },
     { id: "s9", paragraphs: ["P1"] },

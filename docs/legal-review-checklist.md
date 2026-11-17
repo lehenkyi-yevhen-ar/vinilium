@@ -6,7 +6,7 @@ The privacy policy (`/privacy`) and terms (`/terms`) are **drafts**. Every passa
 details starts with `[NEEDS LEGAL REVIEW]` and is shown highlighted on the page. After a lawyer has checked a passage, edit its text in all three
 language files and delete the mark there. The draft banner disappears by itself when no mark is left.
 
-**Open marks: 13.** Run `npm run legal:checklist -- --check` before launch: it fails while any mark remains.
+**Open marks: 14.** Run `npm run legal:checklist -- --check` before launch: it fails while any mark remains.
 
 Also fill in (these are placeholders on the pages until set):
 
@@ -17,7 +17,7 @@ Also fill in (these are placeholders on the pages until set):
 | # | Key | Passage (English) |
 | --- | --- | --- |
 | 1 | `legal.draftBanner` | Draft: a lawyer has not reviewed this text. Passages marked  must be checked and the marks removed before launch. |
-| 2 | `legal.privacy.s1P2` | The operator’s legal role for personal data (for example “controller”), any registration, and the data-protection contact, if one is required, must be stated here. |
+| 2 | `legal.privacy.s1P2` | How the operator is identified: a private individual shown only under a project name or nickname, with the contact address below. Whether that identification is enough for users in the EU or Norway, and whether anything more (for example a postal address) is required, must be checked. The operator’s legal role for personal data (for example “controller”) and any registration or data-protection contact also belong here. |
 | 3 | `legal.privacy.s5P2` | Whether this cookie approach satisfies the rules that apply in the operator’s country and to the users’ countries. |
 | 4 | `legal.privacy.s6P1` | Where these providers process data (including outside the EU/EEA), the agreements that cover it, and the wording about them. |
 | 5 | `legal.privacy.s7P2` | Exact retention periods, including how long database backups keep deleted data (this depends on the database plan and is to be filled in by the operator). |
@@ -29,3 +29,4 @@ Also fill in (these are placeholders on the pages until set):
 | 11 | `legal.terms.s5P2` | Warranty disclaimers, the limit of our liability, and what the law allows to be excluded. |
 | 12 | `legal.terms.s7P1` | Governing law and jurisdiction (the operator’s country is {country}) and how disputes are handled. |
 | 13 | `legal.terms.s8P2` | How changes are announced, and when continued use counts as acceptance. |
+| 14 | `legal.terms.s1P2` | How the provider is identified (a private individual shown only under a project name or nickname) and whether that is sufficient for users in the EU or Norway. |

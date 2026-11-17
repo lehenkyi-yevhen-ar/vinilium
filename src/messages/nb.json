@@ -93,7 +93,9 @@
       "USER_ALREADY_EXISTS": "Det finnes allerede en konto med denne e-postadressen. Prøv å logge inn.",
       "EMAIL_NOT_VERIFIED": "Bekreft e-postadressen først. Vi har nettopp sendt deg en ny lenke.",
       "INVALID_TOKEN": "Denne lenken er ugyldig eller utløpt.",
-      "SESSION_EXPIRED": "Økten er for gammel for denne handlingen. Logg inn på nytt og prøv igjen."
+      "SESSION_EXPIRED": "Økten er for gammel for denne handlingen. Logg inn på nytt og prøv igjen.",
+      "EMAIL_PASSWORD_DISABLED": "Innlogging med e-post og passord er slått av. Fortsett med Google.",
+      "SIGNUP_INVITE_ONLY": "Å opprette en konto er foreløpig bare mulig etter invitasjon. Kontakt oss hvis du vil være med."
     },
     "validation": {
       "emailRequired": "Skriv inn e-postadressen din.",
@@ -101,7 +103,11 @@
       "passwordRequired": "Skriv inn passordet ditt.",
       "passwordShort": "Bruk minst 8 tegn.",
       "nameRequired": "Skriv inn navnet ditt."
-    }
+    },
+    "emailPasswordOffText": "Innlogging med e-post og passord er slått av. Fortsett med Google.",
+    "emailPasswordOffNoGoogle": "Innlogging er ikke tilgjengelig akkurat nå. Prøv igjen senere eller kontakt oss.",
+    "emailNotArrived": "Ingenting etter noen minutter? Sjekk søppelpostmappen: meldingen kan komme fra en annen avsenderadresse enn vår. Du kan prøve igjen eller kontakte oss.",
+    "emailNotArrivedLink": "Kontakt oss"
   },
   "account": {
     "title": "Kontoen din",
@@ -430,7 +436,7 @@
   },
   "legal": {
     "draftBanner": "Utkast: en jurist har ikke gjennomgått denne teksten. Avsnitt merket [NEEDS LEGAL REVIEW] må kontrolleres, og merkene fjernes før lansering.",
-    "operatorUnset": "[OPERATOR NAME – TO BE FILLED]",
+    "operatorUnset": "[PROJECT NAME OR NICKNAME – TO BE FILLED]",
     "countryUnset": "[COUNTRY – TO BE FILLED]",
     "emailUnset": "[CONTACT EMAIL – TO BE FILLED]",
     "contactLabel": "Kontakt",
@@ -441,15 +447,15 @@
       "updated": "Utkast av 17. november 2026",
       "lead": "Vinilium er en gratis, ikke-kommersiell tjeneste. Denne siden forklarer enkelt hva den lagrer om deg og hva du kan gjøre med det.",
       "s1Title": "Hvem som driver tjenesten",
-      "s1P1": "Vinilium drives av {operator} ({country}) som et gratis, ikke-kommersielt prosjekt.",
-      "s1P2": "[NEEDS LEGAL REVIEW] Operatørens rolle for personopplysninger (for eksempel «behandlingsansvarlig»), eventuell registrering og kontaktpunkt for personvern, hvis det kreves, må oppgis her.",
+      "s1P1": "Vinilium drives av en privatperson som et gratis, ikke-kommersielt hobbyprosjekt. Operatøren opptrer under prosjektnavnet eller kallenavnet «{operator}» og er basert i {country}.",
+      "s1P2": "[NEEDS LEGAL REVIEW] Hvordan operatøren identifiseres: en privatperson som bare opptrer under et prosjektnavn eller kallenavn, med kontaktadressen under. Om en slik identifikasjon er tilstrekkelig for brukere i EU eller Norge, og om noe mer (for eksempel en postadresse) kreves, må kontrolleres. Operatørens rolle for personopplysninger (for eksempel «behandlingsansvarlig») og eventuell registrering eller kontaktpunkt for personvern hører også hjemme her.",
       "s2Title": "Hva vi lagrer om deg",
       "s2Intro": "Bare det tjenesten trenger for å fungere:",
       "s2Account": "Kontoen din: navn, e-postadresse og språk. For en konto med passord lagres passordet bare i hashet form, som vi ikke kan lese. Hvis du logger inn med Google, lagrer vi koblingen til Google-kontoen din og navnet og bildeadressen Google oppgir. Vi lagrer ikke Googles tilgangstokener.",
       "s2Sessions": "Innloggingene dine: en tilfeldig øktidentifikator, når den utløper, og IP-adressen og nettleserbeskrivelsen (user agent) til enheten du logget inn fra.",
       "s2Lists": "Listene dine: Discogs-utgivelsesnumrene du legger til, hvilken liste hver ligger på (ønskeliste eller samling), dine egne notater og standvurderinger, og datoer.",
       "s2Counters": "Forespørselstellere: for å beskytte tjenesten mot misbruk teller vi forespørsler per IP-adresse og per konto i omtrent ett minutt om gangen.",
-      "s2Emails": "E-poster: bekreftelses- og tilbakestillingsmeldinger sendes via Resend, som får e-postadressen og navnet ditt til dette formålet.",
+      "s2Emails": "E-poster: bekreftelses- og tilbakestillingsmeldinger sendes via Brevo, som får e-postadressen og navnet ditt til dette formålet. Svar på disse meldingene går til kontaktadressen vår.",
       "s3Title": "Hva vi ikke gjør",
       "s3P1": "Ingen analyse, ingen reklame, ingen sporing av hva du gjør på andre nettsteder og ingen betalingsdata. Vi ber aldri om Discogs-kontoen eller passordet ditt: platedetaljer hentes av serveren vår med tjenestens egne Discogs-opplysninger.",
       "s4Title": "Data fra Discogs",
@@ -461,7 +467,7 @@
       "s6Intro": "Tjenester vi bruker for å drive Vinilium:",
       "s6Hosting": "Vercel: drift av nettstedet og serverkoden.",
       "s6Database": "Neon: databasen som holder dataene over.",
-      "s6Email": "Resend: sending av bekreftelses- og tilbakestillingsmeldinger.",
+      "s6Email": "Brevo: sending av bekreftelses- og tilbakestillingsmeldinger.",
       "s6Google": "Google: innlogging med Google-konto, hvis du velger det.",
       "s6Discogs": "Discogs: kilden til platedetaljer (se over).",
       "s6P1": "[NEEDS LEGAL REVIEW] Hvor disse leverandørene behandler data (også utenfor EU/EØS), hvilke avtaler som dekker det, og hvordan det formuleres.",
@@ -479,7 +485,8 @@
       "s10P1": "[NEEDS LEGAL REVIEW] Passord lagres hashet, og nettstedet er ment å brukes over HTTPS. Vi tar rimelig vare på sikkerheten, men ingen system er helt sikkert; ordlyden i dette løftet må kontrolleres.",
       "s11Title": "Endringer",
       "s11P1": "Hvis denne siden endres på en måte som betyr noe, endres datoen over også.",
-      "s11P2": "[NEEDS LEGAL REVIEW] Hvordan eksisterende brukere varsles om endringer."
+      "s11P2": "[NEEDS LEGAL REVIEW] Hvordan eksisterende brukere varsles om endringer.",
+      "s2AccountGoogleOnly": "Kontoen din: navn, e-postadresse og språk, koblingen til Google-kontoen din, og navnet og bildeadressen Google oppgir. Vi lagrer ikke Googles tilgangstokener. En konto som ble opprettet tidligere med passord, har fortsatt passordet i hashet form, som vi ikke kan lese."
     },
     "terms": {
       "title": "Vilkår for bruk",
@@ -487,7 +494,7 @@
       "updated": "Utkast av 17. november 2026",
       "lead": "Vinilium er en gratis, ikke-kommersiell tjeneste. Ved å opprette en konto godtar du disse vilkårene.",
       "s1Title": "Tjenesten",
-      "s1P1": "Vinilium hjelper deg å finne vinylutgivelser og holde en ønskeliste og en samling. Den tilbys gratis av {operator} ({country}).",
+      "s1P1": "Vinilium hjelper deg å finne vinylutgivelser og holde en ønskeliste og en samling. Den tilbys gratis, som et hobbyprosjekt, av en privatperson som her vises som «{operator}» ({country}).",
       "s2Title": "Kontoen din og hvordan den brukes",
       "s2Intro": "Vennligst:",
       "s2A": "hold passordet hemmelig og bruk tjenesten for deg selv, ikke til videresalg eller kommersielle formål;",
@@ -509,7 +516,9 @@
       "s8P1": "Vi kan oppdatere disse vilkårene. Datoen over viser gjeldende versjon.",
       "s8P2": "[NEEDS LEGAL REVIEW] Hvordan endringer varsles, og når fortsatt bruk regnes som samtykke.",
       "s9Title": "Kontakt",
-      "s9P1": "Spørsmål om disse vilkårene: se kontaktopplysningene under eller kontaktsiden."
+      "s9P1": "Spørsmål om disse vilkårene: se kontaktopplysningene under eller kontaktsiden.",
+      "s1P2": "[NEEDS LEGAL REVIEW] Hvordan tilbyderen identifiseres (en privatperson som bare opptrer under et prosjektnavn eller kallenavn) og om det er tilstrekkelig for brukere i EU eller Norge.",
+      "s2AGoogleOnly": "hold tilgangen til kontoen din privat og bruk tjenesten for deg selv, ikke til videresalg eller kommersielle formål;"
     }
   },
   "signUpConsent": {

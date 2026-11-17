@@ -93,7 +93,9 @@
       "USER_ALREADY_EXISTS": "An account with this email already exists. Try signing in.",
       "EMAIL_NOT_VERIFIED": "Please verify your email first. We have just sent you a new link.",
       "INVALID_TOKEN": "This link is invalid or has expired.",
-      "SESSION_EXPIRED": "Your session is too old for this action. Sign in again and retry."
+      "SESSION_EXPIRED": "Your session is too old for this action. Sign in again and retry.",
+      "EMAIL_PASSWORD_DISABLED": "Signing in with email and password is turned off. Please continue with Google.",
+      "SIGNUP_INVITE_ONLY": "Creating an account is by invitation only for now. Please contact us if you would like to join."
     },
     "validation": {
       "emailRequired": "Enter your email.",
@@ -101,7 +103,11 @@
       "passwordRequired": "Enter your password.",
       "passwordShort": "Use at least 8 characters.",
       "nameRequired": "Enter your name."
-    }
+    },
+    "emailPasswordOffText": "Signing in with email and password is turned off. Please continue with Google.",
+    "emailPasswordOffNoGoogle": "Signing in is not available right now. Please try again later or contact us.",
+    "emailNotArrived": "Nothing after a few minutes? Check your spam folder: the message may come from a sender address other than ours. You can try again, or contact us.",
+    "emailNotArrivedLink": "Contact us"
   },
   "account": {
     "title": "Your account",
@@ -430,7 +436,7 @@
   },
   "legal": {
     "draftBanner": "Draft: a lawyer has not reviewed this text. Passages marked [NEEDS LEGAL REVIEW] must be checked and the marks removed before launch.",
-    "operatorUnset": "[OPERATOR NAME – TO BE FILLED]",
+    "operatorUnset": "[PROJECT NAME OR NICKNAME – TO BE FILLED]",
     "countryUnset": "[COUNTRY – TO BE FILLED]",
     "emailUnset": "[CONTACT EMAIL – TO BE FILLED]",
     "contactLabel": "Contact",
@@ -441,15 +447,15 @@
       "updated": "Draft of 17 November 2026",
       "lead": "Vinilium is a free, non-commercial service. This page says plainly what it stores about you and what you can do about it.",
       "s1Title": "Who runs this service",
-      "s1P1": "Vinilium is run by {operator} ({country}) as a free, non-commercial project.",
-      "s1P2": "[NEEDS LEGAL REVIEW] The operator’s legal role for personal data (for example “controller”), any registration, and the data-protection contact, if one is required, must be stated here.",
+      "s1P1": "Vinilium is run by a private individual as a free, non-commercial hobby project. The operator appears under the project name or nickname “{operator}” and is based in {country}.",
+      "s1P2": "[NEEDS LEGAL REVIEW] How the operator is identified: a private individual shown only under a project name or nickname, with the contact address below. Whether that identification is enough for users in the EU or Norway, and whether anything more (for example a postal address) is required, must be checked. The operator’s legal role for personal data (for example “controller”) and any registration or data-protection contact also belong here.",
       "s2Title": "What we store about you",
       "s2Intro": "Only what the service needs to work:",
       "s2Account": "Your account: your name, your email address and your language. For a password account, the password is stored only in hashed form, which we cannot read. If you sign in with Google, we store the link to your Google account and the name and picture address Google provides. We do not store Google’s access tokens.",
       "s2Sessions": "Your sign-ins: a random session identifier, when it expires, and the IP address and browser description (user agent) of the device you signed in from.",
       "s2Lists": "Your lists: the Discogs release numbers you add, which list each is on (Wishlist or Collection), your own notes and condition grades, and dates.",
       "s2Counters": "Request counters: to protect the service from misuse we count requests per IP address and per account for about a minute at a time.",
-      "s2Emails": "Emails: verification and password-reset messages are sent through Resend, which receives your email address and name for that purpose.",
+      "s2Emails": "Emails: verification and password-reset messages are sent through Brevo, which receives your email address and name for that purpose. Replies to these messages go to our contact address.",
       "s3Title": "What we do not do",
       "s3P1": "No analytics, no advertising, no tracking of what you do on other sites, no payment data. We never ask for your Discogs account or password: record details are fetched by our server with the service’s own Discogs credentials.",
       "s4Title": "Discogs data",
@@ -461,7 +467,7 @@
       "s6Intro": "Services we use to run Vinilium:",
       "s6Hosting": "Vercel: hosting of the website and its server code.",
       "s6Database": "Neon: the database that holds the data above.",
-      "s6Email": "Resend: sending verification and password-reset emails.",
+      "s6Email": "Brevo: sending verification and password-reset emails.",
       "s6Google": "Google: signing in with a Google account, if you choose it.",
       "s6Discogs": "Discogs: the source of record details (see above).",
       "s6P1": "[NEEDS LEGAL REVIEW] Where these providers process data (including outside the EU/EEA), the agreements that cover it, and the wording about them.",
@@ -479,7 +485,8 @@
       "s10P1": "[NEEDS LEGAL REVIEW] Passwords are stored hashed, and the site is meant to be used over HTTPS. We take reasonable care, but no system is perfectly secure; the exact wording of this promise must be checked.",
       "s11Title": "Changes",
       "s11P1": "If this page changes in a way that matters, the date above changes too.",
-      "s11P2": "[NEEDS LEGAL REVIEW] How changes are announced to existing users."
+      "s11P2": "[NEEDS LEGAL REVIEW] How changes are announced to existing users.",
+      "s2AccountGoogleOnly": "Your account: your name, your email address and your language, the link to your Google account, and the name and picture address Google provides. We do not store Google’s access tokens. An account created earlier with a password still holds that password in hashed form, which we cannot read."
     },
     "terms": {
       "title": "Terms of use",
@@ -487,7 +494,7 @@
       "updated": "Draft of 17 November 2026",
       "lead": "Vinilium is a free, non-commercial service. By creating an account you agree to these terms.",
       "s1Title": "The service",
-      "s1P1": "Vinilium helps you find vinyl pressings and keep a Wishlist and a Collection. It is provided by {operator} ({country}) free of charge.",
+      "s1P1": "Vinilium helps you find vinyl pressings and keep a Wishlist and a Collection. It is provided free of charge, as a hobby project, by a private individual shown here as “{operator}” ({country}).",
       "s2Title": "Your account and how to use it",
       "s2Intro": "Please:",
       "s2A": "keep your password private and use the service for yourself, not for resale or commercial purposes;",
@@ -509,7 +516,9 @@
       "s8P1": "We may update these terms. The date above shows the current version.",
       "s8P2": "[NEEDS LEGAL REVIEW] How changes are announced, and when continued use counts as acceptance.",
       "s9Title": "Contact",
-      "s9P1": "Questions about these terms: see the contact details below or the contact page."
+      "s9P1": "Questions about these terms: see the contact details below or the contact page.",
+      "s1P2": "[NEEDS LEGAL REVIEW] How the provider is identified (a private individual shown only under a project name or nickname) and whether that is sufficient for users in the EU or Norway.",
+      "s2AGoogleOnly": "keep access to your account private and use the service for yourself, not for resale or commercial purposes;"
     }
   },
   "signUpConsent": {
