@@ -1,7 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import type { ReleaseDetail } from "@/lib/discogs/types";
+import { albumsBackQuery, contextQuery, parseFinder, parseMaster } from "@/lib/finder-state";
 import { Link } from "@/i18n/navigation";
 import { ChevronLeftIcon } from "@/ds/icons";
 import { DiscogsAttribution } from "../DiscogsAttribution";
@@ -24,14 +26,27 @@ export function ReleaseView({ releaseId }: { releaseId: number }) {
   const f = useTranslations("finder");
   const { state, retry } = useDiscogs<ReleaseDetail>(`/api/discogs/releases/${releaseId}`);
   const r = state.kind === "ok" ? state.data : null;
+  // The pressings page (or the albums list) this card was opened from is in the address: Back rebuilds it with the same search,
+  // artist, filters and "show more" state. A card opened without that context (a list, a typed link) falls back to what the
+  // release itself tells us.
+  const params = useSearchParams();
+  const fs = parseFinder(params);
+  const master = parseMaster(params);
   const stepLabels = (["track", "artist", "album", "pressing"] as const).map((k) => f(`steps.${k}`));
 
   return (
     <div className="container x-page x-finder">
       <Stepper current={4} label={f("stepsLabel")} steps={stepLabels} />
       {r?.masterId ? (
-        <Link className="link x-link-block" href={{ pathname: `/master/${r.masterId}`, query: { t: r.title, ...(r.artist ? { a: r.artist } : {}) } }}>
+        <Link
+          className="link x-link-block"
+          href={{ pathname: `/master/${r.masterId}`, query: contextQuery(fs, { ...master, t: master.t ?? r.title, a: master.a ?? r.artist ?? null }) }}
+        >
           <ChevronLeftIcon /> {t("backToPressings")}
+        </Link>
+      ) : fs.q ? (
+        <Link className="link x-link-block" href={{ pathname: "/search", query: albumsBackQuery(fs, { a: master.a ?? r?.artist ?? null }) }}>
+          <ChevronLeftIcon /> {t("backToAlbums")}
         </Link>
       ) : (
         <Link className="link x-link-block" href="/search">

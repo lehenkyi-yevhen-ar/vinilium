@@ -100,4 +100,21 @@ test.describe("app shell", () => {
       expect((await page.request.get(`/${locale}`)).status()).toBe(200);
     });
   }
+
+  test("a signed-out visitor following a finder link returns to the SAME step after signing in (validated state only)", async ({ page }) => {
+    // search: the step and "show more" state are kept; a tampered counter is clamped and control characters are dropped
+    await page.goto("/en/search?mode=track&q=ultraviolence&by=Lana%20del%20Rey&g=lana%20del%20rey&n=999&sp=2&junk=1");
+    const nextOf = async () => new URL((await page.getByRole("main").getByRole("link", { name: "Sign in", exact: true }).getAttribute("href"))!, "http://x").searchParams.get("next");
+    expect(await nextOf()).toBe("/search?mode=track&q=ultraviolence&by=Lana+del+Rey&g=lana+del+rey&n=10&sp=2"); // `junk` is not carried
+
+    // pressings and the release card: filters and the search they came from
+    await page.goto("/en/master/500?mode=track&q=slow+orbit&g=cobalt+parade&a=Cobalt+Parade&t=Glass+Harbor&country=Japan");
+    expect(await nextOf()).toBe("/master/500?mode=track&q=slow+orbit&g=cobalt+parade&a=Cobalt+Parade&t=Glass+Harbor&country=Japan");
+    await page.goto("/en/release/13?mode=track&q=slow+orbit&g=cobalt+parade&country=Japan");
+    expect(await nextOf()).toBe("/release/13?mode=track&q=slow+orbit&g=cobalt+parade&country=Japan");
+
+    // only a same-site path ever reaches `next`: the value is rebuilt from validated parts
+    await page.goto("/en/search?mode=track&q=%2F%2Fevil.example&g=%5C%5Cx");
+    expect((await nextOf())!.startsWith("/search?")).toBe(true);
+  });
 });

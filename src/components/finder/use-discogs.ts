@@ -91,9 +91,17 @@ export interface PageLike {
   hasMore: boolean;
 }
 
+export interface PagedOptions {
+  /** Pages that were loaded when this address was left (from the URL). They are fetched again, one after the other. */
+  wantPages?: number;
+  /** Called after the person asked for more and it arrived, with the page now loaded (to put it in the URL). */
+  onMore?: (page: number) => void;
+}
+
 export function usePaged<T extends PageLike>(
   urlForPage: (page: number) => string | null,
   merge: (previous: T, next: T) => T,
+  { wantPages = 1, onMore }: PagedOptions = {},
 ) {
   const first = urlForPage(1);
   const { state, retry } = useDiscogs<T>(first);
@@ -111,13 +119,35 @@ export function usePaged<T extends PageLike>(
     setMoreProblem(null);
     const next = await fetchDiscogs<T>(urlForPage(data.page + 1) ?? first).catch(() => ({ kind: "error" }) as Fetched<T>);
     setLoadingMore(false);
-    if (next.kind === "ok") setExtra({ forUrl: first, data: merge(data, next.data) });
-    else setMoreProblem(next);
-  }, [data, first, urlForPage, merge]);
+    if (next.kind === "ok") {
+      setExtra({ forUrl: first, data: merge(data, next.data) });
+      onMore?.(next.data.page);
+    } else setMoreProblem(next);
+  }, [data, first, urlForPage, merge, onMore]);
+
+  // Coming back to a step where "show more" had been pressed: load the missing pages again (each is cached on the server).
+  // One page per effect run; the result changes `data`, which runs the effect for the next page.
+  const missing = Boolean(data && data.hasMore && data.page < wantPages && !moreProblem);
+  // A string, not the function: a new function identity on every render would restart the request every time.
+  const nextUrl = missing && data ? urlForPage(data.page + 1) : null;
+  useEffect(() => {
+    if (!nextUrl || !data || !first) return;
+    let cancelled = false;
+    fetchDiscogs<T>(nextUrl)
+      .then((next) => {
+        if (cancelled) return;
+        if (next.kind === "ok") setExtra({ forUrl: first, data: merge(data, next.data) });
+        else setMoreProblem(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [nextUrl, data, first, merge]);
 
   // Remember the last good result so filter controls can stay on screen while a new filter set loads.
   // (React's documented pattern for derived state: adjust during render, guarded so it cannot loop.)
   if (base && lastOk?.data !== base) setLastOk({ data: base });
 
-  return { state, data, lastData: lastOk?.data ?? null, loadMore, loadingMore, moreProblem, retry };
+  return { state, data, lastData: lastOk?.data ?? null, loadMore, loadingMore, moreProblem, retry, restoring: missing };
 }

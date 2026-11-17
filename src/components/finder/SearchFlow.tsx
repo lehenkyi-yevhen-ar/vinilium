@@ -1,11 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { mergeGroups } from "@/lib/discogs/group";
 import { artistKey, primaryType } from "@/lib/discogs/normalize";
 import type { ArtistGroup, MasterSummary, MastersBatch, SearchEntry, SearchPage } from "@/lib/discogs/types";
+import { artistsBackQuery, finderQuery, MODES, parseFinder, UNKNOWN_KEY, type FinderState, type Mode } from "@/lib/finder-state";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Button } from "@/ds/Button";
 import { SearchIcon } from "@/ds/icons";
@@ -13,18 +14,17 @@ import { StatusMessage } from "@/ds/StatusMessage";
 import { DiscogsAttribution } from "../DiscogsAttribution";
 import { Cover, Problem, ResultSkeleton, Stepper } from "./parts";
 import { useDiscogs, usePaged } from "./use-discogs";
+import { replaceParams } from "./url-state";
 
-type Mode = "track" | "artist" | "album";
-const MODES: Mode[] = ["track", "artist", "album"];
-const UNKNOWN_KEY = "-";
 /** Albums shown (and master records resolved) at a time. Each unresolved master costs one Discogs request. */
 const ALBUMS_PER_VIEW = 12;
 /** A throttled batch is retried this many times, then the cards simply keep the data we already have. */
 const MAX_MASTER_RETRIES = 2;
 
-const parseMode = (v: string | null): Mode => (MODES.includes(v as Mode) ? (v as Mode) : "track");
 const groupParam = (g: ArtistGroup) => g.key || UNKNOWN_KEY;
 const mergeSearch = (prev: SearchPage, next: SearchPage): SearchPage => ({ ...next, groups: mergeGroups(prev.groups, next.groups) });
+/** "Show more" results: the page count goes into the URL, and is loaded again when the person comes back to this address. */
+const rememberSearchPages = (page: number) => replaceParams({ sp: page > 1 ? String(page) : null });
 const discogsSearchUrl = (q: string) => `https://www.discogs.com/search/?q=${encodeURIComponent(q)}&type=all`;
 
 /** Step 1: the query form. Remounted when the URL's query changes, so it never shows stale text. */
@@ -119,9 +119,11 @@ function AlbumCard({ entry, master, resolving, query }: { entry: SearchEntry; ma
   const title = master?.title ?? entry.title;
   const year = master?.year ?? entry.year;
   const thumb = master?.thumb ?? entry.thumb;
+  // `query` is where we are now (search, artist, "show more" state): the next screens carry it, so Back can rebuild this one exactly.
+  const artist = master?.artist ?? entry.artist;
   const href = isMaster
-    ? { pathname: `/master/${entry.id}`, query: { ...query, ...((master?.artist ?? entry.artist) ? { a: (master?.artist ?? entry.artist)! } : {}), t: title } }
-    : { pathname: `/release/${entry.id}` };
+    ? { pathname: `/master/${entry.id}`, query: { ...query, ...(artist ? { a: artist } : {}), t: title } }
+    : { pathname: `/release/${entry.id}`, query: { ...query, ...(artist ? { a: artist } : {}) } };
   const waiting = isMaster && resolving && !master;
   const kind = primaryType(entry.types); // Album / EP / Single / Compilation, only when the format descriptors say so
 
@@ -192,12 +194,12 @@ function AlbumPage({ entries, query }: { entries: SearchEntry[]; query: Record<s
  * Vinyl releases Discogs has not grouped under a master come AFTER, in a section that is collapsed by default (open only
  * when there is nothing else to show).
  */
-function AlbumList({ group, query }: { group: ArtistGroup; query: Record<string, string> }) {
+function AlbumList({ group, query, views, othersOpen }: { group: ArtistGroup; query: Record<string, string>; views: number; othersOpen: boolean }) {
   const t = useTranslations("finder");
-  const [views, setViews] = useState(1);
   const masters = group.entries.filter((e) => e.kind === "master");
   const others = group.entries.filter((e) => e.kind === "release");
-  const [openOthers] = useState(masters.length === 0);
+  // "Show more" and the open/closed section live in the URL (see lib/finder-state.ts), so Back, reload and a copied link keep them.
+  const openOthers = othersOpen || masters.length === 0;
 
   const shown = masters.slice(0, views * ALBUMS_PER_VIEW);
   const pages = Array.from({ length: views }, (_, i) => shown.slice(i * ALBUMS_PER_VIEW, (i + 1) * ALBUMS_PER_VIEW)).filter((p) => p.length);
@@ -211,13 +213,21 @@ function AlbumList({ group, query }: { group: ArtistGroup; query: Record<string,
         </div>
       ) : null}
       {shown.length < masters.length ? (
-        <Button variant="outline" onClick={() => setViews((v) => v + 1)}>
+        <Button variant="outline" onClick={() => replaceParams({ n: String(views + 1) })}>
           {t("showMoreAlbums")}
         </Button>
       ) : null}
 
       {others.length ? (
-        <details className="x-disclosure" open={openOthers}>
+        <details
+          className="x-disclosure"
+          open={openOthers}
+          onToggle={(e) => {
+            // Only a real change by the person (not React setting `open` from the URL) is written back.
+            const open = e.currentTarget.open;
+            if (open !== openOthers) replaceParams({ o: open ? "1" : null });
+          }}
+        >
           <summary className="x-disclosure__summary">
             <span>{t("otherPressingsTitle")}</span>
             <span className="badge">{t("otherPressingsCount", { count: others.length })}</span>
@@ -235,7 +245,7 @@ function AlbumList({ group, query }: { group: ArtistGroup; query: Record<string,
 }
 
 /** Step 2. A common title can match dozens of artists, so a long list can be narrowed by typing part of a name. */
-function ArtistList({ groups, mode, q, by }: { groups: ArtistGroup[]; mode: Mode; q: string; by: string }) {
+function ArtistList({ groups, fs }: { groups: ArtistGroup[]; fs: FinderState }) {
   const t = useTranslations("finder");
   /** "6 albums · 10 without a master": albums are masters; the rest are vinyl releases without one. */
   const counts = (g: ArtistGroup) => {
@@ -261,7 +271,7 @@ function ArtistList({ groups, mode, q, by }: { groups: ArtistGroup[]; mode: Mode
           {visible.map((g) => (
             <li key={g.key || UNKNOWN_KEY}>
               <Link
-                href={{ pathname: "/search", query: { mode, q, ...(by ? { by } : {}), g: groupParam(g) } }}
+                href={{ pathname: "/search", query: finderQuery({ ...fs, g: groupParam(g), views: 1, othersOpen: false }) }}
                 className="card card--interactive x-result x-result--artist"
               >
                 <Cover src={g.entries.find((e) => e.thumb)?.thumb ?? null} />
@@ -283,25 +293,24 @@ function ArtistList({ groups, mode, q, by }: { groups: ArtistGroup[]; mode: Mode
 export function SearchFlow() {
   const t = useTranslations("finder");
   const params = useSearchParams();
-  const mode = parseMode(params.get("mode"));
-  const q = (params.get("q") ?? "").trim().slice(0, 100);
-  const by = mode === "artist" ? "" : (params.get("by") ?? "").trim().slice(0, 100);
-  const groupKey = params.get("g");
+  // Everything below comes from the address (see lib/finder-state.ts): invalid or tampered values have already fallen back to defaults.
+  const fs = parseFinder(params);
+  const { mode, q, by } = fs;
 
-  const urlForPage = useCallback(
-    (page: number) => (q ? `/api/discogs/search?q=${encodeURIComponent(q)}&mode=${mode}${by ? `&by=${encodeURIComponent(by)}` : ""}&page=${page}` : null),
-    [q, mode, by],
-  );
-  const paged = usePaged<SearchPage>(urlForPage, mergeSearch);
+  const urlForPage = (page: number) => (q ? `/api/discogs/search?q=${encodeURIComponent(q)}&mode=${mode}${by ? `&by=${encodeURIComponent(by)}` : ""}&page=${page}` : null);
+  const paged = usePaged<SearchPage>(urlForPage, mergeSearch, { wantPages: fs.searchPages, onMore: rememberSearchPages });
   const { state, data } = paged;
 
   const groups = data?.groups ?? [];
-  const selected = groups.length === 1 ? groups[0] : (groups.find((g) => groupParam(g) === groupKey) ?? null);
+  const selected = groups.length === 1 ? groups[0] : (groups.find((g) => groupParam(g) === fs.g) ?? null);
   // 0 Track, 1 Artist, 2 Album. Pressing and the release card are on the next screens.
   const current = !q ? 0 : selected ? 2 : 1;
   const stepLabels = (["track", "artist", "album", "pressing"] as const).map((k) => t(`steps.${k}`));
-  const albumContext: Record<string, string> = { q, mode, ...(by ? { by } : {}) };
+  const page = data?.page ?? 1;
+  // Where we are right now, carried by every link that leaves this screen (album cards) so that Back returns here exactly.
+  const albumContext = finderQuery({ ...fs, g: selected ? groupParam(selected) : fs.g, searchPages: page });
   const empty = Boolean(q && data && groups.length === 0);
+  const restoring = paged.restoring;
 
   return (
     <div className="container x-page x-finder">
@@ -314,7 +323,7 @@ export function SearchFlow() {
 
       {!q ? <p className="x-note">{t("hint")}</p> : null}
 
-      {q && state.kind === "loading" ? <ResultSkeleton label={t("resultsFor", { q })} /> : null}
+      {q && (state.kind === "loading" || restoring) ? <ResultSkeleton label={t("resultsFor", { q })} /> : null}
       {q && state.kind !== "loading" && state.kind !== "ok" && state.kind !== "idle" ? <Problem state={state} onRetry={paged.retry} /> : null}
 
       {empty ? (
@@ -322,16 +331,17 @@ export function SearchFlow() {
           <StatusMessage tone="info" title={t("emptyTitle")}>
             <span id="empty-h">{t("emptyText")}</span>
           </StatusMessage>
-          {/* Ways out of a dead end. Shown ONLY when the main search found nothing. */}
+          {/* Ways out of a dead end. Shown ONLY when the main search found nothing. The optional artist travels with the
+              track <-> album switch (both use it); the artist mode has no such field. */}
           <nav className="x-fallback" aria-label={t("fallbackTitle")}>
             <span className="x-note">{t("fallbackText", { q })}</span>
             {MODES.filter((m) => m !== mode).map((m) => (
-              <Link key={m} className="tag" href={{ pathname: "/search", query: { mode: m, q } }}>
+              <Link key={m} className="tag" href={{ pathname: "/search", query: finderQuery({ ...fs, mode: m, g: null, views: 1, searchPages: 1, othersOpen: false, by: m === "artist" ? "" : by }) }}>
                 {t(`tryAs.${m}`)}
               </Link>
             ))}
             {by ? (
-              <Link className="tag" href={{ pathname: "/search", query: { mode, q } }}>
+              <Link className="tag" href={{ pathname: "/search", query: finderQuery({ ...fs, by: "", g: null, views: 1, searchPages: 1, othersOpen: false }) }}>
                 {t("withoutArtist")}
               </Link>
             ) : null}
@@ -339,28 +349,28 @@ export function SearchFlow() {
         </section>
       ) : null}
 
-      {data && groups.length > 0 && !selected ? (
+      {data && !restoring && groups.length > 0 && !selected ? (
         <section className="x-section" aria-labelledby="artists-h">
           <h2 id="artists-h">{t("artistsTitle")}</h2>
           <p className="x-note">{t("artistsLead")}</p>
-          <ArtistList key={`${mode}|${q}|${by}`} groups={groups} mode={mode} q={q} by={by} />
+          <ArtistList key={`${mode}|${q}|${by}`} groups={groups} fs={{ ...fs, searchPages: page }} />
           <DiscogsAttribution href={discogsSearchUrl(q)} />
         </section>
       ) : null}
 
-      {data && selected ? (
+      {data && !restoring && selected ? (
         <section className="x-section" aria-labelledby="albums-h">
           {groups.length > 1 ? (
-            <Link className="link x-link-block" href={{ pathname: "/search", query: { mode, q, ...(by ? { by } : {}) } }}>
+            <Link className="link x-link-block" href={{ pathname: "/search", query: artistsBackQuery({ ...fs, searchPages: page }) }}>
               {t("otherArtists")}
             </Link>
           ) : null}
           <h2 id="albums-h">{selected.artist ? t("albumsBy", { artist: selected.artist }) : t("albumsTitle")}</h2>
-          <AlbumList key={selected.key || UNKNOWN_KEY} group={selected} query={albumContext} />
+          <AlbumList key={selected.key || UNKNOWN_KEY} group={selected} query={albumContext} views={fs.views} othersOpen={fs.othersOpen} />
         </section>
       ) : null}
 
-      {data && groups.length > 0 ? (
+      {data && !restoring && groups.length > 0 ? (
         <div className="x-more">
           {data.incomplete ? (
             <p className="x-note" role="note">

@@ -285,6 +285,7 @@
   },
   "release": {
     "backToPressings": "Back to pressings",
+    "backToAlbums": "Back to albums",
     "backToSearch": "Back to search",
     "coverAlt": "Cover of {title}",
     "by": "by {artist}",

@@ -1,10 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { artistKey } from "@/lib/discogs/normalize";
-import type { FacetValue, VersionFilters, VersionsPage, VersionSummary } from "@/lib/discogs/types";
+import { albumsBackQuery, contextQuery, parseFinder, parseMaster } from "@/lib/finder-state";
+import type { FacetValue, VersionsPage, VersionSummary } from "@/lib/discogs/types";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Button } from "@/ds/Button";
 import { ChevronLeftIcon } from "@/ds/icons";
@@ -12,9 +11,13 @@ import { StatusMessage } from "@/ds/StatusMessage";
 import { DiscogsAttribution } from "../DiscogsAttribution";
 import { Cover, Problem, ResultSkeleton, Stepper } from "./parts";
 import { usePaged } from "./use-discogs";
+import { replaceParams } from "./url-state";
 
 const FILTER_KEYS = ["country", "released", "label"] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
+
+/** "Load more" pressings: the page count goes into the URL, so Back from a release card shows the same list. */
+const rememberVersionPages = (page: number) => replaceParams({ vp: page > 1 ? String(page) : null });
 
 const mergeVersions = (prev: VersionsPage, next: VersionsPage): VersionsPage => {
   const seen = new Set(prev.versions.map((v) => v.id));
@@ -57,9 +60,10 @@ function FilterSelect({
   );
 }
 
-function PressingCard({ v }: { v: VersionSummary }) {
+function PressingCard({ v, context }: { v: VersionSummary; context: Record<string, string> }) {
   const t = useTranslations("pressings");
-  const href = { pathname: `/release/${v.id}` };
+  // The release card carries where we are (search, artist, filters, pages loaded), so its Back link can rebuild this page exactly.
+  const href = { pathname: `/release/${v.id}`, query: context };
   return (
     <article className="card x-result">
       <Link href={href} className="x-result__media" tabIndex={-1} aria-hidden="true">
@@ -85,61 +89,45 @@ export function PressingsView({ masterId }: { masterId: number }) {
   const params = useSearchParams();
   const router = useRouter();
 
-  const artist = params.get("a")?.slice(0, 200) || null;
-  const title = params.get("t")?.slice(0, 200) || null;
-  const filters: VersionFilters = {
-    country: params.get("country") || undefined,
-    released: params.get("released") || undefined,
-    label: params.get("label") || undefined,
-  };
-  const { country, released, label } = filters;
+  const fs = parseFinder(params);
+  const master = parseMaster(params);
+  const { a: artist, t: title, country, released, label } = master;
 
-  const urlForPage = useCallback(
-    (page: number) => {
-      const qs = new URLSearchParams({ page: String(page) });
-      if (country) qs.set("country", country);
-      if (released) qs.set("released", released);
-      if (label) qs.set("label", label);
-      return `/api/discogs/masters/${masterId}/versions?${qs}`;
-    },
-    [masterId, country, released, label],
-  );
-  const paged = usePaged<VersionsPage>(urlForPage, mergeVersions);
+  const urlForPage = (page: number) => {
+    const qs = new URLSearchParams({ page: String(page) });
+    if (country) qs.set("country", country);
+    if (released) qs.set("released", released);
+    if (label) qs.set("label", label);
+    return `/api/discogs/masters/${masterId}/versions?${qs}`;
+  };
+  const paged = usePaged<VersionsPage>(urlForPage, mergeVersions, { wantPages: master.versionPages, onMore: rememberVersionPages });
   const { state, data } = paged;
   const facets = (data ?? paged.lastData)?.facets;
 
-  // Keep the navigation context (what we are looking at) when a filter changes. Read the CURRENT url at event time, so
-  // two quick changes cannot overwrite each other with values captured at the previous render.
+  // Change a filter and keep everything else we are carrying (search, artist, "show more" state). Read the CURRENT url at event
+  // time, so two quick changes cannot overwrite each other with values captured at the previous render. A new filter set starts
+  // again at the first page of pressings.
   const keep = (extra: Partial<Record<FilterKey, string | undefined>>) => {
     const now = new URLSearchParams(window.location.search);
-    const query: Record<string, string> = {};
-    for (const k of ["q", "mode", "by", "a", "t"]) if (now.get(k)) query[k] = now.get(k)!;
-    for (const k of FILTER_KEYS) {
-      const v = k in extra ? extra[k] : now.get(k) || undefined;
-      if (v) query[k] = v;
-    }
-    return query;
+    const m = parseMaster(now);
+    for (const k of FILTER_KEYS) if (k in extra) m[k] = extra[k];
+    return contextQuery(parseFinder(now), { ...m, versionPages: 1 });
   };
   const setFilter = (key: FilterKey, value: string) => router.replace({ pathname: `/master/${masterId}`, query: keep({ [key]: value || undefined }) }, { scroll: false });
   const hasFilter = Boolean(country || released || label);
-  const backQuery = params.get("q")
-    ? { mode: params.get("mode") ?? "track", q: params.get("q")!, ...(params.get("by") ? { by: params.get("by")! } : {}), g: (artist && artistKey(artist)) || "-" }
-    : null;
+  // Back to the albums of the SAME search: query, artist, the albums already shown, the loaded result pages. Without a search in the
+  // address (a link from the lists, or a hand-typed one) there is nothing to rebuild, so it goes to the search start.
+  const backQuery = fs.q ? albumsBackQuery(fs, master) : null;
+  const releaseContext = contextQuery(fs, { ...master, versionPages: data?.page ?? master.versionPages });
 
   const stepLabels = (["track", "artist", "album", "pressing"] as const).map((k) => f(`steps.${k}`));
 
   return (
     <div className="container x-page x-finder">
       <Stepper current={3} label={f("stepsLabel")} steps={stepLabels} />
-      {backQuery ? (
-        <Link className="link x-link-block" href={{ pathname: "/search", query: backQuery }}>
-          <ChevronLeftIcon /> {t("back")}
-        </Link>
-      ) : (
-        <Link className="link x-link-block" href="/search">
-          <ChevronLeftIcon /> {t("back")}
-        </Link>
-      )}
+      <Link className="link x-link-block" href={backQuery ? { pathname: "/search", query: backQuery } : "/search"}>
+        <ChevronLeftIcon /> {t("back")}
+      </Link>
       <h1 className="x-finder__title">{title ? t("headingFor", { title }) : t("headingUnknown")}</h1>
       {artist ? <p className="x-lead">{t("by", { artist })}</p> : null}
 
@@ -170,7 +158,7 @@ export function PressingsView({ masterId }: { masterId: number }) {
           </p>
           <div className="x-result-grid">
             {data.versions.map((v) => (
-              <PressingCard key={v.id} v={v} />
+              <PressingCard key={v.id} v={v} context={releaseContext} />
             ))}
           </div>
         </section>

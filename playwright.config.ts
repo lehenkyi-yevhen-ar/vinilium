@@ -49,11 +49,25 @@ export default defineConfig({
       dependencies: ["finder-desktop"],
       use: { ...devices["Pixel 7"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.202" } },
     },
+    // Back links, browser Back and reload through every finder step (state lives in the URL): desktop, then 390 px wide.
+    {
+      name: "finder-nav-desktop",
+      testMatch: /finder-nav\.spec\.ts/,
+      // E2E_NAV_ONLY=1 runs these specs after the sign-in setup only (a quick loop while working on them); CI runs the whole chain.
+      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["finder-mobile"],
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.203" } },
+    },
+    {
+      name: "finder-nav-390",
+      testMatch: /finder-nav\.spec\.ts/,
+      dependencies: ["finder-nav-desktop"],
+      use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 }, storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.204" } },
+    },
     // The Wishlist / Collection screens (milestone 4). After the finder, one after the other: the same mock and Discogs bucket.
     {
       name: "library-desktop",
       testMatch: /library\.spec\.ts/,
-      dependencies: ["finder-mobile"],
+      dependencies: ["finder-nav-390"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.211" } },
