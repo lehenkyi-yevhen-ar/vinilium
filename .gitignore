@@ -51,3 +51,7 @@ next-env.d.ts
 
 # Recordings of REAL Discogs responses stay on this machine only (the repo uses synthetic fixtures: tests/fixtures/vinyl.ts)
 /tests/fixtures/_local-recordings/
+
+.vercel
+.env*
+!.env.example
