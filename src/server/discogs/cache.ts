@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gt, like, lt } from "drizzle-orm";
+import { and, eq, gt, inArray, like, lt, sql } from "drizzle-orm";
 import { discogsCache, rateLimit } from "@/server/db/schema";
 import { APP_RATE_LIMIT_PREFIX } from "@/server/rate-limit";
 import type { AppDb } from "./token-bucket";
@@ -17,7 +17,7 @@ import type { AppDb } from "./token-bucket";
 export const CACHE_KEY_VERSION = "v2";
 
 /** Cache key: versioned, scoped to the API origin, params sorted so equivalent requests share a row. */
-export function cacheKey(origin: string, kind: "search" | "versions" | "release" | "master", params: Record<string, string | number>): string {
+export function cacheKey(origin: string, kind: "search" | "versions" | "release" | "master" | "gone", params: Record<string, string | number>): string {
   const canon = Object.entries(params)
     .map(([k, v]) => [k, String(v).normalize("NFC").trim().replace(/\s+/g, " ")] as const)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -38,6 +38,30 @@ export async function getCached<T>(db: AppDb, key: string, now = Date.now()): Pr
     .from(discogsCache)
     .where(and(eq(discogsCache.key, key), gt(discogsCache.expiresAt, new Date(now))));
   return row ? { payload: row.payload as T, fetchedAt: row.fetchedAt, expiresAt: row.expiresAt } : null;
+}
+
+/** Several keys in ONE query. Missing or expired keys are simply absent from the map. */
+export async function getCachedMany<T>(db: AppDb, keys: string[], now = Date.now()): Promise<Map<string, CacheHit<T>>> {
+  if (keys.length === 0) return new Map();
+  const rows = await db
+    .select()
+    .from(discogsCache)
+    .where(and(inArray(discogsCache.key, keys), gt(discogsCache.expiresAt, new Date(now))));
+  return new Map(rows.map((r) => [r.key, { payload: r.payload as T, fetchedAt: r.fetchedAt, expiresAt: r.expiresAt }]));
+}
+
+/** Several rows in ONE insert, each with its own TTL (a short one for negative answers). */
+export async function putCachedMany(db: AppDb, entries: Array<{ key: string; payload: unknown; ttlSeconds: number }>, now = Date.now()): Promise<Date> {
+  const fetchedAt = new Date(now);
+  if (entries.length === 0) return fetchedAt;
+  await db
+    .insert(discogsCache)
+    .values(entries.map((e) => ({ key: e.key, payload: e.payload, fetchedAt, expiresAt: new Date(now + e.ttlSeconds * 1000) })))
+    .onConflictDoUpdate({
+      target: discogsCache.key,
+      set: { payload: sql`excluded.payload`, fetchedAt: sql`excluded.fetched_at`, expiresAt: sql`excluded.expires_at` },
+    });
+  return fetchedAt;
 }
 
 export async function putCached(

@@ -143,6 +143,30 @@ export interface MastersBatch {
   retryAfter?: number;
 }
 
+/** What a list card shows of a release: a trimmed view of ReleaseDetail (no tracklist, identifiers or style lists). */
+export interface ReleaseCard {
+  id: number;
+  masterId: number | null;
+  title: string;
+  artist: string | null;
+  year: number | null;
+  country: string | null;
+  label: string | null;
+  catno: string | null;
+  /** e.g. "Vinyl, LP, Album" as Discogs describes the pressing. */
+  format: string | null;
+  thumb: string | null;
+  discogsUrl: string;
+}
+
+/** Result of resolving the releases of one list page. `gone` ids no longer exist on Discogs; `missing` ones could not be resolved right now. */
+export interface ReleasesBatch {
+  releases: ReleaseCard[];
+  gone: number[];
+  missing: number[];
+  retryAfter?: number;
+}
+
 export type DiscogsErrorCode =
   | "throttled" // Discogs budget exhausted; retry after `retryAfter` seconds
   | "not_found"

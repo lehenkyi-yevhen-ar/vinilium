@@ -169,10 +169,19 @@ describe("(a) a track on both a single and an album surfaces the album's vinyl m
 });
 
 describe("the album card's data comes from the MASTER record, not from one release", () => {
+  /** Parallel lookups arrive in no fixed order, so the fake answers by URL, not by queue position. */
+  async function masters(answer: (id: number) => Response) {
+    const service = await import("@/server/discogs/service");
+    const fetchImpl = vi.fn(async (u: URL) => answer(Number(u.pathname.split("/").pop())));
+    const deps = { db, fetchImpl: fetchImpl as unknown as typeof fetch, sleep: async () => {}, random: () => 0.5 };
+    return { ...service, deps, fetchImpl };
+  }
+  const master = (id: number) => ({ id, title: `Album ${id}`, year: 2000, uri: `https://www.discogs.com/master/${id}`, artists: [{ name: "A" }] });
+
   it("resolves /masters/{id} to the album's title, year and artist, strips price fields, and caches it", async () => {
-    const s = await svc(albumMasterRecord());
+    const s = await masters(() => json(albumMasterRecord()));
     const r = await s.getMasters(s.deps, [910001]);
-    expect(s.urls()[0].pathname).toBe("/masters/910001");
+    expect((s.fetchImpl.mock.calls[0] as unknown as [URL])[0].pathname).toBe("/masters/910001");
     if (!r.ok) throw new Error("failed");
     expect(r.data.masters).toEqual([
       expect.objectContaining({ id: 910001, title: "Static Bloom", year: 2014, artist: "Mira Vale", discogsUrl: "https://www.discogs.com/master/910001-Mira-Vale-Static-Bloom" }),
@@ -186,30 +195,67 @@ describe("the album card's data comes from the MASTER record, not from one relea
     expect(s.fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("is bounded: at most 12 masters per call, each looked up once, in order", async () => {
+  it("is bounded: at most 12 masters per call, each looked up once, answered in the order asked", async () => {
     const ids = Array.from({ length: 20 }, (_, i) => 1000 + i);
-    const master = (id: number) => ({ id, title: `Album ${id}`, year: 2000, uri: `https://www.discogs.com/master/${id}`, artists: [{ name: "A" }] });
-    const s = await svc(...ids.slice(0, 12).map(master));
+    const s = await masters((id) => json(master(id)));
     const r = await s.getMasters(s.deps, [...ids, ...ids]); // duplicates and too many
     expect(s.fetchImpl).toHaveBeenCalledTimes(12);
     expect(r.ok && r.data.masters.map((m) => m.id)).toEqual(ids.slice(0, 12));
   });
 
-  it("when Discogs says slow down, keeps what it has, reports the rest as missing with retryAfter, and stops asking", async () => {
-    const s = await svc(albumMasterRecord(), new Response("", { status: 429, headers: { "retry-after": "120" } }));
-    const r = await s.getMasters(s.deps, [910001, 910002, 111111]);
+  it("looks the missing ones up CONCURRENTLY (a small pool), not one after the other", async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => 2000 + i);
+    let inFlight = 0;
+    let peak = 0;
+    const service = await import("@/server/discogs/service");
+    const fetchImpl = vi.fn(async (u: URL) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 30)); // a slow upstream
+      inFlight--;
+      return json(master(Number(u.pathname.split("/").pop())));
+    });
+    const deps = { db, fetchImpl: fetchImpl as unknown as typeof fetch, sleep: async () => {}, random: () => 0.5 };
+    const r = await service.getMasters(deps, ids);
+    expect(r.ok && r.data.masters).toHaveLength(12);
+    expect(peak).toBeGreaterThan(1); // concurrent...
+    expect(peak).toBeLessThanOrEqual(service.BATCH_CONCURRENCY); // ...but bounded
+    expect(service.BATCH_CONCURRENCY).toBe(4);
+  });
+
+  it("reads all cache rows in ONE query and writes the new ones in ONE insert", async () => {
+    const s = await masters((id) => json(master(id)));
+    await s.getMasters(s.deps, [3001, 3002, 3003, 3004, 3005, 3006]);
+    const rows = await db.select().from(discogsCache);
+    expect(rows).toHaveLength(6);
+    expect(new Set(rows.map((r) => r.fetchedAt.getTime())).size).toBe(1); // one insert, one timestamp
+    const again = await s.getMasters(s.deps, [3001, 3002, 3003, 3004, 3005, 3006, 3007]);
+    expect(again.ok && again.data.masters).toHaveLength(7);
+    expect(s.fetchImpl).toHaveBeenCalledTimes(7); // only the new one went upstream
+  });
+
+  it("when Discogs says slow down, keeps what it has, reports the rest as missing with retryAfter, and stops launching", async () => {
+    const s = await masters((id) => (id === 910001 ? json(albumMasterRecord()) : new Response("", { status: 429, headers: { "retry-after": "120" } })));
+    const r = await s.getMasters(s.deps, [910001, 910002, 111111, 222222, 333333, 444444, 555555, 666666]);
     if (!r.ok) throw new Error("failed");
     expect(r.data.masters.map((m) => m.id)).toEqual([910001]);
-    expect(r.data.missing).toEqual([910002, 111111]);
+    expect(r.data.missing).toEqual([910002, 111111, 222222, 333333, 444444, 555555, 666666]);
     expect(r.data.retryAfter).toBe(120);
-    expect(s.fetchImpl).toHaveBeenCalledTimes(2); // the third master was NOT requested
+    expect(s.fetchImpl.mock.calls.length).toBeLessThanOrEqual(5); // the first pool at most, then the shared block refuses the rest
   });
 
   it("serves an unknown master as missing rather than failing the batch", async () => {
-    const s = await svc(new Response("", { status: 404 }), albumMasterRecord());
+    const s = await masters((id) => (id === 999999 ? new Response("", { status: 404 }) : json(albumMasterRecord())));
     const r = await s.getMasters(s.deps, [999999, 910001]);
     expect(r.ok && r.data).toMatchObject({ missing: [999999] });
     expect(r.ok && r.data.masters.map((m) => m.id)).toEqual([910001]);
+  });
+
+  it("remembers 'does not exist' briefly, so a page view does not ask again", async () => {
+    const s = await masters(() => new Response("", { status: 404 }));
+    await s.getMasters(s.deps, [999999]);
+    await s.getMasters(s.deps, [999999]);
+    expect(s.fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
 

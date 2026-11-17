@@ -3,12 +3,14 @@ import { groupByArtist } from "@/lib/discogs/group";
 import {
   normalizeMaster,
   normalizeRelease,
+  toReleaseCard,
   normalizeSearchResponse,
   normalizeVersionsResponse,
   searchParamsFor,
 } from "@/lib/discogs/normalize";
-import type { DiscogsResult, MasterSummary, MastersBatch, ReleaseDetail, SearchMode, SearchPage, VersionFilters, VersionsPage } from "@/lib/discogs/types";
-import { cacheKey, getCached, purgeExpiredCache, putCached } from "./cache";
+import { MAX_RELEASES_PER_BATCH } from "@/lib/lists/rules";
+import type { DiscogsResult, MasterSummary, MastersBatch, ReleaseDetail, ReleasesBatch, SearchMode, SearchPage, VersionFilters, VersionsPage } from "@/lib/discogs/types";
+import { cacheKey, getCached, getCachedMany, purgeExpiredCache, putCached, putCachedMany } from "./cache";
 import { discogsGet, type ClientDeps, type RequestOutcome } from "./client";
 import { apiBase, cacheTtlSeconds, MAX_SEARCH_PAGES, MAX_VERSION_PAGES, PAGE_SIZE } from "./config";
 import { imageMapper } from "./image";
@@ -138,48 +140,153 @@ export async function getRelease(deps: Deps, releaseId: number): Promise<Discogs
   );
 }
 
+/** Concurrent Discogs requests inside ONE batch. Every request still takes its token from the shared bucket, so this never
+ *  raises the request RATE: it only stops the calls from waiting in line behind each other. */
+export const BATCH_CONCURRENCY = 4;
+/** How long "this id does not exist on Discogs" is remembered (it is an absence, but asking again for every page view is waste). */
+export const GONE_TTL_SECONDS = 3_600;
+
+export interface BatchResult<T> {
+  found: Map<number, T>;
+  /** Ids Discogs says do not exist (404). */
+  gone: Set<number>;
+  /** Ids that could not be resolved right now (throttled, failed): the caller shows them as pending / retryable. */
+  missing: number[];
+  /** Set when Discogs asked us to slow down; stop launching and try again after this many seconds. */
+  retryAfter?: number;
+  unconfigured: boolean;
+  fetchedAt: Date;
+  /** Number of Discogs calls that succeeded or answered 404 (the ones that cost budget). */
+  upstreamCalls: number;
+  /** Oldest fetchedAt among everything returned: what the freshness rule must look at. */
+  oldestFetchedAt: Date;
+}
+
 /**
- * Resolve a few masters (title, year, cover) for the albums step. Cached one by one (TTL), looked up one at a time through
- * the shared budget. If Discogs asks us to slow down we stop and report what is `missing` with a `retryAfter`, so the
- * screen can show what it has instead of failing.
+ * Cache-through for MANY ids at once: one query for all cache rows, a small concurrent pool for the rest, one insert for the
+ * results. Used by the albums step (masters) and the list screens (releases).
+ */
+export async function batchCached<T>(
+  deps: Deps,
+  spec: { kind: "master" | "release"; ids: number[]; build: (json: unknown) => T | null; path: (id: number) => string },
+): Promise<BatchResult<T>> {
+  const now = (deps.now ?? Date.now)();
+  const origin = apiBase();
+  const key = (id: number) => cacheKey(origin, spec.kind, { id });
+  const goneKey = (id: number) => cacheKey(origin, "gone", { kind: spec.kind, id });
+
+  const ids = [...new Set(spec.ids)];
+  const [hits, goneHits] = await Promise.all([
+    getCachedMany<T>(deps.db, ids.map(key), now),
+    getCachedMany<{ gone: true }>(deps.db, ids.map(goneKey), now),
+  ]);
+
+  const found = new Map<number, T>();
+  const gone = new Set<number>();
+  let oldest = now;
+  const todo: number[] = [];
+  for (const id of ids) {
+    const h = hits.get(key(id));
+    if (h) {
+      found.set(id, h.payload);
+      oldest = Math.min(oldest, h.fetchedAt.getTime());
+    } else if (goneHits.has(goneKey(id))) {
+      gone.add(id);
+    } else todo.push(id);
+  }
+
+  const fresh: Array<{ key: string; payload: unknown; ttlSeconds: number }> = [];
+  const failed = new Set<number>();
+  let retryAfter: number | undefined;
+  let unconfigured = false;
+  let upstreamCalls = 0;
+  let cursor = 0;
+
+  async function worker() {
+    for (;;) {
+      if (retryAfter !== undefined || unconfigured) return; // being throttled: do not launch anything new
+      const id = todo[cursor++];
+      if (id === undefined) return;
+      const out = await discogsGet(spec.path(id), {}, deps);
+      if (out.ok) {
+        upstreamCalls++;
+        const built = spec.build(out.json);
+        if (built === null) failed.add(id);
+        else {
+          found.set(id, built);
+          fresh.push({ key: key(id), payload: built, ttlSeconds: cacheTtlSeconds() });
+        }
+      } else if (out.kind === "not_found") {
+        upstreamCalls++;
+        gone.add(id);
+        fresh.push({ key: goneKey(id), payload: { gone: true }, ttlSeconds: Math.min(GONE_TTL_SECONDS, cacheTtlSeconds()) });
+      } else if (out.kind === "throttled") {
+        retryAfter = Math.max(retryAfter ?? 0, out.retryAfter);
+      } else if (out.kind === "unconfigured") {
+        unconfigured = true;
+      } else failed.add(id);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, todo.length) }, worker));
+
+  const fetchedAt = fresh.length ? await putCachedMany(deps.db, fresh, now) : new Date(now);
+  if (fresh.length) {
+    oldest = Math.min(oldest, fetchedAt.getTime());
+    await purgeExpiredCache(deps.db, now).catch(() => {});
+  }
+  const missing = ids.filter((id) => !found.has(id) && !gone.has(id));
+  return { found, gone, missing, ...(retryAfter !== undefined ? { retryAfter } : {}), unconfigured, fetchedAt, upstreamCalls, oldestFetchedAt: new Date(oldest) };
+}
+
+/**
+ * Resolve a few masters (title, year, cover) for the albums step. Cached one by one (TTL), looked up through the shared
+ * budget by a small concurrent pool. If Discogs asks us to slow down we stop launching and report what is `missing` with a
+ * `retryAfter`, so the screen can show what it has instead of failing.
  */
 export async function getMasters(deps: Deps, ids: number[]): Promise<DiscogsResult<MastersBatch>> {
   const wanted = [...new Set(ids)].slice(0, MAX_MASTERS_PER_BATCH);
-  const now = (deps.now ?? Date.now)();
-  const found: MasterSummary[] = [];
-  const missing: number[] = [];
-  let retryAfter: number | undefined;
-  let fetchedAt = new Date(now);
-  let wroteAny = false;
+  const image = imageMapper();
+  const r = await batchCached<MasterSummary>(deps, { kind: "master", ids: wanted, build: (j) => normalizeMaster(j, image), path: (id) => `/masters/${id}` });
+  if (r.unconfigured && r.found.size === 0) return { ok: false, error: "unconfigured" };
+  return {
+    ok: true,
+    data: {
+      masters: wanted.filter((id) => r.found.has(id)).map((id) => r.found.get(id)!),
+      missing: wanted.filter((id) => !r.found.has(id)),
+      ...(r.retryAfter !== undefined ? { retryAfter: r.retryAfter } : {}),
+    },
+    cached: r.upstreamCalls === 0,
+    fetchedAt: r.oldestFetchedAt.toISOString(),
+  };
+}
 
-  for (const id of wanted) {
-    const key = cacheKey(apiBase(), "master", { id });
-    const hit = await getCached<MasterSummary>(deps.db, key, now);
-    if (hit) {
-      found.push(hit.payload);
-      continue;
-    }
-    if (retryAfter !== undefined) {
-      missing.push(id); // already being throttled: do not ask again
-      continue;
-    }
-    const out = await discogsGet(`/masters/${id}`, {}, deps);
-    if (!out.ok) {
-      if (out.kind === "unconfigured") return { ok: false, error: "unconfigured" };
-      if (out.kind === "throttled") retryAfter = out.retryAfter;
-      missing.push(id);
-      continue;
-    }
-    const master = normalizeMaster(out.json, imageMapper());
-    if (!master) {
-      missing.push(id);
-      continue;
-    }
-    const written = await putCached(deps.db, key, master, cacheTtlSeconds(), now);
-    fetchedAt = written.fetchedAt;
-    wroteAny = true;
-    found.push(master);
-  }
-  if (wroteAny) await purgeExpiredCache(deps.db, now).catch(() => {});
-  return { ok: true, data: { masters: found, missing, ...(retryAfter !== undefined ? { retryAfter } : {}) }, cached: !wroteAny, fetchedAt: fetchedAt.toISOString() };
+/** The most releases resolved in one call: the largest list page. */
+
+
+/**
+ * Resolve the releases of ONE list page. Shares the single-release cache key with getRelease, so a release seen in the finder
+ * costs nothing here (and the other way round). Anything Discogs does not know (404) is `gone`; anything not resolvable right
+ * now (throttled, failed) is `missing`, with a `retryAfter` when Discogs asked us to slow down.
+ */
+export async function getReleases(deps: Deps, ids: number[]): Promise<DiscogsResult<ReleasesBatch>> {
+  const wanted = [...new Set(ids)].slice(0, MAX_RELEASES_PER_BATCH);
+  const image = imageMapper();
+  const r = await batchCached<ReleaseDetail>(deps, {
+    kind: "release",
+    ids: wanted,
+    build: (j) => normalizeRelease(j, image),
+    path: (id) => `/releases/${id}`,
+  });
+  if (r.unconfigured && r.found.size === 0 && r.gone.size === 0) return { ok: false, error: "unconfigured" };
+  return {
+    ok: true,
+    data: {
+      releases: wanted.filter((id) => r.found.has(id)).map((id) => toReleaseCard(r.found.get(id)!)),
+      gone: wanted.filter((id) => r.gone.has(id)),
+      missing: r.missing,
+      ...(r.retryAfter !== undefined ? { retryAfter: r.retryAfter } : {}),
+    },
+    cached: r.upstreamCalls === 0,
+    fetchedAt: r.oldestFetchedAt.toISOString(),
+  };
 }

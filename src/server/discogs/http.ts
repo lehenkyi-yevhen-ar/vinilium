@@ -90,6 +90,12 @@ export const masterIdsSchema = z
   .regex(/^[1-9]\d{0,9}(,[1-9]\d{0,9}){0,11}$/)
   .transform((s) => [...new Set(s.split(",").map(Number))]);
 
+/** `?ids=1,2,3`: one to 24 distinct release ids (one list page). */
+export const releaseIdsSchema = z
+  .string()
+  .regex(/^[1-9]\d{0,9}(,[1-9]\d{0,9}){0,23}$/)
+  .transform((s) => [...new Set(s.split(",").map(Number))]);
+
 /** Discogs ids are positive integers; anything else is rejected before it reaches a URL. */
 export const idSchema = z.string().regex(/^[1-9]\d{0,9}$/).transform(Number);
 

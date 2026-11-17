@@ -1,4 +1,4 @@
-import type { FacetValue, MasterSummary, ReleaseDetail, ReleaseType, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
+import type { FacetValue, MasterSummary, ReleaseCard, ReleaseDetail, ReleaseType, SearchEntry, SearchMode, TrackItem, VersionSummary } from "./types";
 
 /**
  * Raw Discogs JSON -> our shapes. This is a WHITELIST: only the fields copied below survive, so price and
@@ -340,5 +340,23 @@ export function normalizeMaster(raw: unknown, image: ImageMapper): MasterSummary
     year: year(raw.year),
     thumb: image(str(primary?.uri150) ?? str(primary?.uri)),
     discogsUrl: discogsUrlFor("master", id, raw.uri),
+  };
+}
+
+/** The list-card view of a release (what is shown for an item on a list). */
+export function toReleaseCard(r: ReleaseDetail): ReleaseCard {
+  const fmt = r.formats[0];
+  return {
+    id: r.id,
+    masterId: r.masterId,
+    title: r.title,
+    artist: r.artist,
+    year: r.year,
+    country: r.country,
+    label: r.labels[0]?.name ?? null,
+    catno: r.labels[0]?.catno ?? null,
+    format: fmt ? [fmt.name, ...fmt.descriptions].join(", ") : null,
+    thumb: r.thumb ?? r.cover,
+    discogsUrl: r.discogsUrl,
   };
 }
