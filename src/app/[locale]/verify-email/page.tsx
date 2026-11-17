@@ -7,6 +7,7 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { emailPasswordEnabled } from "@/lib/auth-flags";
 import { googleEnabled } from "@/lib/env";
 import { EmailPasswordOff } from "@/components/auth/EmailPasswordOff";
+import { EmailNotArrived } from "@/components/auth/EmailNotArrived";
 import { ResendVerification } from "@/components/auth/ResendVerification";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/verify-email">): Promise<Metadata> {
@@ -42,7 +43,7 @@ export default async function VerifyEmailPage({ params, searchParams }: PageProp
         </Link>
       }
     >
-      {email.success ? <ResendVerification email={email.data} /> : null}
+      {email.success ? <ResendVerification email={email.data} /> : <EmailNotArrived />}
     </AuthCard>
   );
 }

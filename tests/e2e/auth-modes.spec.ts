@@ -193,22 +193,71 @@ test("a failing email provider (429, 500, 401) never breaks sign-up or reset, an
   await setEmailFail(null);
 });
 
-test("the pages say what to do when nothing arrives, and say the same thing to everyone", async ({ page }) => {
-  await page.goto(`${MAIN}/en/verify-email?email=anyone%40example.test`);
-  await expect(page.getByTestId("email-not-arrived")).toContainText("Check your spam folder");
-  await expect(page.getByTestId("email-not-arrived").getByRole("link", { name: "Contact us" })).toHaveAttribute("href", "/en/contact");
+const NOT_ARRIVED = {
+  en: { words: ["spam or junk folder", "not spam", "try again"], contact: "Contact us", submit: /Send reset link/ },
+  uk: { words: ["«Спам» або «Небажана пошта»", "«Не спам»", "спробувати ще раз"], contact: "Зв’язатися з нами", submit: /Надіслати/ },
+  nb: { words: ["søppelpost- eller spam-mappen", "«ikke søppelpost»", "prøve igjen"], contact: "Kontakt oss", submit: /Send/ },
+} as const;
 
-  await page.goto(`${MAIN}/uk/forgot-password`);
-  await page.locator('input[type="email"]').fill("whoever@example.test"); // by type: the label is translated
-  await page.getByRole("button", { name: /Надіслати|посилання|Відновити|скидання/i }).first().click();
-  await expect(page.getByTestId("email-not-arrived")).toContainText("Спам");
-});
+for (const lang of ["en", "uk", "nb"] as const) {
+  test(`${lang}: every screen that sends an email says what to do when nothing arrives (spam or junk, try again, contact us)`, async ({ page }) => {
+    const { words, contact } = NOT_ARRIVED[lang];
+    // Better Auth limits these endpoints per IP per minute (that is the point of the limiter): every submit comes from its own address.
+    const freshIp = () => page.context().setExtraHTTPHeaders({ "x-forwarded-for": nextIp() });
+    const note = page.getByTestId("email-not-arrived");
+    const expectNote = async () => {
+      await expect(note).toBeVisible();
+      for (const w of words) await expect(note).toContainText(w);
+      await expect(note.getByRole("link", { name: contact })).toHaveAttribute("href", `/${lang}/contact`);
+    };
+
+    // 1. the sign-up confirmation: really sign up through the form and land on the "check your inbox" screen
+    const email = `e2e-notes-${lang}-${RUN}@example.test`;
+    await freshIp();
+    await page.goto(`${MAIN}/${lang}/sign-up`);
+    await page.locator('input[name="name"]').fill("Notes User");
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').first().fill(PASSWORD);
+    await page.locator('form button[type="submit"]').click(); // not "the last button": Google's is one too
+    await expect(page).toHaveURL(new RegExp(`/${lang}/verify-email[?]email=`));
+    await expectNote();
+
+    // 2. the verification resend screen (same page, with its button) and the page when it is opened without an address
+    await page.goto(`${MAIN}/${lang}/verify-email?email=${encodeURIComponent(email)}`);
+    await expectNote();
+    await expect(page.getByRole("main").getByRole("button").first()).toBeVisible();
+    await page.goto(`${MAIN}/${lang}/verify-email`);
+    await expectNote();
+
+    // 3. signing in with an address that is not verified yet (a new link is sent): the error AND the note
+    await freshIp();
+    await page.goto(`${MAIN}/${lang}/sign-in`);
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').first().fill(PASSWORD);
+    await page.locator('form button[type="submit"]').click();
+    await expect(page.getByRole("alert").first()).toBeVisible();
+    await expectNote();
+
+    // 4. the password-reset screen: an existing and an unknown address get the SAME words (no account enumeration)
+    const answers: string[] = [];
+    for (const address of [email, `nobody-${lang}-${RUN}@example.test`]) {
+      await freshIp();
+      await page.goto(`${MAIN}/${lang}/forgot-password`);
+      await page.locator('input[type="email"]').fill(address);
+      await page.locator('form button[type="submit"]').click(); // not "the last button": Google's is one too
+      await expectNote();
+      answers.push(await page.getByRole("main").innerText());
+    }
+    expect(answers[0]).toBe(answers[1]);
+  });
+}
 
 test("the privacy policy and terms describe the normal mode: Brevo, passwords, the operator as a private individual", async ({ page }) => {
   await page.goto(`${MAIN}/en/privacy`);
   await expect(page.locator("article")).toContainText("Brevo");
   await expect(page.locator("article")).not.toContainText("Resend");
   await expect(page.locator("article")).toContainText("hashed form");
+  await expect(page.locator("article")).toContainText("local storage"); // the one setting the search help keeps on the device
   await expect(page.locator("article")).toContainText("private individual");
   await expect(page.locator("article")).toContainText("[NEEDS LEGAL REVIEW]");
   await page.goto(`${MAIN}/en/terms`);

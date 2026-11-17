@@ -9,6 +9,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/ds/Button";
 import { Field } from "@/ds/Field";
 import { StatusMessage } from "@/ds/StatusMessage";
+import { EmailNotArrived } from "./EmailNotArrived";
 import { GoogleButton } from "./GoogleButton";
 import { PasswordField } from "./PasswordField";
 import { fieldErrors, useAuthError } from "./use-auth-error";
@@ -23,10 +24,13 @@ export function SignInForm({ googleEnabled, next, resetDone }: { googleEnabled: 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Signing in with an unverified address sends a fresh verification email: that screen gets the "nothing arrived?" note too.
+  const [mailSent, setMailSent] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
+    setMailSent(false);
 
     const schema = z.object({
       email: z.string().trim().min(1, t("validation.emailRequired")).pipe(z.email(t("validation.emailInvalid"))),
@@ -40,6 +44,7 @@ export function SignInForm({ googleEnabled, next, resetDone }: { googleEnabled: 
     const { data, error } = await authClient.signIn.email(parsed.data);
     if (error || !data) {
       setPending(false);
+      setMailSent(error?.code === "EMAIL_NOT_VERIFIED");
       return setFormError(authError(error));
     }
 
@@ -54,6 +59,7 @@ export function SignInForm({ googleEnabled, next, resetDone }: { googleEnabled: 
     <form className="x-form" onSubmit={onSubmit} noValidate>
       {resetDone ? <StatusMessage tone="success">{t("resetDone")}</StatusMessage> : null}
       {formError ? <StatusMessage tone="error">{formError}</StatusMessage> : null}
+      {mailSent ? <EmailNotArrived /> : null}
       <Field name="email" type="email" label={t("email")} autoComplete="email" inputMode="email" error={errors.email} />
       <PasswordField name="password" label={t("password")} autoComplete="current-password" error={errors.password} />
       <Link className="link x-link-block" href="/forgot-password">
