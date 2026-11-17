@@ -92,6 +92,15 @@ export default defineConfig({
       workers: 1,
       use: { ...devices["Pixel 7"], colorScheme: "light", storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.215" } },
     },
+    // Email + password switches and the invite-only allowlist: this spec starts two extra servers (same build, other env).
+    {
+      name: "auth-modes",
+      testMatch: /auth-modes\.spec\.ts/,
+      dependencies: ["keyboard"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
     // Keyboard behaviour (focus order, skip link, dialogs, toggles), desktop.
     {
       name: "keyboard",
@@ -131,6 +140,12 @@ export default defineConfig({
         NEXT_PUBLIC_CONTACT_TELEGRAM: "@example_contact",
         // Discogs points at the mock with FAKE credentials, so a real key can never reach the real API from a test.
         DISCOGS_API_BASE: `http://localhost:${MOCK_PORT}`,
+        // Email goes to the mock Brevo (same mock server): the sign-up, verification and reset flows run for real against it.
+        EMAIL_PROVIDER: "brevo",
+        BREVO_API_KEY: "test-brevo-key",
+        BREVO_API_BASE: `http://localhost:${MOCK_PORT}/brevo`,
+        EMAIL_FROM: "sender@example.test",
+        EMAIL_FROM_NAME: "Vinilium",
         DISCOGS_CONSUMER_KEY: "test-key",
         DISCOGS_CONSUMER_SECRET: "test-secret",
         DISCOGS_TOKEN: "",

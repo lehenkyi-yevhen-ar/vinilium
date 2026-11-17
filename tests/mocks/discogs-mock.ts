@@ -7,6 +7,8 @@
  *   POST /__control {"throttleNext": n, "retryAfter": s}   next n API calls answer 429
  *   POST /__reset                                           clear counters and the request log
  *   GET  /__log                                             every request the app made, incl. auth headers
+ *   POST /__control {"emailFail": 429}                       Brevo mock: answer this status to the next sends (null/0 = healthy again)
+ *   GET  /__emails                                          emails the app sent through the Brevo mock (POST /brevo/v3/smtp/email)
  */
 import http from "node:http";
 import { masterPayloads, releasePayload, searchPage1, searchPage2, versionsPage } from "../fixtures/discogs";
@@ -34,6 +36,11 @@ let log: LogEntry[] = [];
 let used = 0;
 let throttleNext = 0;
 let retryAfter = 2;
+
+// ---- Brevo mock (transactional email API) ----
+const BREVO_KEY = "test-brevo-key";
+let emails: Array<Record<string, unknown>> = [];
+let emailFail = 0;
 
 // Real Discogs hosts images on i.discogs.com; here they live on the mock so the proxy can fetch them.
 const localise = (body: unknown) => JSON.parse(JSON.stringify(body).replaceAll("https://i.discogs.com/", `${ORIGIN}/images/`));
@@ -90,6 +97,8 @@ const server = http.createServer((req, res) => {
     log = [];
     used = 0;
     throttleNext = 0;
+    emails = [];
+    emailFail = 0;
     return send(res, 200, { ok: true });
   }
   if (path === "/__control") {
@@ -99,6 +108,7 @@ const server = http.createServer((req, res) => {
       const b = JSON.parse(raw || "{}");
       if (typeof b.throttleNext === "number") throttleNext = b.throttleNext;
       if (typeof b.retryAfter === "number") retryAfter = b.retryAfter;
+      if ("emailFail" in b) emailFail = Number(b.emailFail) || 0;
       send(res, 200, { throttleNext, retryAfter });
     });
     return;
@@ -107,6 +117,20 @@ const server = http.createServer((req, res) => {
   const authorization = (req.headers.authorization as string | undefined) ?? null;
   const userAgent = (req.headers["user-agent"] as string | undefined) ?? null;
   const record = (status: number) => log.push({ method: req.method ?? "GET", path, query, authorization, userAgent, status });
+
+  if (path === "/__emails") return send(res, 200, emails);
+  if (path === "/brevo/v3/smtp/email" && req.method === "POST") {
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", () => {
+      if (req.headers["api-key"] !== BREVO_KEY) return send(res, 401, { code: "unauthorized", message: "Key not found" });
+      if (emailFail) return send(res, emailFail, { code: emailFail === 429 ? "too_many_requests" : "error", message: "mock failure" });
+      const b = JSON.parse(raw || "{}");
+      emails.push({ to: b.to?.[0]?.email, sender: b.sender, replyTo: b.replyTo, subject: b.subject, html: b.htmlContent, text: b.textContent });
+      send(res, 201, { messageId: `<mock-${emails.length}@brevo.test>` });
+    });
+    return;
+  }
 
   // ---- images: authenticated, like the real thing ----
   if (path.startsWith("/images/")) {

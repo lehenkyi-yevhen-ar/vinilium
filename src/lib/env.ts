@@ -17,6 +17,15 @@ const serverSchema = z.object({
   GOOGLE_CLIENT_SECRET: optional(z.string()),
   RESEND_API_KEY: optional(z.string()),
   EMAIL_FROM: z.string().default("Vinilium <onboarding@resend.dev>"),
+  /** brevo | resend. Unset = whichever of BREVO_API_KEY / RESEND_API_KEY is set (Brevo first). See src/server/email/providers.ts. */
+  EMAIL_PROVIDER: optional(z.string()),
+  EMAIL_FROM_NAME: optional(z.string()),
+  BREVO_API_KEY: optional(z.string()),
+  /** Tests only (mock server); honoured only for a localhost address. */
+  BREVO_API_BASE: optional(z.string()),
+  /** See src/lib/auth-flags.ts. Read at request time. */
+  AUTH_EMAIL_PASSWORD_ENABLED: optional(z.string()),
+  AUTH_SIGNUP_ALLOWLIST: optional(z.string()),
   APP_CONTACT: z.string().default("https://example.com/contact"),
   // Discogs credentials, all optional here: either a personal token or an app key + secret pair.
   // Resolution (and the "pair wins over token" rule) lives in src/server/discogs/credentials.ts.

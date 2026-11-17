@@ -1,9 +1,9 @@
 import { after } from "next/server";
 import { createTranslator } from "next-intl";
-import { Resend } from "resend";
 import { site } from "@/config/site";
 import { serverEnv } from "@/lib/env";
 import { routing, type Locale } from "@/i18n/routing";
+import { brevoBase, parseSender, resolveProvider, sendViaBrevo, sendViaResend, type Address, type OutgoingEmail, type SendResult } from "./providers";
 
 type EmailKind = "verify" | "reset";
 
@@ -44,40 +44,75 @@ async function render(kind: EmailKind, locale: Locale, name: string, url: string
   return { subject, html, text };
 }
 
-export async function sendAuthEmail(opts: {
+export interface AuthEmail {
   kind: EmailKind;
   to: string;
   name: string;
   locale: unknown;
   url: string;
-}) {
-  const locale = normalizeLocale(opts.locale);
-  const { subject, html, text } = await render(opts.kind, locale, opts.name, opts.url);
-  const env = serverEnv();
+}
 
-  if (!env.RESEND_API_KEY) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("RESEND_API_KEY is required in production to send email.");
-    }
-    // Dev mode: no provider configured. Print the email instead of sending it.
-    // Never do this in production: links are credentials.
-    console.log(`\n[email:dev] to=${opts.to} subject="${subject}"\n[email:dev] ${opts.url}\n`);
-    return;
-  }
-
-  const resend = new Resend(env.RESEND_API_KEY);
-  const { error } = await resend.emails.send({ from: env.EMAIL_FROM, to: opts.to, subject, html, text });
-  if (error) throw new Error(`Resend failed: ${error.message}`);
+/** Who replies go to. Brevo replaces a free-mail From address with its own, so replies must be steered to a real inbox. */
+export function replyToAddress(): Address | undefined {
+  const email = site.contact.email;
+  return email ? { email, name: `${site.name} contact` } : undefined;
 }
 
 /**
- * Fire-and-forget without letting serverless freeze the work: `after()` keeps the function
- * alive until the email is handed to the provider, while the HTTP response (and its timing)
- * stays the same whether or not the account exists.
+ * Sends (or, in development with no provider, prints) one email and reports what happened. Never throws: the caller decides.
+ * The result carries a provider, a reason and an HTTP status at most: never an address, a key or a link.
  */
-export function queueAuthEmail(opts: Parameters<typeof sendAuthEmail>[0]) {
-  const run = () =>
-    sendAuthEmail(opts).catch((e) => console.error(`[email] ${opts.kind} email failed`, e));
+export async function deliverAuthEmail(opts: AuthEmail, env: Record<string, string | undefined> = process.env): Promise<SendResult | { ok: true; provider: "console" }> {
+  const locale = normalizeLocale(opts.locale);
+  const { subject, html, text } = await render(opts.kind, locale, opts.name, opts.url);
+  const provider = resolveProvider(env);
+
+  if (provider.kind === "none") {
+    if (process.env.NODE_ENV === "production") return { ok: false, provider: "none", reason: "misconfigured", code: "no_provider" };
+    // Development: no provider configured. Print the email instead of sending it. Never in production: links are credentials.
+    console.log(`
+[email:dev] to=${opts.to} subject="${subject}"
+[email:dev] ${opts.url}
+`);
+    return { ok: true, provider: "console" };
+  }
+  if (provider.kind === "misconfigured") {
+    return { ok: false, provider: provider.provider === "unknown" ? "none" : provider.provider, reason: "misconfigured", code: "provider_setting" };
+  }
+
+  const e = serverEnv();
+  const from = parseSender(env.EMAIL_FROM ?? (provider.kind === "resend" ? e.EMAIL_FROM : undefined), env.EMAIL_FROM_NAME?.trim() || site.name);
+  // Brevo needs a sender it has validated: refuse to guess one (the built-in default belongs to Resend's test domain).
+  if (!from) return { ok: false, provider: provider.kind, reason: "misconfigured", code: "sender_setting" };
+
+  const msg: OutgoingEmail = { from, to: { email: opts.to, name: opts.name }, replyTo: replyToAddress(), subject, html, text };
+  return provider.kind === "brevo" ? sendViaBrevo(msg, { apiKey: provider.apiKey, base: brevoBase(env) }) : sendViaResend(msg, { apiKey: provider.apiKey });
+}
+
+/** For callers (and older tests) that want a rejection on failure. The message names the reason only. */
+export async function sendAuthEmail(opts: AuthEmail): Promise<void> {
+  const r = await deliverAuthEmail(opts);
+  if (!r.ok) throw new Error(`email not sent: ${r.provider} ${r.reason}${"status" in r && r.status ? ` (${r.status})` : ""}`);
+}
+
+const describe = (r: Exclude<Awaited<ReturnType<typeof deliverAuthEmail>>, { ok: true }>) =>
+  `provider=${r.provider} reason=${r.reason}${"status" in r && r.status ? ` status=${r.status}` : ""}${"code" in r && r.code ? ` code=${r.code}` : ""}`;
+
+/**
+ * Fire-and-forget without letting serverless freeze the work: `after()` keeps the function alive until the email is handed to the
+ * provider, while the HTTP response (and its timing) stays the same whether or not the account exists. A failure is LOGGED (see
+ * docs/operations.md) and never reaches the person asking: telling them "we could not email you" would reveal that the address
+ * has an account. The pages say what to do when nothing arrives.
+ */
+export function queueAuthEmail(opts: AuthEmail) {
+  const run = async () => {
+    try {
+      const r = await deliverAuthEmail(opts);
+      if (!r.ok) console.error(`[email] ${opts.kind} email FAILED ${describe(r)}`);
+    } catch {
+      console.error(`[email] ${opts.kind} email FAILED reason=exception`); // not the error object: it could carry the address
+    }
+  };
   try {
     after(run);
   } catch {

@@ -5,10 +5,12 @@ vi.mock("next/server", () => ({ after: (fn: () => void) => fn() }));
 
 beforeEach(() => {
   vi.resetModules();
-  process.env.DATABASE_URL = "postgresql://u:p@localhost/db";
+  process.env.DATABASE_URL = "postgresql://localhost/db";
   process.env.BETTER_AUTH_SECRET = "0123456789abcdef0123456789abcdef";
   process.env.BETTER_AUTH_URL = "http://localhost:3000";
   delete process.env.RESEND_API_KEY;
+  delete process.env.BREVO_API_KEY;
+  delete process.env.EMAIL_PROVIDER;
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -23,7 +25,7 @@ describe("normalizeLocale", () => {
   });
 });
 
-describe("sendAuthEmail (dev mode, no Resend key)", () => {
+describe("sendAuthEmail (dev mode, no provider key)", () => {
   it("prints the link instead of sending, in the user's language", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const { sendAuthEmail } = await import("@/server/email");
@@ -38,7 +40,7 @@ describe("sendAuthEmail (dev mode, no Resend key)", () => {
     const { sendAuthEmail } = await import("@/server/email");
     await expect(
       sendAuthEmail({ kind: "reset", to: "a@b.co", name: "A", locale: "en", url: "http://x/y" }),
-    ).rejects.toThrow(/RESEND_API_KEY/);
+    ).rejects.toThrow("email not sent: none misconfigured");
     vi.unstubAllEnvs();
   });
 });
