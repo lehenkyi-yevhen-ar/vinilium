@@ -106,7 +106,7 @@
     },
     "emailPasswordOffText": "Signing in with email and password is turned off. Please continue with Google.",
     "emailPasswordOffNoGoogle": "Signing in is not available right now. Please try again later or contact us.",
-    "emailNotArrived": "Nothing after a few minutes? Check your spam folder: the message may come from a sender address other than ours. You can try again, or contact us.",
+    "emailNotArrived": "Nothing arrived? Check your spam or junk folder: the message comes from an address your mail provider may not trust yet, so it can end up there. If you find it, mark it as “not spam”. You can also try again in a few minutes. Still nothing?",
     "emailNotArrivedLink": "Contact us"
   },
   "account": {
@@ -263,7 +263,37 @@
     "otherPressingsTitle": "Other pressings without a master",
     "otherPressingsCount": "{count, plural, one {# release} other {# releases}}",
     "otherPressingsHint": "Vinyl releases Discogs has not grouped under an album. Often unofficial.",
-    "withoutMasterCount": "{count, plural, one {# without a master} other {# without a master}}"
+    "withoutMasterCount": "{count, plural, one {# without a master} other {# without a master}}",
+    "help": {
+      "title": "How to search",
+      "intro": "You can start in three ways. Choose one with the Track, Artist or Album buttons in the form.",
+      "way1": "By track name: you remember a song but not the album.",
+      "way2": "By artist: you know who made it and want to browse their albums.",
+      "way3": "By album title: you know which album it is.",
+      "flowTitle": "The steps",
+      "flow1": "Type a track and press Search.",
+      "flow2": "Pick the artist.",
+      "flow3": "Pick the album.",
+      "flow4": "Pick the exact pressing: country, year and label.",
+      "flow5": "Open the release card and add it to your Wishlist or Collection.",
+      "tipsTitle": "Tips",
+      "tip1": "The optional artist field narrows a track or album search. It helps when a title is common.",
+      "tip2": "Found nothing? Try the album or artist mode: the track may be listed under a different name.",
+      "tip3": "Only vinyl is shown.",
+      "tip4": "Coloured, deluxe and special editions are usually under the album’s pressings (“See pressings”).",
+      "tip5": "Releases Discogs has not grouped under an album are in the collapsed section “Other pressings without a master”.",
+      "tip6": "Results can be incomplete. Use “Load more” and “Show more albums” to see further.",
+      "exampleLine": "Example: track “One More Time” by Daft Punk",
+      "exampleButton": "Fill in this example",
+      "exampleDone": "Example filled in. Press Search."
+    },
+    "modeHint": {
+      "track": "A song title. Add the artist below if the title is common.",
+      "artist": "An artist or band name. You will then pick one of their albums.",
+      "album": "An album title. Add the artist below to narrow it down."
+    },
+    "emptyTips": "Need ideas? See the search tips.",
+    "emptyTipsButton": "Show search tips"
   },
   "pressings": {
     "title": "Pick the pressing",
@@ -463,6 +493,7 @@
       "s4P1": "Record details (titles, artists, covers, track lists) come from Discogs. Our server asks Discogs for them; your browser does not contact Discogs for them. A short-lived cache (at most 6 hours) holds that data for all users together and contains nothing about you. Links to discogs.com lead to Discogs’ own site, which has its own policies. Vinilium is not affiliated with Discogs.",
       "s5Title": "Cookies",
       "s5P1": "We use two cookies, both strictly necessary: the sign-in session cookie, and a cookie that remembers your language. There are no analytics or advertising cookies, so there is no cookie banner. If that ever changes, this page and a notice will change first.",
+      "s5P3": "Your browser also keeps one small setting in its local storage, not a cookie: whether you closed the “How to search” help on the search page. It stays on your device and is never sent to us.",
       "s5P2": "[NEEDS LEGAL REVIEW] Whether this cookie approach satisfies the rules that apply in the operator’s country and to the users’ countries.",
       "s6Title": "Who else is involved",
       "s6Intro": "Services we use to run Vinilium:",

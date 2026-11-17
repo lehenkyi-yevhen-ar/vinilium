@@ -223,3 +223,16 @@ same email depends on Better Auth's account linking, which has **not been tested
 Replies therefore reach your real inbox. If `NEXT_PUBLIC_CONTACT_EMAIL` is unset there is no Reply-To (it is never invented).
 
 **By-hand deliverability test:** [email-deliverability-test.md](email-deliverability-test.md).
+
+
+## 16. Finder URLs, the search help and the "nothing arrived?" note
+
+* **The finder keeps its state in the address**, so Back links, the browser's Back button, a reload and a copied link return to the same
+  step: `mode`, `q`, `by` (search), `g` (artist), `n` (albums shown), `sp` (result pages loaded), `o` (other pressings open), `a` and `t`
+  (artist and album title), `country`, `released`, `label` (filters), `vp` (pressing pages loaded). They are parsed in
+  `src/lib/finder-state.ts`: invalid or tampered values fall back to defaults and the counters are capped (`n` 10, `sp` 5, `vp` 10).
+  Going back re-asks for the pages that were loaded; each is a search request, and the search limiter (30 a minute per IP) counts them.
+* **"How to search" keeps one setting in the browser's local storage** (`vinilium:search-help` = `closed`; not a cookie, never sent to
+  us). The privacy page says so (section "Cookies"). If other things are ever stored on the device, change that sentence too.
+* **The "nothing arrived?" note** (`auth.emailNotArrived`) says the message may be in spam or junk because the sender address is not
+  authenticated. **When you buy a domain and authenticate it in Brevo, revisit that wording** (and `docs/email-deliverability-test.md`).

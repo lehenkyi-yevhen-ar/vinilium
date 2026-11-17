@@ -14,6 +14,7 @@ import { StatusMessage } from "@/ds/StatusMessage";
 import { DiscogsAttribution } from "../DiscogsAttribution";
 import { Cover, Problem, ResultSkeleton, Stepper } from "./parts";
 import { useDiscogs, usePaged } from "./use-discogs";
+import { openSearchHelp, SearchHelp } from "./SearchHelp";
 import { replaceParams } from "./url-state";
 
 /** Albums shown (and master records resolved) at a time. Each unresolved master costs one Discogs request. */
@@ -27,7 +28,10 @@ const mergeSearch = (prev: SearchPage, next: SearchPage): SearchPage => ({ ...ne
 const rememberSearchPages = (page: number) => replaceParams({ sp: page > 1 ? String(page) : null });
 const discogsSearchUrl = (q: string) => `https://www.discogs.com/search/?q=${encodeURIComponent(q)}&type=all`;
 
-/** Step 1: the query form. Remounted when the URL's query changes, so it never shows stale text. */
+/** What "Fill in this example" puts in the form (names that are on the placeholders already; no claim about any record). */
+const EXAMPLE = { mode: "track" as Mode, q: "One More Time", by: "Daft Punk" };
+
+/** Step 1: the query form. Remounted when the URL's query changes or an example is filled in, so it never shows stale text. */
 function SearchForm({ mode: initialMode, q, by: initialBy }: { mode: Mode; q: string; by: string }) {
   const t = useTranslations("finder");
   const router = useRouter();
@@ -70,9 +74,12 @@ function SearchForm({ mode: initialMode, q, by: initialBy }: { mode: Mode; q: st
           enterKeyHint="search"
           placeholder={t(`placeholder.${mode}`)}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${inputId}-err` : undefined}
+          aria-describedby={error ? `${inputId}-help ${inputId}-err` : `${inputId}-help`}
           onChange={(e) => setValue(e.target.value)}
         />
+        <div className="field__help" id={`${inputId}-help`}>
+          {t(`modeHint.${mode}`)}
+        </div>
         {error ? (
           <div className="field__help" id={`${inputId}-err`} role="alert">
             {error}
@@ -311,6 +318,12 @@ export function SearchFlow() {
   const albumContext = finderQuery({ ...fs, g: selected ? groupParam(selected) : fs.g, searchPages: page });
   const empty = Boolean(q && data && groups.length === 0);
   const restoring = paged.restoring;
+  // "Fill in this example" (in the help): the form is remounted with the example's values. It only applies to the address it was
+  // pressed on: a real search (a new address) shows that search again. The counter makes each press a fresh form.
+  const addressKey = `${mode}|${q}|${by}`;
+  const [example, setExample] = useState<{ n: number; addressKey: string } | null>(null);
+  const exampleShown = example !== null && example.addressKey === addressKey;
+  const seed = exampleShown ? EXAMPLE : { mode, q, by };
 
   return (
     <div className="container x-page x-finder">
@@ -319,7 +332,9 @@ export function SearchFlow() {
       <p className="x-note">{t("vinylOnly")}</p>
       <Stepper current={current} label={t("stepsLabel")} steps={stepLabels} />
 
-      <SearchForm key={`${mode}|${q}|${by}`} mode={mode} q={q} by={by} />
+      <SearchHelp onExample={() => setExample((e) => ({ n: (e?.n ?? 0) + 1, addressKey }))} />
+
+      <SearchForm key={`${addressKey}|${exampleShown ? example.n : 0}`} mode={seed.mode} q={seed.q} by={seed.by} />
 
       {!q ? <p className="x-note">{t("hint")}</p> : null}
 
@@ -331,6 +346,12 @@ export function SearchFlow() {
           <StatusMessage tone="info" title={t("emptyTitle")}>
             <span id="empty-h">{t("emptyText")}</span>
           </StatusMessage>
+          <p className="x-note">
+            {t("emptyTips")}{" "}
+            <Button variant="ghost" size="sm" onClick={openSearchHelp}>
+              {t("emptyTipsButton")}
+            </Button>
+          </p>
           {/* Ways out of a dead end. Shown ONLY when the main search found nothing. The optional artist travels with the
               track <-> album switch (both use it); the artist mode has no such field. */}
           <nav className="x-fallback" aria-label={t("fallbackTitle")}>

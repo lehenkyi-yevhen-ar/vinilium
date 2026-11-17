@@ -106,7 +106,7 @@
     },
     "emailPasswordOffText": "Innlogging med e-post og passord er slått av. Fortsett med Google.",
     "emailPasswordOffNoGoogle": "Innlogging er ikke tilgjengelig akkurat nå. Prøv igjen senere eller kontakt oss.",
-    "emailNotArrived": "Ingenting etter noen minutter? Sjekk søppelpostmappen: meldingen kan komme fra en annen avsenderadresse enn vår. Du kan prøve igjen eller kontakte oss.",
+    "emailNotArrived": "Dukket det ikke opp noe? Sjekk søppelpost- eller spam-mappen: meldingen kommer fra en adresse e-postleverandøren din kanskje ikke stoler på ennå, så den kan havne der. Hvis du finner den, merk den som «ikke søppelpost». Du kan også prøve igjen om noen minutter. Fortsatt ingenting?",
     "emailNotArrivedLink": "Kontakt oss"
   },
   "account": {
@@ -263,7 +263,37 @@
     "otherPressingsTitle": "Andre utgivelser uten master",
     "otherPressingsCount": "{count, plural, one {# utgivelse} other {# utgivelser}}",
     "otherPressingsHint": "Vinylutgivelser Discogs ikke har samlet under et album. Ofte uoffisielle.",
-    "withoutMasterCount": "{count, plural, one {# uten master} other {# uten master}}"
+    "withoutMasterCount": "{count, plural, one {# uten master} other {# uten master}}",
+    "help": {
+      "title": "Slik søker du",
+      "intro": "Du kan begynne på tre måter. Velg med knappene Spor, Artist eller Album i skjemaet.",
+      "way1": "Etter sportittel: du husker en sang, men ikke albumet.",
+      "way2": "Etter artist: du vet hvem som lagde den og vil bla i albumene deres.",
+      "way3": "Etter albumtittel: du vet hvilket album det er.",
+      "flowTitle": "Trinnene",
+      "flow1": "Skriv inn et spor og trykk Søk.",
+      "flow2": "Velg artist.",
+      "flow3": "Velg album.",
+      "flow4": "Velg den nøyaktige utgivelsen: land, år og plateselskap.",
+      "flow5": "Åpne utgivelseskortet og legg den til i ønskelisten eller samlingen.",
+      "tipsTitle": "Tips",
+      "tip1": "Det valgfrie artistfeltet snevrer inn søk etter spor eller album. Det hjelper når tittelen er vanlig.",
+      "tip2": "Fant du ingenting? Prøv album- eller artistmodus: sporet kan stå under et annet navn.",
+      "tip3": "Bare vinyl vises.",
+      "tip4": "Fargede utgaver, deluxe- og spesialutgaver ligger vanligvis under albumets utgivelser («Se utgivelser»).",
+      "tip5": "Utgivelser som Discogs ikke har gruppert under et album, finner du i den sammenfoldede delen «Andre utgivelser uten master».",
+      "tip6": "Resultatene kan være ufullstendige. Bruk «Vis flere» og «Vis flere album» for å se videre.",
+      "exampleLine": "Eksempel: spor «One More Time» av Daft Punk",
+      "exampleButton": "Fyll inn dette eksemplet",
+      "exampleDone": "Eksemplet er fylt inn. Trykk Søk."
+    },
+    "modeHint": {
+      "track": "En sangtittel. Legg til artisten under hvis tittelen er vanlig.",
+      "artist": "Navnet på en artist eller et band. Deretter velger du et av albumene deres.",
+      "album": "En albumtittel. Legg til artisten under for å snevre inn søket."
+    },
+    "emptyTips": "Trenger du ideer? Se søketipsene.",
+    "emptyTipsButton": "Vis søketips"
   },
   "pressings": {
     "title": "Velg utgivelse",
@@ -463,6 +493,7 @@
       "s4P1": "Platedetaljer (titler, artister, omslag, sporlister) kommer fra Discogs. Serveren vår henter dem; nettleseren din kontakter ikke Discogs for dette. En kortvarig hurtigbuffer (høyst 6 timer) holder dataene for alle brukere samlet og inneholder ingenting om deg. Lenker til discogs.com fører til Discogs’ eget nettsted, som har egne regler. Vinilium er ikke tilknyttet Discogs.",
       "s5Title": "Informasjonskapsler",
       "s5P1": "Vi bruker to informasjonskapsler, begge strengt nødvendige: innloggingsøkten og en som husker språket ditt. Det finnes ingen analyse- eller reklamekapsler, så det er ikke noe banner. Hvis det endres, endres denne siden og et varsel først.",
+      "s5P3": "Nettleseren din lagrer også én liten innstilling i lokal lagring, ikke i en informasjonskapsel: om du har lukket hjelpen «Slik søker du» på søkesiden. Den blir værende på enheten din og sendes aldri til oss.",
       "s5P2": "[NEEDS LEGAL REVIEW] Om denne tilnærmingen til informasjonskapsler oppfyller reglene som gjelder i operatørens land og i brukernes land.",
       "s6Title": "Hvem andre som er involvert",
       "s6Intro": "Tjenester vi bruker for å drive Vinilium:",

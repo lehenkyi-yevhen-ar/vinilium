@@ -134,6 +134,41 @@ test.describe("signed in", () => {
     await scan(page, "search albums step");
   });
 
+  test("search start: How to search open (first visit)", async ({ page }) => {
+    await page.goto("/en/search");
+    await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
+    await settle(page);
+    await scan(page, "search start, help open");
+  });
+
+  test("search start: How to search closed, and the example filled in", async ({ page }) => {
+    await page.goto("/en/search");
+    await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
+    await page.getByRole("button", { name: "Fill in this example" }).click();
+    await expect(page.getByText("Example filled in. Press Search.")).toBeVisible();
+    await scan(page, "search start, example filled in");
+    await page.locator("details.x-help summary").click();
+    await expect(page.locator("details.x-help")).not.toHaveAttribute("open", "");
+    await scan(page, "search start, help closed");
+  });
+
+  test("search: empty result with the tips link", async ({ page }) => {
+    await page.goto("/en/search?mode=track&q=cdonly-a11y");
+    await expect(page.getByText("No vinyl matches")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show search tips" })).toBeVisible();
+    await settle(page);
+    await scan(page, "search empty result");
+  });
+
+  for (const [locale, summary] of [["uk", "Як шукати"], ["nb", "Slik søker du"]] as const) {
+    test(`search start with the help open (${locale})`, async ({ page }) => {
+      await page.goto(`/${locale}/search`);
+      await expect(page.locator("details.x-help summary")).toHaveText(summary);
+      await settle(page);
+      await scan(page, `search start (${locale})`);
+    });
+  }
+
   test("pressings of an album", async ({ page }) => {
     await page.goto("/en/master/500?t=Glass%20Harbor&a=Cobalt%20Parade");
     await expect(page.getByRole("heading", { level: 1, name: /Pressings of/ })).toBeVisible();

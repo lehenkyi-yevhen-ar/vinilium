@@ -29,7 +29,7 @@ export default async function PrivacyPage({ params }: PageProps<"/[locale]/priva
     { id: "s2", intro: true, items: withPasswords ? ["Account", "Sessions", "Lists", "Counters", "Emails"] : ["AccountGoogleOnly", "Sessions", "Lists", "Counters"] },
     { id: "s3", paragraphs: ["P1"] },
     { id: "s4", paragraphs: ["P1"] },
-    { id: "s5", paragraphs: ["P1", "P2"] },
+    { id: "s5", paragraphs: ["P1", "P3", "P2"] },
     { id: "s6", intro: true, items: withPasswords ? ["Hosting", "Database", "Email", "Google", "Discogs"] : ["Hosting", "Database", "Google", "Discogs"], paragraphs: ["P1"] },
     { id: "s7", paragraphs: ["P1", "P2"] },
     { id: "s8", items: ["Delete", "Export", "Correct"], paragraphs: ["P1"] },
