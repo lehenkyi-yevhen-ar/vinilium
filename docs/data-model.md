@@ -71,7 +71,7 @@ page. Consequences you should know about:
 1. ~~One list at a time?~~ **Decided: yes.** `UNIQUE (user_id, discogs_release_id)`; "Move" is one `UPDATE`.
 2. **Confirmed 2026-11-16 for the MVP:** list search/sort only on `added_at`, notes and condition. Lists are paginated (12-24 per
    page), fetch only the visible page, load progressively with skeletons, and handle a throttled state per item without
-   breaking the page. `user_items` already exists (milestone 3 uses it for the Add buttons); the list screens are milestone 4.
+   breaking the page. `user_items` already exists (milestone 3 uses it for the Add buttons); the list screens were built in milestone 4 (`/lists`): sort by added date / notes / (Collection only) condition, search in notes and by grade, one batched `/api/discogs/releases?ids=` per visible page, conditions kept (hidden, not erased) when an item moves to the Wishlist.
 
 ## Why there is no `releases` table
 

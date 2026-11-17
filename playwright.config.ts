@@ -49,6 +49,23 @@ export default defineConfig({
       dependencies: ["finder-desktop"],
       use: { ...devices["Pixel 7"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.202" } },
     },
+    // The Wishlist / Collection screens (milestone 4). After the finder, one after the other: the same mock and Discogs bucket.
+    {
+      name: "library-desktop",
+      testMatch: /library\.spec\.ts/,
+      dependencies: ["finder-mobile"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.211" } },
+    },
+    {
+      name: "library-mobile",
+      testMatch: /library\.spec\.ts/,
+      dependencies: ["library-desktop"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Pixel 7"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.212" } },
+    },
   ],
   webServer: [
     {

@@ -71,6 +71,10 @@ Never put `nofollow`, `sponsored` or `ugc` on it. Do not show a block whose `fet
   image host sends no `X-Discogs-Ratelimit*` headers, and a page of thumbnails drawing from the API bucket would have starved
   API calls. A 429 from the image host blocks images only.
 * Milestone 3 screens render a "Data provided by Discogs." link next to every block of Discogs data (checklist above).
+* Milestone 4 (lists): every list card that shows Discogs data renders its own attribution link to that release's discogs.com
+  page; the "no longer on Discogs" placeholder shows no Discogs data, so it carries none. The page's Discogs data is re-fetched
+  at 5.5 h (`REFRESH_AFTER_MS`). The export contains the user's own fields only (ids, list, notes, condition, dates): no Discogs
+  content is ever handed out as a file. A release Discogs reports as 404 is remembered for one hour (an absence, not Content).
 
 ## Owner decisions (2026-11-16)
 

@@ -155,7 +155,28 @@ Signed-in users find a pressing in four steps, all in `src/components/finder/`:
 Visitors who are not signed in see a "Sign in to search" state on these URLs (the landing page and Contact page stay public).
 Every block of Discogs data carries its own "Data provided by Discogs." link. Throttled, failed or unconfigured calls show a
 message (with a countdown and automatic retry when throttled) instead of breaking the page, and thumbnails that fail show a
-placeholder. Lists themselves (browse, search, notes, condition) are milestone 4.
+placeholder.
+
+## Wishlist and Collection (milestone 4)
+
+`/<locale>/lists` (signed-in users; header link and phone tab bar), code in `src/components/library/`, rules shared by server and
+screens in `src/lib/lists/`, queries in `src/server/lists/items.ts`.
+
+* **What is stored**: `user_items` holds only the Discogs release id plus the user's own fields (list, notes, media/sleeve
+  condition, added date). Nothing from Discogs, so nothing here is subject to the 6-hour rule.
+* **Paging, sort and search work on stored fields only**: 12 or 24 per page; sort by added date, notes, or (Collection only)
+  condition; search in notes and by grade (`vg+`). Titles and artists are NOT searchable, because they are Discogs content.
+* **Discogs data for the visible page only**: one `GET /api/discogs/releases?ids=` (at most 24) per page view, served through the
+  TTL cache. Per record the screen shows a skeleton while loading, "Waiting for Discogs" with an automatic retry (twice, then a
+  button) when throttled, an error with a retry button when a single lookup failed, or a "No longer on Discogs" placeholder
+  when Discogs says 404 (remembered for an hour). The user's own notes, condition, Move and Remove keep working in every state.
+  The client refetches the page's Discogs data at 5.5 hours, inside the 6-hour display limit.
+* **Optimistic UI with rollback**: editing notes, setting a grade, moving and removing update the screen at once; if the server
+  refuses, the change is undone and the card says so. Remove always goes through a confirm modal.
+* **Export**: `GET /api/lists/export?format=csv|json`: release ids, list, notes, condition and dates, nothing from Discogs.
+  CSV cells that start with `= + - @` are defused against spreadsheet formula injection.
+* **Cost of a list page** (measured, see "Tests"): cold = one Discogs call per uncached record on the visible page (12 or 24);
+  warm = none. The next page only asks for its own records.
 
 ## Discogs integration (milestone 2)
 
@@ -170,7 +191,10 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
 | `GET /api/discogs/masters/:id/versions?page=&country=&released=&label=` | VINYL pressings of a master (max 10 pages of 50), with filter facets. |
 | `GET /api/discogs/releases/:id` | One release. |
 | `GET /api/discogs/image?u=` | Image proxy (exact Discogs image hosts only, streamed, never stored). |
-| `GET\|PUT\|DELETE /api/lists/items/:releaseId` | The signed-in user's wishlist / collection entry for one pressing (`PUT {"list":"wishlist"\|"collection"}` adds or moves). |
+| `GET /api/discogs/releases?ids=1,2,3` | Card data (title, artist, year, country, label, format, thumbnail) for up to 24 releases, cached one by one under the same key as `/releases/:id`. Answers `gone` (404 on Discogs), `missing` (not resolvable right now) and `retryAfter`. |
+| `GET\|PUT\|PATCH\|DELETE /api/lists/items/:releaseId` | The signed-in user's wishlist / collection entry for one pressing (`PUT {"list":"wishlist"\|"collection"}` adds or moves; `PATCH {notes?, conditionMedia?, conditionSleeve?}` edits the user's own fields, condition on the Collection only). |
+| `GET /api/lists/items?list=&q=&sort=&dir=&page=&pageSize=` | One page of the signed-in user's stored items (no Discogs content). |
+| `GET /api/lists/export?format=csv\|json` | The user's own list data as a download (10 per minute). |
 | `GET /api/cron/purge` | Deletes expired cache rows. Needs `Authorization: Bearer $CRON_SECRET`. |
 
 * **Credentials**: `DISCOGS_CONSUMER_KEY` + `DISCOGS_CONSUMER_SECRET` win over `DISCOGS_TOKEN` when both are set.

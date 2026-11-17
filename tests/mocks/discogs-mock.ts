@@ -176,6 +176,10 @@ const server = http.createServer((req, res) => {
     if (m[1] === "404404") {
       status = 404;
       body = { message: "Release not found." };
+    } else if (Number(m[1]) >= 100_000_000) {
+      // The list screens' records: every id is its own record, so a test can tell the cards apart.
+      const id = Number(m[1]);
+      body = localise({ ...releasePayload, id, master_id: 0, title: `Library Record ${id}`, uri: `https://www.discogs.com/release/${id}-Library-Record` });
     } else {
       body = localise({ ...releasePayload, id: Number(m[1]) });
     }
