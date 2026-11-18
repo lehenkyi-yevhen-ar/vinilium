@@ -26,7 +26,7 @@ export default async function PrivacyPage({ params }: PageProps<"/[locale]/priva
   const withPasswords = emailPasswordEnabled();
   const sections = buildSections(tp, [
     { id: "s1", paragraphs: ["P1", "P2"] },
-    { id: "s2", intro: true, items: withPasswords ? ["Account", "Sessions", "Lists", "Counters", "Emails"] : ["AccountGoogleOnly", "Sessions", "Lists", "Counters"] },
+    { id: "s2", intro: true, items: withPasswords ? ["Account", "Sessions", "Lists", "Counters", "Logs", "Emails"] : ["AccountGoogleOnly", "Sessions", "Lists", "Counters", "Logs"] },
     { id: "s3", paragraphs: ["P1"] },
     { id: "s4", paragraphs: ["P1"] },
     { id: "s5", paragraphs: ["P1", "P3", "P2"] },

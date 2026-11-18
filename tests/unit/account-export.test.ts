@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { getTableConfig } from "drizzle-orm/pg-core";
+import * as schema from "@/server/db/schema";
 import { accountExportJson, buildAccountExport } from "@/lib/account/export";
 import { EXPORT_COLUMNS } from "@/lib/lists/export";
 import type { StoredItemJson } from "@/lib/lists/rules";
@@ -19,7 +21,7 @@ describe("account data export", () => {
     const out = buildAccountExport(profile, [item], new Date("2026-05-06T00:00:00Z"));
     expect(out).toEqual({
       exportedAt: "2026-05-06T00:00:00.000Z",
-      account: { name: "Test Person", email: "person@example.test", emailVerified: true, language: "nb", createdAt: "2026-03-04T05:06:07.000Z" },
+      account: { name: "Test Person", email: "person@example.test", emailVerified: true, language: "nb", pictureUrl: null, createdAt: "2026-03-04T05:06:07.000Z" },
       lists: {
         columns: [...EXPORT_COLUMNS],
         items: [{ discogs_release_id: 951004, list: "collection", notes: "bought in Oslo", condition_media: "NM", condition_sleeve: "VG+", added_at: item.addedAt, updated_at: item.updatedAt }],
@@ -30,8 +32,21 @@ describe("account data export", () => {
   it("is a whitelist: a user row with secrets cannot leak through it", () => {
     const row = { ...profile, id: "u1", password: "scrypt$hash", ipAddress: "203.0.113.9", accessToken: "ya29.x", image: "https://example.test/p.png" };
     const text = accountExportJson(row, [item]);
-    expect(text).not.toMatch(/scrypt|203\.0\.113|ya29|u1|p\.png|password|token|session/i);
+    expect(text).not.toMatch(/scrypt|203\.0\.113|ya29|u1|password|token|session/i);
     expect(JSON.parse(text).account).toHaveProperty("email");
+    expect(JSON.parse(text).account.pictureUrl).toBe("https://example.test/p.png"); // the picture address is the person's own data too
+  });
+
+  it("contains every user-owned column of the schema, so the export cannot silently fall behind the data inventory", () => {
+    const profileCols = ["name", "email", "email_verified", "locale", "created_at", "image"];
+    const internal = ["id", "updated_at"]; // a key and housekeeping, not data about the person
+    const userColumns = getTableConfig(schema.user).columns.map((c) => c.name);
+    expect(userColumns.filter((c) => !profileCols.includes(c) && !internal.includes(c))).toEqual([]);
+    const exported = buildAccountExport({ ...profile, image: "x" }, []).account;
+    expect(Object.keys(exported).sort()).toEqual(["createdAt", "email", "emailVerified", "language", "name", "pictureUrl"]);
+
+    const itemCols = getTableConfig(schema.userItems).columns.map((c) => c.name).filter((c) => !["id", "user_id"].includes(c));
+    expect([...EXPORT_COLUMNS].sort()).toEqual([...itemCols].sort());
   });
 
   it("defaults the language, handles an empty list, and ends with a newline", () => {

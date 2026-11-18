@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { serverEnv } from "@/lib/env";
 import { getDb } from "@/server/db";
-import { purgeExpired } from "@/server/discogs/cache";
+import { purgeRetention } from "@/server/retention";
 
 function authorized(request: Request): boolean {
   const secret = serverEnv().CRON_SECRET;
@@ -13,9 +13,13 @@ function authorized(request: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Deletes expired Discogs cache rows and stale limiter counters. Vercel Cron calls this with the CRON_SECRET. */
+/**
+ * Applies the retention rules (src/server/retention.ts): expired Discogs cache rows, expired verification rows and sessions, and old
+ * limiter counters. `?dryRun=1` only reports what it would delete. Vercel Cron calls this with the CRON_SECRET.
+ */
 export async function GET(request: Request) {
   if (!authorized(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const result = await purgeExpired(getDb());
+  const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";
+  const result = await purgeRetention(getDb(), { dryRun });
   return Response.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
 }

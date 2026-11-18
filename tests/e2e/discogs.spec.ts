@@ -274,12 +274,13 @@ test("refuses browser requests that come from another site (no hotlinking / thir
 test("the purge endpoint requires the cron secret", async ({ request }) => {
   expect((await request.get("/api/cron/purge")).status()).toBe(401);
   expect((await request.get("/api/cron/purge", { headers: { authorization: "Bearer wrong" } })).status()).toBe(401);
-  const ok = await request.get("/api/cron/purge", { headers: { authorization: "Bearer e2e-cron-secret-0123456789" } });
+  // ALWAYS ?dryRun=1 here: the real purge deletes expired sessions, verification rows and old counters, and the dev branch holds copies
+  // of real accounts that an e2e run must never modify. The deleting behaviour is covered on an embedded Postgres (tests/unit/retention.test.ts).
+  const ok = await request.get("/api/cron/purge?dryRun=1", { headers: { authorization: "Bearer e2e-cron-secret-0123456789" } });
   expect(ok.status()).toBe(200);
   const body = await ok.json();
-  expect(body).toMatchObject({ ok: true });
-  expect(typeof body.cacheRows).toBe("number");
-  expect(typeof body.rateLimitRows).toBe("number");
+  expect(body).toMatchObject({ ok: true, dryRun: true });
+  for (const k of ["cacheRows", "verificationRows", "sessionRows", "rateLimitRows"]) expect(typeof body[k], k).toBe("number");
 });
 
 test.describe("signed out", () => {
