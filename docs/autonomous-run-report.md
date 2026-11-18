@@ -37,7 +37,7 @@ Details per block: `docs/autonomous-progress.md`. Bugs: `docs/autonomous-changes
 | 06bdfe8 | Error pages, web app manifest and icons, robots.txt, sitemap and meta tags for public pages |
 | a362bd4 | Accessibility fixes found by new reflow, spacing, forced-colour, touch-target and focus checks; attribution crawler; Firefox and WebKit smoke projects |
 | cc7e22e | Chaos tests for Discogs failures, performance budgets, plural and locale checks; docs/performance.md |
-| (last) | Docs: run report, progress, decisions, inventory links, threat-model route table |
+| 51f7f64 | Docs: run report, progress, decisions, inventory links, threat-model route table |
 
 Every commit passed typecheck, lint and the whole unit suite on exactly its staged tree (the first seven were gated with a stash; from the eighth on, the staged tree was checked
 out into a temporary folder and tested there). A secret scan of the added lines ran before each (counts only: zero findings every time).
