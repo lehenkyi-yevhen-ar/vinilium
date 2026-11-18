@@ -26,7 +26,15 @@ export function applyLocalNeonProxy(config: NeonConfigLike, env: Record<string, 
   } catch {
     return false;
   }
-  if (host === "neon.tech" || host.endsWith(".neon.tech")) return false; // a real Neon database: never rerouted
+  // A real Neon database is never rerouted. A trailing dot ("x.neon.tech.") names the same host, so it is removed before the comparison.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(host); // an opaque host keeps "%2e" as typed; some clients decode it
+  } catch {
+    return false; // not decodable: not something to guess about
+  }
+  const bare = decoded.replace(/\.+$/, "");
+  if (bare === "neon.tech" || bare.endsWith(".neon.tech")) return false;
   config.wsProxy = () => proxy;
   config.useSecureWebSocket = false;
   config.pipelineTLS = false;

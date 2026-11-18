@@ -15,7 +15,14 @@ import {
 import { masterPayloads, releasePayload, searchPage1, searchPage2, versionsPage } from "../fixtures/discogs";
 
 // Identity-ish mapper: lets us see which URLs survive; real allow-listing is tested in discogs-image.test.ts.
-const image = (u: string | null | undefined) => (u && u.includes("i.discogs.com") ? `/proxy?u=${u}` : null);
+const imageHost = (u: string): string | null => {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return null;
+  }
+};
+const image = (u: string | null | undefined) => (u && imageHost(u) === "i.discogs.com" ? `/proxy?u=${u}` : null);
 
 const MARKETPLACE_KEYS = ["lowest_price", "num_for_sale", "price", "estimated_weight", "blocked_from_sale", "community", "stats"];
 

@@ -24,7 +24,6 @@ beforeEach(async () => {
   await db.delete(rateLimit);
 });
 
-const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 const tail = (u: URL) => Number(u.pathname.split("/").pop());
 
 function discogs() {
