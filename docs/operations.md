@@ -319,3 +319,45 @@ the proxy first: the run log of the `wsproxy` container, and that `NEON_WS_PROXY
 
 **Updating a pinned action by hand.** Get the *commit* SHA of the tag (`git ls-remote --tags https://github.com/<owner>/<action>.git`
 shows the tag object for annotated tags; use `<tag>^{}`), check the tag is at least two weeks old, and replace SHA and comment together.
+
+## 19. Health check, metrics and the purge
+
+**`GET /api/health`** (also `HEAD`): for an uptime monitor. `200 {"status":"ok","version":"<package version>","db":"up"}` when the database
+answers a `select 1` (3 s timeout), `503 {"status":"degraded",...,"db":"down"}` when it does not. It reports nothing else: no environment, no
+secret, no person, and it never calls Discogs (a monitor must not spend the shared budget). The answer is remembered for 30 seconds per
+instance, so polling it hard does not become a stream of queries.
+
+* Point a free uptime monitor (UptimeRobot, Better Stack, Healthchecks, your choice) at `https://<domain>/api/health`, **every 5 minutes**,
+  alert on anything but 200. Every probe wakes the database: on a scale-to-zero Neon plan that keeps compute running. Check what your plan
+  includes before choosing a shorter interval (not verified here).
+* `503` with `db: down` means Neon is unreachable or the connection string is wrong: see sections 2 and 3. A `200` does **not** mean Discogs
+  works; look at section 5 for that.
+
+**The `[metrics]` line.** Each server instance counts events in memory and writes **one line a minute while it is busy** (nothing when idle):
+
+```
+[metrics] window=60s discogs_calls=12 cache_hits=48 cache_misses=12 throttled=0 cap_hits=1 upstream_errors=0
+```
+
+| Counter | Meaning |
+| --- | --- |
+| `discogs_calls` | requests actually sent to Discogs (each one used budget) |
+| `cache_hits`, `cache_misses` | answers served from our cache, and lookups that had to go upstream (per record for batches) |
+| `throttled` | our token bucket or a Discogs 429 said wait |
+| `cap_hits` | the IP's or the person's cold allowance refused a request (nothing was sent to Discogs) |
+| `upstream_errors` | Discogs answered 5xx or an unusable body, or the call failed |
+
+There is one line per instance, so add the lines of a minute to get the app-wide numbers. They hold **no person, IP address, query or content**
+(`tests/unit/metrics.test.ts`, `tests/unit/log-hygiene.test.ts`). Search the Vercel logs for `[metrics]`. A healthy quiet day: `cache_hits` well above
+`cache_misses`, `discogs_calls` far below 60 a minute, `throttled=0`. Sustained `throttled` with few users: section 5.
+
+**The daily purge** (`/api/cron/purge`, `vercel.json`) applies the retention rules of `docs/data-inventory.md`: expired Discogs cache rows,
+expired verification rows and sessions, and rate-limit counters (ours and Better Auth's) whose window ended more than an hour ago. It never touches
+accounts, users or lists. See what it would delete without deleting anything:
+
+```bash
+curl -H "Authorization: Bearer <CRON_SECRET>" "https://<domain>/api/cron/purge?dryRun=1"
+# {"ok":true,"dryRun":true,"cacheRows":0,"verificationRows":2,"sessionRows":5,"rateLimitRows":31}
+```
+
+The end-to-end tests only ever call it with `?dryRun=1`, because the dev branch can hold copies of real accounts.
