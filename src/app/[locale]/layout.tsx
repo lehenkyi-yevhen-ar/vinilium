@@ -20,6 +20,8 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
     metadataBase: new URL(site.url),
     title: { default: site.name, template: `%s · ${site.name}` },
     description: t("description"),
+    // The app is not for search engines: a page opts in with publicMetadata() (home, contact, privacy, terms).
+    robots: { index: false, follow: false },
   };
 }
 
