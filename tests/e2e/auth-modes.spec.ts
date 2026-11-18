@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { expect, request as pwRequest, test, type APIRequestContext } from "@playwright/test";
 import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { FAKE_TOKEN } from "../helpers/fake-secrets";
 
 /**
  * Email + password sign-up, verification and reset against a MOCK Brevo (tests/mocks/discogs-mock.ts), the two switches
@@ -279,7 +280,7 @@ test.describe("email + password switched off (Google only)", () => {
 
   test("every email+password screen says so, in all three languages, and shows no password field", async ({ page }) => {
     for (const lang of ["en", "uk", "nb"] as const) {
-      for (const path of ["sign-in", "sign-up", "forgot-password", "reset-password?token=abcdefgh1234", "verify-email?email=a%40example.test"]) {
+      for (const path of ["sign-in", "sign-up", "forgot-password", `reset-password?token=${FAKE_TOKEN}`, "verify-email?email=a%40example.test"]) {
         await page.goto(`${OFF}/${lang}/${path}`);
         await expect(page.getByTestId("email-password-off"), `${lang}/${path}`).toBeVisible();
         await expect(page.getByTestId("email-password-off")).toContainText(UNAVAILABLE[lang]);
@@ -298,7 +299,7 @@ test.describe("email + password switched off (Google only)", () => {
       ["/api/auth/sign-in/email", { email, password: PASSWORD }],
       ["/api/auth/send-verification-email", { email }],
       ["/api/auth/request-password-reset", { email, redirectTo: `${OFF}/en/reset-password` }],
-      ["/api/auth/reset-password", { newPassword: NEW_PASSWORD, token: "abcdefgh1234" }],
+      ["/api/auth/reset-password", { newPassword: NEW_PASSWORD, token: FAKE_TOKEN }],
     ] as const) {
       const r = await post(OFF, path, data);
       expect(r.status, path).toBe(403);

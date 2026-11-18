@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import { config as loadEnv } from "dotenv";
 import { e2eDatabaseUrl } from "./tests/helpers/e2e-db";
+import { FAKE_E2E_CRON_SECRET } from "./tests/helpers/fake-secrets";
 
 // Local runs pick DEV_DATABASE_URL up from .env.local; CI passes it too (a throwaway Neon branch). e2e NEVER uses DATABASE_URL
 // (production): it creates and deletes users and cache rows. See tests/helpers/e2e-db.ts.
@@ -227,7 +228,7 @@ export default defineConfig({
         DISCOGS_CONSUMER_SECRET: "test-secret",
         DISCOGS_TOKEN: "",
         DISCOGS_CACHE_TTL_SECONDS: "300",
-        CRON_SECRET: "e2e-cron-secret-0123456789",
+        CRON_SECRET: FAKE_E2E_CRON_SECRET,
         // Per-IP limit is exercised by one test (its own X-Forwarded-For); the per-user limit is lifted because every
         // e2e project shares one signed-in user.
         RL_SEARCH_IP_PER_MIN: "60",

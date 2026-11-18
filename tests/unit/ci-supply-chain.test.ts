@@ -65,6 +65,58 @@ describe("GitHub workflows", () => {
   });
 });
 
+describe("gitleaks configuration", () => {
+  const toml = readFileSync(path.join(ROOT, ".gitleaks.toml"), "utf8");
+  const ignore = readFileSync(path.join(ROOT, ".gitleaksignore"), "utf8");
+  const scan = readFileSync(path.join(WORKFLOWS, "secret-scan.yml"), "utf8");
+
+  it("extends the default rules and ignores nothing by path, rule or pattern", () => {
+    expect(toml).toMatch(/useDefault\s*=\s*true/);
+    const active = toml.split(/\r?\n/).filter((l) => !l.trim().startsWith("#"));
+    expect(active.join("\n")).not.toMatch(/\[allowlist|\[\[allowlists|paths\s*=|regexes\s*=|stopwords|commits\s*=/);
+  });
+
+  it("every exception is one exact fingerprint (full 40-character commit, path, rule, line), with its reason above it", () => {
+    const entries = ignore.split(/\r?\n/).filter((l) => l.trim() && !l.startsWith("#"));
+    expect(entries.length).toBeGreaterThan(0);
+    for (const e of entries) expect(e, e).toMatch(/^[0-9a-f]{40}:[^:*?\s]+:[a-z0-9-]+:\d+$/);
+    expect(ignore.split(/\r?\n/).filter((l) => l.startsWith("#")).length).toBeGreaterThan(3);
+  });
+
+  it("the workflow uses the config, scans the whole history outside pull requests, and verifies the binary it downloads", () => {
+    expect(scan).toContain("GITLEAKS_CONFIG: .gitleaks.toml");
+    expect(scan).toContain("--config .gitleaks.toml");
+    expect(scan).toMatch(/fetch-depth:\s*0/);
+    expect(scan).toMatch(/full-history:[\s\S]*?github\.event_name != 'pull_request'/);
+    expect(scan).toMatch(/GITLEAKS_SHA256:\s*[0-9a-f]{64}/);
+    expect(scan).toMatch(/sha256sum --check --strict/);
+  });
+});
+
+describe("no fixture looks like a real key (gitleaks flags high-entropy literals next to SECRET, KEY, TOKEN)", () => {
+  it("the secrets used by the tests come from tests/helpers/fake-secrets.ts, built from repeated characters", () => {
+    const fake = readFileSync(path.join(ROOT, "tests/helpers/fake-secrets.ts"), "utf8");
+    expect(fake).toMatch(/repeat\(/);
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(ts|tsx)$/.test(e.name) && !full.endsWith("ci-supply-chain.test.ts")) {
+          const text = readFileSync(full, "utf8");
+          for (const m of text.matchAll(/(SECRET|API_KEY|TOKEN)[A-Z_]*["']?\s*[:=]\s*["']([^"']{16,})["']/g)) {
+            const value = m[2];
+            // a value that says FAKE is a deliberately key-shaped fake used to test redaction (tests/unit/email-providers.test.ts)
+            if (new Set(value).size >= 10 && !/\s|\$\{|FAKE/.test(value)) offenders.push(`${path.relative(ROOT, full)}: ${m[1]}…`);
+          }
+        }
+      }
+    };
+    walk(path.join(ROOT, "tests"));
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe(".github/dependabot.yml", () => {
   const text = readFileSync(path.join(ROOT, ".github/dependabot.yml"), "utf8");
 

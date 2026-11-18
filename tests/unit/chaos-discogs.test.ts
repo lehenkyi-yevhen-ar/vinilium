@@ -17,7 +17,7 @@ beforeAll(async () => ({ db, close } = await createTestDb()));
 afterAll(() => close());
 beforeEach(async () => {
   vi.resetModules();
-  setEnv({ DISCOGS_API_BASE: "http://discogs.test", DISCOGS_CONSUMER_KEY: "key-should-never-leak", DISCOGS_CONSUMER_SECRET: "secret-should-never-leak" });
+  setEnv({ DISCOGS_API_BASE: "http://discogs.test", DISCOGS_CONSUMER_KEY: "FAKE-key-should-never-leak", DISCOGS_CONSUMER_SECRET: "FAKE-secret-should-never-leak" });
   await db.delete(discogsCache);
   await db.delete(discogsBucket);
   await db.delete(rateLimit);

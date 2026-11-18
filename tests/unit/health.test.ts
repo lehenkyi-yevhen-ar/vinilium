@@ -3,6 +3,7 @@ import type { AppDb } from "@/server/db/types";
 import { createTestDb } from "../helpers/pglite";
 import { setEnv } from "../helpers/env";
 import pkg from "../../package.json";
+import { FAKE_CRON_SECRET } from "../helpers/fake-secrets";
 
 /** /api/health: version and database reachability, nothing else. */
 
@@ -17,7 +18,7 @@ beforeAll(async () => ({ db, close } = await createTestDb()));
 afterAll(() => close());
 beforeEach(async () => {
   vi.resetModules();
-  setEnv({ BREVO_API_KEY: "SECRET-BREVO", DISCOGS_CONSUMER_SECRET: "SECRET-DISCOGS", CRON_SECRET: "SECRET-CRON-0123456789" });
+  setEnv({ BREVO_API_KEY: "SECRET-BREVO", DISCOGS_CONSUMER_SECRET: "SECRET-DISCOGS", CRON_SECRET: FAKE_CRON_SECRET });
   broken = null;
   const { resetHealthMemory } = await import("@/server/health");
   resetHealthMemory();

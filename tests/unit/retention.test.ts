@@ -3,6 +3,7 @@ import * as schema from "@/server/db/schema";
 import type { AppDb } from "@/server/db/types";
 import { createTestDb } from "../helpers/pglite";
 import { setEnv } from "../helpers/env";
+import { FAKE_CRON_SECRET } from "../helpers/fake-secrets";
 
 /** The daily purge: expired and stale data goes, live data and people's accounts and lists never do. */
 
@@ -14,7 +15,7 @@ beforeAll(async () => ({ db, close } = await createTestDb()));
 afterAll(() => close());
 beforeEach(async () => {
   vi.resetModules();
-  setEnv({ CRON_SECRET: "cron-secret-0123456789" });
+  setEnv({ CRON_SECRET: FAKE_CRON_SECRET });
   await db.delete(schema.user);
   await db.delete(schema.verification);
   await db.delete(schema.rateLimit);
@@ -113,20 +114,20 @@ describe("GET /api/cron/purge", () => {
   it("needs the secret, in constant time, and is disabled without one", async () => {
     expect((await call()).status).toBe(401);
     expect((await call("", "Bearer wrong")).status).toBe(401);
-    expect((await call("", "cron-secret-0123456789")).status).toBe(401); // no "Bearer"
+    expect((await call("", FAKE_CRON_SECRET)).status).toBe(401); // no "Bearer"
     vi.resetModules();
     setEnv({});
     delete process.env.CRON_SECRET;
-    expect((await call("", "Bearer cron-secret-0123456789")).status).toBe(401);
+    expect((await call("", `Bearer ${FAKE_CRON_SECRET}`)).status).toBe(401);
   });
 
   it("?dryRun=1 only counts; without it, it deletes", async () => {
     await db.insert(schema.user).values({ id: "u9", name: "Nine", email: "nine@example.test" });
     await db.insert(schema.session).values({ id: "s9", token: "t9", userId: "u9", expiresAt: new Date(Date.now() - HOUR), updatedAt: new Date() });
-    const dry = await (await call("?dryRun=1", "Bearer cron-secret-0123456789")).json();
+    const dry = await (await call("?dryRun=1", `Bearer ${FAKE_CRON_SECRET}`)).json();
     expect(dry).toMatchObject({ ok: true, dryRun: true, sessionRows: 1 });
     expect(await ids(schema.session)).toEqual(["s9"]);
-    const real = await (await call("", "Bearer cron-secret-0123456789")).json();
+    const real = await (await call("", `Bearer ${FAKE_CRON_SECRET}`)).json();
     expect(real).toMatchObject({ ok: true, dryRun: false, sessionRows: 1 });
     expect(await ids(schema.session)).toEqual([]);
   });

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { mergeGroups } from "../../src/lib/discogs/group";
 import type { ArtistGroup } from "../../src/lib/discogs/types";
+import { FAKE_E2E_CRON_SECRET } from "../helpers/fake-secrets";
 
 /**
  * The Discogs flow end to end, against the MOCKED Discogs server (tests/mocks/discogs-mock.ts, FAKE credentials):
@@ -276,7 +277,7 @@ test("the purge endpoint requires the cron secret", async ({ request }) => {
   expect((await request.get("/api/cron/purge", { headers: { authorization: "Bearer wrong" } })).status()).toBe(401);
   // ALWAYS ?dryRun=1 here: the real purge deletes expired sessions, verification rows and old counters, and the dev branch holds copies
   // of real accounts that an e2e run must never modify. The deleting behaviour is covered on an embedded Postgres (tests/unit/retention.test.ts).
-  const ok = await request.get("/api/cron/purge?dryRun=1", { headers: { authorization: "Bearer e2e-cron-secret-0123456789" } });
+  const ok = await request.get("/api/cron/purge?dryRun=1", { headers: { authorization: `Bearer ${FAKE_E2E_CRON_SECRET}` } });
   expect(ok.status()).toBe(200);
   const body = await ok.json();
   expect(body).toMatchObject({ ok: true, dryRun: true });

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { brevoBase, classifyBrevoStatus, cleanName, parseSender, resolveProvider, sendViaBrevo, sendViaResend, type OutgoingEmail } from "@/server/email/providers";
+import { FAKE_AUTH_SECRET } from "../helpers/fake-secrets";
 
 // `after()` is only valid inside a request.
 vi.mock("next/server", () => ({ after: (fn: () => void) => fn() }));
@@ -136,7 +137,7 @@ describe("sendViaResend", () => {
 // ---------------------------------------------------------------------------------------------------------------------------
 // The whole path: deliverAuthEmail / queueAuthEmail with a mocked Brevo
 
-const baseEnv = { DATABASE_URL: "postgresql://dev.invalid/db", BETTER_AUTH_SECRET: "0123456789abcdef0123456789abcdef", BETTER_AUTH_URL: "http://localhost:3000" };
+const baseEnv = { DATABASE_URL: "postgresql://dev.invalid/db", BETTER_AUTH_SECRET: FAKE_AUTH_SECRET, BETTER_AUTH_URL: "http://localhost:3000" };
 beforeEach(() => {
   vi.resetModules();
   for (const [k, v] of Object.entries(baseEnv)) vi.stubEnv(k, v);
