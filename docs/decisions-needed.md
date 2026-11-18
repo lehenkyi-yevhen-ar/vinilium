@@ -71,6 +71,41 @@ invalid allowlist fails the gate. Tests: `tests/unit/audit-gate.test.ts`.
 **What you still decide:** whether you accept that one exception (it is yours to veto: delete the entry and the gate goes red again). Re-check it
 when picomatch publishes a fix (Dependabot will propose it, with its 14-day cooldown), and in any case by 2026-12-31.
 
+## 6c. gitleaks: 11 older findings in main's history (found 2026-11-18, full-history scan)
+
+The new full-history job scans everything reachable from `main` with gitleaks 8.24.3 and `.gitleaks.toml`. It reports **11 findings, all rule `generic-api-key`**
+(redacted; commits are short ids): `a6013f44` (the first commit): `.env.example` lines 12, 20, 25, 45 and the fake session secrets in `tests/unit/auth-links.test.ts:5` and
+`tests/unit/email.test.ts:9`; `9f3db890`: `tests/unit/email-providers.test.ts:139`, `tests/e2e/auth-modes.spec.ts:233` and `:252`; `b01c7c9b`: `playwright.config.ts:53`
+and `tests/helpers/env.ts:21`. **I allow-listed none of them** (you asked for exactly the two findings of this pull request), so the full-history job on `main` will fail
+until you decide.
+
+* **Test files (7 findings):** made-up strings (`0123456789abcdef...`, `test-secret-...`, a cron secret of digits). Not credentials. Safe to allow-list by fingerprint.
+* **`.env.example` in the first commit (4 findings): not certain.** The values on lines 12 (`BETTER_AUTH_SECRET`, 44 characters, 43 distinct, base64-looking),
+  20 (`GOOGLE_CLIENT_SECRET`-shaped), 25 (`RESEND_API_KEY`-shaped) and 45 (`DISCOGS_CONSUMER_SECRET`-shaped) look random, not like words, and none of them equals the value in
+  your current `.env.local` or `.env.example`. You told me earlier they were fake key-shaped placeholders (GitHub push protection flagged them and you allowed them); I cannot prove that.
+  **If any of them was ever a real credential, rotate it:** `BETTER_AUTH_SECRET` (Vercel; signs everyone out), the Google client secret, the Resend key (unused here), the Discogs key and secret.
+  If they were made-up placeholders, nothing to rotate; add their fingerprints to `.gitleaksignore` (lines below) with that reason.
+* **`CRON_SECRET`: rotate only if** the value in Vercel equals one of the strings that were committed (`cron-secret-0123456789`, `SECRET-CRON-0123456789`,
+  `e2e-cron-secret-0123456789`). They were made up for tests, so a real random value cannot match; compare once by eye. Rotation has no user-visible effect (section 3 of `operations.md`).
+
+Fingerprints to paste into `.gitleaksignore` once you have decided (each needs a one-line reason above it; the file's test requires comments):
+
+```
+9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/e2e/auth-modes.spec.ts:generic-api-key:233
+9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/e2e/auth-modes.spec.ts:generic-api-key:252
+9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/unit/email-providers.test.ts:generic-api-key:139
+b01c7c9bcf94f00be1b09f03267909c8ea2b55d8:playwright.config.ts:generic-api-key:53
+b01c7c9bcf94f00be1b09f03267909c8ea2b55d8:tests/helpers/env.ts:generic-api-key:21
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:tests/unit/auth-links.test.ts:generic-api-key:5
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:tests/unit/email.test.ts:generic-api-key:9
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:12
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:20
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:25
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:45
+```
+
+(The local branch `backup/pre-history-rewrite` has 6 more findings in commits `65477321` and `38dfea4b`; that branch is not on GitHub, so CI never sees them.)
+
 ## 7. Items only you can check (not decisions, but open)
 
 * **Discogs "Application Name and Description Policy"**: it was not part of the pasted Terms. Check that the app name and the description

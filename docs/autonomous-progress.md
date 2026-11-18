@@ -84,3 +84,8 @@ No dead-code or duplication sweep. Bugs found on the way are in `docs/autonomous
 ## K. Documentation: done
 
 README, operations (sections 10, 17, 18, 19), architecture with a mermaid diagram, five ADRs, compliance map, pre-launch checklist, decisions, performance, changes.
+
+## Follow-up: PR #1 checks (2026-11-18): done, pending GitHub
+
+CodeQL URL check, gitleaks, audit and e2e were each investigated, fixed and documented (`docs/autonomous-run-report.md`, "Follow-up"). Commits: f33ac5f aee7ce5 eb013b5 d87cc5f.
+**Next step:** push, then read the four checks. Expected: checks, audit and the pull-request secret scan green; CodeQL shows whether the alert closed; e2e is the first run with the corrected websocket-proxy address; the full-history secret job reports 11 older findings until you decide (`docs/decisions-needed.md` 6c).

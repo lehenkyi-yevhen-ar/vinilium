@@ -140,3 +140,54 @@ gh pr checks --watch
 # GitHub: enable branch protection on main, Dependabot alerts; decide repository visibility (decision 5b).
 # An uptime monitor on https://<domain>/api/health every 5 minutes.
 ```
+
+---
+
+# Follow-up: pull request #1 checks (2026-11-18)
+
+Four checks failed on the pull request. Each: root cause, change, what is verified locally, what only GitHub can confirm. New commits (`git --no-pager log origin/autonomous/hardening..HEAD --oneline`):
+
+| Hash | Message |
+| --- | --- |
+| f33ac5f | URL checks: parse and compare exact hosts everywhere (CodeQL "Incomplete URL substring sanitization"), with hostile-input tests |
+| aee7ce5 | gitleaks: fixtures that cannot look like keys, a config with exact-fingerprint exceptions, full-history scan, notice instead of failure |
+| eb013b5 | audit: a gate that fails on any NEW high advisory and passes only on a reviewed, expiring, per-advisory allowlist |
+| d87cc5f | CI e2e: fix the websocket-proxy address (root cause), name the failing stage, show the real error; CodeQL upload skips with a notice |
+| (last) | Docs: follow-up report |
+
+## 1. CodeQL "Incomplete URL substring sanitization" (High)
+
+* **Root cause.** The alert location was not captured, so the whole repository was searched (src, scripts, tests, workflows) for includes/startsWith/endsWith/indexOf/unanchored-regex checks on URLs, hosts, origins and redirects. **Every production check already parsed with the URL class and compared exactly.** The one substring check on a host was a test helper in `tests/unit/discogs-normalize.test.ts:18` (`u.includes("i.discogs.com")`, which also matches `evil.com/i.discogs.com` and `i.discogs.com.evil.com`): the most likely alert. Not confirmed: I cannot see the alert.
+* **Files and fixes.**
+  * `tests/unit/discogs-normalize.test.ts`: parses the URL and compares the exact host.
+  * `src/server/auth/request-user.ts` (`originMatches`, the CSRF Origin check): it compared `new URL(origin).host` after the parser had "repaired" the value, so `https://app.example\@evil.com` and `https://app%2eexample` matched the site (found by the new hostile tests). An Origin must now be exactly what the parser returns as its origin.
+  * `src/lib/discogs/normalize.ts` (`discogsUrlFor`): accepted a path starting with `//`; refused.
+  * `src/lib/neon-local.ts`: now also off for `x.neon.tech.` (trailing dot) and percent-encoded dots.
+  * Unchanged because already correct: the image proxy allow-list (`validateImageUrl`), `parseTelegram`, `safeNextPath`, `isCrossSite`.
+* **Tests.** `tests/unit/url-checks.test.ts` (95): `evil.com/discogs.com`, `discogs.com.evil.com`, userinfo tricks, encoded dots, backslashes, mixed case, trailing dots, IPv6, punycode, other ports and schemes, against the image allow-list, `discogsUrlFor`, `parseTelegram`, neon-local, the Origin and Sec-Fetch-Site checks and `safeNextPath`. SSRF protections unchanged.
+* **Verified locally:** the tests. **Only GitHub can confirm** that the alert closes. If it is still open after this push and the flagged line is a test or script, dismiss with: *"False positive: test helper or script, not a request path. The production code parses URLs with the URL class and compares exact hosts (see tests/unit/url-checks.test.ts)."* Paste me the file and line and I will fix it instead.
+
+## 2. gitleaks
+
+* **Root cause.** The `generic-api-key` rule flags a high-entropy literal next to SECRET or KEY. Two fixtures written in this PR (`CRON_SECRET: "<made-up string>"` in `retention.test.ts:17` and `health.test.ts:20`) matched. Made-up strings, never used anywhere.
+* **Change.** `tests/helpers/fake-secrets.ts` builds fake secrets from a repeated character (long enough for the code, zero entropy) and every key-shaped literal in the tests uses it. `.gitleaks.toml` extends the default rules and ignores nothing by path or pattern. `.gitleaksignore` lists the two historical findings by exact fingerprint with the reason (a toml `[[allowlists]]` with AND needs a newer gitleaks than 8.24.3, the version the pinned action runs). `secret-scan.yml`: the action (pinned SHA) uses the config on PRs and pushes and skips with a notice for an organisation-owned repository without a licence; a second job scans the **full history** with the pinned binary (sha256 checked) on push to `main`, weekly and on demand, and writes counts, rule ids, files and short commits to the step summary. A unit test fails if a high-entropy literal reappears next to SECRET, API_KEY or TOKEN in tests.
+* **Verified locally** (gitleaks 8.24.3, checksum-verified against the published list): the pull-request range has 0 findings with the config; the new commits have 0.
+* **Full-history result (counts and rule ids only):** all refs including the local `backup/pre-history-rewrite` branch: 17 findings in the first scan. **History reachable from `origin/main`: 11, all rule `generic-api-key`**, none allow-listed (you asked for exactly two): 7 in test files (made-up strings) and **4 in `.env.example` of the first commit** whose values look random and are not your current ones. Fingerprints, details and the rotation advice: `docs/decisions-needed.md` 6c.
+* **Could any be real?** The 4 in `.env.example`: I cannot rule it out (the session secret has 43 distinct characters out of 44). **CRON_SECRET: do not rotate because of this**, unless the value in Vercel equals one of the made-up strings that were committed (`cron-secret-0123456789`, `SECRET-CRON-0123456789`, `e2e-cron-secret-0123456789`); a real random value cannot. Rotating has no user-visible effect. Rotating `BETTER_AUTH_SECRET`, the Google secret and the Discogs key is warranted only if you ever used the first-commit `.env.example` values for real.
+* **Only GitHub can confirm:** that the action accepts the config and the ignore file the same way as the local binary, and that the full-history job installs the pinned binary.
+
+## 3. CI / audit
+
+* **Root cause.** `package.json` is correct: vitest, vite, drizzle-kit and tsx are `devDependencies`. `--omit=dev` still lists them because **`better-auth` declares `vitest` and `drizzle-kit` as optional peers**, which npm counts as production edges (the lockfile marks them `devOptional`). The 6 "high" findings are **one** advisory (picomatch GHSA-fc5q-39xc-vjpf, ReDoS, range `<=4.0.7`); **4.0.7 is the latest release: no patched version exists** (`npm view`). The only truly production path is `next-intl` to `@parcel/watcher` to `picomatch`, used only by next-intl's experimental message extractor with fixed ignore globs (this app does not enable it); `picomatch` is in no traced serverless file (0 matches in `.next/server` and `.next/static`). The 4 moderate are esbuild (development server) through `drizzle-kit`. `npm audit fix --force` would downgrade vitest and drizzle-kit: not run.
+* **Decision implemented.** `npm run audit:prod` is `scripts/audit-gate.ts`: fails on any **new** high or critical advisory; an advisory passes (annotation and summary warning) only while it is on `.audit-allowlist.json`: one GHSA id per entry (wildcards and package-wide ignores refused), justification, review date, **expiry date** (this one: 2026-12-31). Invalid or expired entries fail the job; stale ones are reported. No dependency changed. Documented in `docs/decisions-needed.md` 6b and `docs/operations.md` section 18. 21 tests.
+* **Verified locally:** `npm run audit:prod` exits 0 with the warning; unit tests. **Only GitHub can confirm** the job passes there.
+
+## 4. CI / e2e
+
+* **Root cause (the part that is ours, verified locally).** `src/lib/neon-local.ts` set `neonConfig.wsProxy` to a **function** returning the bare proxy address. The Neon driver's own docs (`CONFIG.md`) say only a **string** gets `?address=<host>:<port>` appended. wsproxy was asked for `/v1` with no target address and refused every connection. Reproduced with a throwaway local server recording the driver's request: old config `-> /v1`, fixed config `-> /v1?address=postgres:5432`. The log hid it because `db-migrate.ts` treated any error as "0 migrations applied" and printed only drizzle's "Failed query" wrapper (the Neon driver reports a failed websocket as a bare ErrorEvent).
+* **Changes.** String `wsProxy` plus a regression test that records the real request. `scripts/ci-db-probe.ts` (proxy HTTP, websocket, Postgres through the proxy; retries about 40 s; fails fast naming the stage). `scripts/db-migrate.ts` proves the connection, prints the whole redacted cause chain including the websocket address, and only a missing relation means "nothing applied" (`scripts/lib/db-error.ts`). Workflow: proxy connection logging, `docker logs` of both service containers on failure, a step summary of failed tests (Playwright JSON reporter), `NEON_WS_PROXY=127.0.0.1:5433/v1`, the probe before the migration. `docs/operations.md` 18a: root cause, how to read each stage, a Docker reproduction (untested). Also: CodeQL's upload is a separate `continue-on-error` step that prints a notice and keeps the SARIF as an artifact, and gitleaks-action skips with a notice for an organisation-owned repository without a licence. All workflows re-read (permissions, full-SHA pins, Node 22, `persist-credentials: false`, no secrets; checked by `ci-supply-chain.test.ts`).
+* **Verified locally:** the address the driver requests; the migrate script's output against an unreachable database and against a dead proxy port; all new unit tests. **NOT verified (no Docker here):** that the Postgres and wsproxy containers then work together in the Actions service network. If the e2e job still fails, its log now says at which stage.
+
+## Totals
+
+Unit: **657 passed, 0 failed, 0 skipped** (49 files); typecheck and lint clean. e2e was not re-run for this follow-up: only CI, test-fixture and URL-guard code changed; the Origin-check change is covered by the new unit tests but the existing e2e write tests were not re-run.
