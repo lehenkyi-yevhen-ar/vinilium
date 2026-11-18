@@ -262,3 +262,8 @@ a.tabs__tab { text-decoration: none; min-height: var(--touch-target); }
 .x-legal .x-section h2 { font: var(--text-h4); }
 .x-legal-mark { background: color-mix(in srgb, var(--color-warning) 22%, transparent); color: var(--color-text); padding: 0 var(--space-1); border-radius: var(--radius-sm); font-weight: 600; }
 .x-legal-banner { margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); border: var(--border-thin) solid var(--color-warning); border-inline-start-width: var(--border-strong); border-radius: var(--radius-md); }
+
+/* Phone bottom sheets: the design system's phone rule `.modal:not(.modal--drawer) .modal__dialog { transform: translateY(40px) }` (the
+   closed, slid-down state) has the same specificity as its own `.modal.is-open .modal__dialog { transform: none }` and comes after it,
+   so an OPEN sheet stayed 40 px too low: its last button was cut off by the bottom of the screen (375x667, Delete account). Outrank it. */
+.modal.is-open:not(.modal--drawer) .modal__dialog { transform: none; }

@@ -66,7 +66,9 @@ async function expectSheetOk(page: Page, report: MenuReport, count: number) {
   expect(report.sheetMediaQuery, "phone width: the design system's bottom sheet applies").toBe(true);
   expect(report.menuPosition).toBe("fixed");
   expect(report.insideViewport, `the whole menu is inside the screen ${where}`).toBe(true);
-  expect(report.menu.top, "it opens at the bottom of the screen, not above the trigger").toBeGreaterThan(report.trigger.bottom);
+  // A bottom sheet is docked to the bottom edge of the SCREEN, wherever its trigger is (a trigger low on a short page is covered by it,
+  // which is normal). If an ancestor trapped it (the bug fixed in 8d06496), it would be placed relative to that ancestor instead.
+  expect(Math.abs(report.menu.bottom - report.viewport.height), "it sits at the bottom of the screen (within the sheet's own 8 px margin)").toBeLessThanOrEqual(16);
   expect(report.menuCentre, "nothing (no scrim, no blur layer) is on top of the menu").toEqual(expect.objectContaining({ isMenu: true }));
   expect(report.options).toHaveLength(count);
   for (const o of report.options) {
@@ -291,6 +293,7 @@ test.describe("other widgets at phone width (signed in)", () => {
     await page.goto("/en/account");
     // the account page's own language select (not the header's)
     const select = "main .dd";
+    await page.locator(`${select} .dd__trigger`).evaluate((el) => el.scrollIntoView({ block: "center" })); // the page is taller than the screen: scroll to it, clear of the tab bar
     await page.locator(`${select} .dd__trigger`).tap();
     await expect(page.locator(`${select}.is-open`)).toHaveCount(1);
     await page.waitForTimeout(450);
@@ -328,6 +331,7 @@ test.describe("other widgets at phone width (signed in)", () => {
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     for (const id of ["#library-sort", "#library-size"]) {
       await expect(page.locator(id)).toBeVisible();
+      await page.locator(id).evaluate((el) => el.scrollIntoView({ block: "center" })); // the page is taller than the screen, and the tab bar is fixed: reachable by scrolling is what counts
       expect(await centreIsInside(page, id), `${id} is on screen and not covered`).toEqual({ inside: true, fully: true });
       expect(await page.locator(id).evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
     }
