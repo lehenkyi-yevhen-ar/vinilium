@@ -14,6 +14,8 @@ import { cacheKey, getCached, getCachedMany, purgeExpiredCache, putCached, putCa
 import { discogsGet, type ClientDeps, type RequestOutcome } from "./client";
 import { apiBase, cacheTtlSeconds, MAX_SEARCH_PAGES, MAX_VERSION_PAGES, PAGE_SIZE } from "./config";
 import { imageMapper } from "./image";
+import { cut, stripControl } from "@/lib/text";
+import { count } from "@/server/metrics";
 import type { AppDb } from "./token-bucket";
 
 /** Everything in this app is about vinyl; the medium is a constant, not a user choice. */
@@ -37,13 +39,20 @@ async function cached<T>(
 ): Promise<DiscogsResult<T>> {
   const now = (deps.now ?? Date.now)();
   const hit = await getCached<T>(deps.db, key, now);
-  if (hit) return { ok: true, data: hit.payload, cached: true, fetchedAt: hit.fetchedAt.toISOString() };
+  if (hit) {
+    count("cache_hits");
+    return { ok: true, data: hit.payload, cached: true, fetchedAt: hit.fetchedAt.toISOString() };
+  }
+  count("cache_misses");
 
   if (deps.coldLimit) {
     // Not cached, so this request would spend Discogs budget: ask the caller's cold allowance first. Refused = the same answer as a
     // Discogs throttle (a countdown on screen), and nothing is sent upstream.
     const allowance = await deps.coldLimit();
-    if (!allowance.allowed) return { ok: false, error: "throttled", retryAfter: allowance.retryAfter };
+    if (!allowance.allowed) {
+      count("cap_hits");
+      return { ok: false, error: "throttled", retryAfter: allowance.retryAfter };
+    }
   }
 
   const out = await request();
@@ -68,7 +77,7 @@ const pageFlags = (page: number, pages: number, cap: number) => ({
 });
 
 export function normalizeQuery(q: string): string {
-  return q.normalize("NFC").trim().replace(/\s+/g, " ");
+  return stripControl(q).normalize("NFC").trim().replace(/\s+/g, " ");
 }
 
 export async function searchDiscogs(
@@ -76,7 +85,7 @@ export async function searchDiscogs(
   input: { mode: SearchMode; query: string; by?: string | null; page: number },
 ): Promise<DiscogsResult<SearchPage>> {
   const query = normalizeQuery(input.query);
-  const by = input.mode === "artist" || !input.by ? null : normalizeQuery(input.by).slice(0, 100) || null;
+  const by = input.mode === "artist" || !input.by ? null : cut(normalizeQuery(input.by), 100) || null;
   const page = Math.min(Math.max(1, Math.trunc(input.page) || 1), MAX_SEARCH_PAGES);
   const params = { ...searchParamsFor(input.mode, query, by), per_page: PAGE_SIZE, page };
   const key = cacheKey(apiBase(), "search", { mode: input.mode, q: query, by: by ?? "", page, per_page: PAGE_SIZE });
@@ -106,8 +115,8 @@ export async function searchDiscogs(
 export function cleanFilters(f: VersionFilters | undefined): VersionFilters {
   const out: VersionFilters = {};
   for (const k of ["country", "released", "label"] as const) {
-    const v = f?.[k]?.normalize("NFC").trim().replace(/\s+/g, " ");
-    if (v) out[k] = v.slice(0, 100);
+    const v = f?.[k] === undefined ? undefined : stripControl(f[k]!).normalize("NFC").trim().replace(/\s+/g, " ");
+    if (v) out[k] = cut(v, 100);
   }
   return out;
 }
@@ -192,6 +201,8 @@ export async function batchCached<T>(
     getCachedMany<{ gone: true }>(deps.db, ids.map(goneKey), now),
   ]);
 
+  count("cache_hits", hits.size + goneHits.size);
+  count("cache_misses", ids.length - hits.size - goneHits.size);
   const found = new Map<number, T>();
   const gone = new Set<number>();
   let oldest = now;
@@ -235,6 +246,7 @@ export async function batchCached<T>(
         const allowance = await deps.coldLimit();
         if (!allowance.allowed) {
           // Over this person's allowance: stop launching, exactly like a Discogs throttle (the screen shows a countdown, not an error).
+          count("cap_hits");
           retryAfter = Math.max(retryAfter ?? 0, allowance.retryAfter);
           return;
         }

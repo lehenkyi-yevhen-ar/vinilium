@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { stripControl } from "@/lib/text";
 import { CONDITIONS, isListName, NOTES_MAX, type ListName } from "@/lib/lists/rules";
 import { getDb } from "@/server/db";
+import { isForeignKeyViolation } from "@/server/db/errors";
 import { errorResponse, idSchema } from "@/server/discogs/http";
 import { gateLists, NO_STORE, WRITE_LIMIT } from "@/server/lists/gate";
 import { getItem, removeItem, setItemList, updateItem } from "@/server/lists/items";
@@ -10,7 +12,7 @@ type Ctx = { params: Promise<{ releaseId: string }> };
 const putSchema = z.object({ list: z.string().refine(isListName) });
 const patchSchema = z
   .object({
-    notes: z.string().max(NOTES_MAX * 2).nullable().optional(),
+    notes: z.string().max(NOTES_MAX * 2).transform(stripControl).nullable().optional(),
     conditionMedia: z.enum(CONDITIONS).nullable().optional(),
     conditionSleeve: z.enum(CONDITIONS).nullable().optional(),
   })
@@ -43,7 +45,15 @@ export async function PUT(request: Request, ctx: Ctx) {
   const parsed = putSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return errorResponse(400, { error: "bad_request", message: 'Expected {"list":"wishlist"|"collection"}.' });
 
-  const out = await setItemList(getDb(), g.userId, g.releaseId, parsed.data.list as ListName);
+  let out;
+  try {
+    out = await setItemList(getDb(), g.userId, g.releaseId, parsed.data.list as ListName);
+  } catch (error) {
+    // The person deleted their account between the session check and this write (the foreign key to "user" refused the row):
+    // they are signed out now, which is what the screen shows for a 401. Anything else is a real error and propagates.
+    if (isForeignKeyViolation(error)) return errorResponse(401, { error: "unauthorized" });
+    throw error;
+  }
   if (!out.ok) return errorResponse(409, { error: "bad_request", message: "List limit reached." });
   return body(out.item, { result: out.result });
 }

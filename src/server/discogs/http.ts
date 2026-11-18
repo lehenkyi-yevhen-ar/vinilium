@@ -5,6 +5,7 @@ import { getRequestUserId, isCrossSite } from "@/server/auth/request-user";
 import { getDb } from "@/server/db";
 import { limits } from "@/server/limits";
 import { clientIp, hit } from "@/server/rate-limit";
+import { stripControl } from "@/lib/text";
 import { MAX_SEARCH_PAGES, MAX_VERSION_PAGES } from "./config";
 
 const NO_STORE = { "Cache-Control": "private, no-store" } as const;
@@ -94,12 +95,12 @@ export function respond<T>(result: DiscogsResult<T>): Response {
 }
 
 export const searchQuerySchema = z.object({
-  q: z.string().transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " ")).pipe(z.string().min(1).max(100)),
+  q: z.string().transform((s) => stripControl(s).normalize("NFC").trim().replace(/\s+/g, " ")).pipe(z.string().min(1).max(100)),
   mode: z.enum(["track", "artist", "album"]),
   /** Optional artist to narrow a track or album search to. */
   by: z
     .string()
-    .transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " "))
+    .transform((s) => stripControl(s).normalize("NFC").trim().replace(/\s+/g, " "))
     .pipe(z.string().max(100))
     .optional()
     .transform((s) => s || undefined),
@@ -108,7 +109,7 @@ export const searchQuerySchema = z.object({
 
 const optionalText = z
   .string()
-  .transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " "))
+  .transform((s) => stripControl(s).normalize("NFC").trim().replace(/\s+/g, " "))
   .pipe(z.string().max(100))
   .optional()
   .transform((s) => s || undefined);

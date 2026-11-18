@@ -15,14 +15,25 @@ export const getSession = cache(async () => {
   try {
     return await getAuth().api.getSession({ headers: requestHeaders });
   } catch (error) {
-    console.error("[auth] getSession failed", error);
+    // Name and code only: an error from the database or the auth library can carry request details we must not write to a log.
+    const e = error as { name?: unknown; code?: unknown } | null;
+    console.error(`[auth] getSession failed name=${String(e?.name ?? "unknown").slice(0, 60)} code=${String(e?.code ?? "-").slice(0, 30)}`);
     return null;
   }
 });
 
-/** Only allow same-site relative paths as post-login redirect targets (blocks open redirects). */
+/**
+ * Only allow same-site relative paths as post-login redirect targets (blocks open redirects). A browser's URL parser silently DROPS tab,
+ * newline and carriage-return characters and treats a backslash as a slash, so "/\t/evil.example" is really "//evil.example": every control
+ * character and backslash is refused, and the result must still resolve to the same origin when parsed.
+ * (Every use also prefixes the locale, which is a second layer, not the only one.)
+ */
 export function safeNextPath(value: string | string[] | undefined): string | null {
   const v = Array.isArray(value) ? value[0] : value;
-  if (!v || !v.startsWith("/") || v.startsWith("//") || v.includes("\\")) return null;
-  return v;
+  if (!v || v.length > 2000 || !v.startsWith("/") || v.startsWith("//") || /[\\\u0000-\u001f\u007f]/.test(v)) return null;
+  try {
+    return new URL(v, "http://app.invalid").origin === "http://app.invalid" ? v : null;
+  } catch {
+    return null;
+  }
 }

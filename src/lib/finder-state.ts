@@ -1,4 +1,5 @@
 import { artistKey } from "./discogs/normalize";
+import { cut } from "./text";
 
 /**
  * Where the person is in the finder (track -> artist -> album -> pressing -> release card), kept ENTIRELY in the URL, so the
@@ -31,7 +32,8 @@ const NAME_MAX = 200;
 type Params = { get(name: string): string | null };
 
 const CONTROL = /[\u0000-\u001f\u007f]/g;
-const text = (v: string | null, max: number) => (v ?? "").replace(CONTROL, " ").trim().slice(0, max);
+// trim, cut, trim again: cutting can leave a trailing space, and reading the value back must give the same value (a stable round trip)
+const text = (v: string | null, max: number) => cut((v ?? "").replace(CONTROL, " ").trim(), max).trimEnd();
 const integer = (v: string | null, min: number, max: number) => {
   if (v === null || !/^\d{1,3}$/.test(v)) return min;
   return Math.min(max, Math.max(min, Number(v)));
