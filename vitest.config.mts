@@ -21,6 +21,8 @@ export default defineConfig({
     // died with a V8 abort while many PGlite (WASM) instances started at once. With 4 the same import takes ~1-3 s and the whole
     // run costs about 3 s more.
     maxWorkers: 4,
+    // next-intl imports 'next/server' without the .js extension, which Node's ESM resolver refuses: let Vite resolve it.
+    server: { deps: { inline: [/next-intl/] } },
     // Generous timeouts as a backstop for a loaded CI runner: the first import of heavy modules (better-auth, PGlite) is slow.
     testTimeout: 30_000,
     hookTimeout: 60_000,

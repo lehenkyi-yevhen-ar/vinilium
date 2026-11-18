@@ -17,9 +17,9 @@ const nextConfig: NextConfig = {
     return [
       {
         // Every response (pages, API, static). HSTS appears only when HSTS_MAX_AGE_SECONDS is set (see security-headers.ts).
+        // The Content-Security-Policy is NOT here: it carries a per-request nonce and is set by src/proxy.ts for page requests.
         source: "/:path*",
         headers: securityHeaders({
-          dev: process.env.NODE_ENV !== "production",
           hstsMaxAgeSeconds: process.env.HSTS_MAX_AGE_SECONDS,
           hstsIncludeSubdomains: process.env.HSTS_INCLUDE_SUBDOMAINS === "1",
         }),

@@ -1,5 +1,7 @@
 "use client";
 
+import "@/lib/zod-jitless"; // first: see the file (no `Function("")` probe under the CSP)
+
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { z } from "zod";

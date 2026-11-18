@@ -167,7 +167,8 @@ test("the language menu opens from the keyboard, closes with Escape and returns 
   const trigger = page.getByRole("button", { name: /Language/ });
   await trigger.focus();
   await page.keyboard.press("Enter");
-  const menu = page.locator(".dd--right .dd__menu");
+  // The language menu's own dropdown: the header has two (language and theme), both `.dd--right`, so scope it to the trigger's menu.
+  const menu = page.locator(".dd--right", { has: trigger }).locator(".dd__menu");
   await expect(menu).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();

@@ -17,8 +17,12 @@ process.env.E2E_HAS_DB = hasDb ? "1" : "";
 export default defineConfig({
   testDir: "tests/e2e",
   fullyParallel: true,
-  reporter: [["list"]],
-  use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure" },
+  // CI keeps an HTML report plus a trace and a screenshot of every failure (uploaded as an artifact by the workflow); no retries, so a
+  // flaky test is seen, not hidden.
+  reporter: process.env.CI ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]] : [["list"]],
+  forbidOnly: !!process.env.CI,
+  retries: 0,
+  use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure", screenshot: "only-on-failure" },
   globalTeardown: "./tests/e2e/global-teardown.ts",
   projects: [
     // Creates a verified e2e user and saves its session cookie (search and images need sign-in).
@@ -138,6 +142,16 @@ export default defineConfig({
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
     },
+    // The Content-Security-Policy in a real browser: zero violations on every page and language, a nonce on every inline script.
+    // Run the whole suite with CSP_MODE=enforce to prove an enforcing policy breaks nothing (docs/operations.md, section 10).
+    {
+      name: "csp",
+      testMatch: /csp\.spec\.ts/,
+      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["auth-modes"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
     // Keyboard behaviour (focus order, skip link, dialogs, toggles), desktop.
     {
       name: "keyboard",
@@ -168,10 +182,14 @@ export default defineConfig({
         // real variables so nothing in .env.local can leak through.
         DATABASE_URL: e2eDbUrl,
         DEV_DATABASE_URL: "",
+        // CI only (empty = off): the Postgres service container is reached through Neon's wsproxy. See src/lib/neon-local.ts.
+        NEON_WS_PROXY: process.env.NEON_WS_PROXY ?? "",
         BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
         BETTER_AUTH_URL: `http://localhost:${PORT}`,
         NEXT_PUBLIC_APP_URL: `http://localhost:${PORT}`,
         NEXT_PUBLIC_APP_NAME: "Vinilium",
+        // "report-only" (the default) or "enforce": the Content-Security-Policy mode under test (src/proxy.ts).
+        CSP_MODE: process.env.CSP_MODE ?? "report-only",
         // Fake public contact details (inlined at build time) so the contact page tests are deterministic.
         NEXT_PUBLIC_CONTACT_EMAIL: "contact@example.test",
         NEXT_PUBLIC_CONTACT_TELEGRAM: "@example_contact",

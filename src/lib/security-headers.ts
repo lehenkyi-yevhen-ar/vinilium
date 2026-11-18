@@ -1,10 +1,15 @@
 /**
- * Security headers for every response. Pure functions (no framework imports), so next.config.ts and the unit tests share them.
+ * Security headers. Pure functions (no framework imports), so next.config.ts, the proxy and the unit tests share them.
  *
- * CSP is deliberately REPORT-ONLY for now: Next.js and the design-system bootstrap rely on inline scripts, so the policy below
- * allows 'unsafe-inline' for scripts and styles and only forbids everything else (other origins, objects, framing, base-uri
- * tricks). It reports what it would block to /api/csp-report. Moving to an enforcing, nonce-based policy is a later step once
- * the reports are clean (see docs/operations.md).
+ * Two kinds of header:
+ *  - the STATIC ones (`securityHeaders`, applied to every response in next.config.ts): nosniff, framing, referrer, permissions, COOP,
+ *    and HSTS when asked for;
+ *  - the CONTENT-SECURITY-POLICY (`contentSecurityPolicy`, set per request by src/proxy.ts), because a nonce-based policy needs a fresh
+ *    random nonce on every page response.
+ *
+ * The CSP is the strict one in both modes. `CSP_MODE=report-only` (the default) sends it as Content-Security-Policy-Report-Only: it blocks
+ * nothing, and violations reach /api/csp-report. `CSP_MODE=enforce` sends the same policy as Content-Security-Policy. Rollout and
+ * rollback: docs/operations.md, section 10 and docs/adr/0005-csp-rollout.md.
  *
  * HSTS is opt-in (HSTS_MAX_AGE_SECONDS) because it must only be switched on once the WHOLE site is confirmed to work over HTTPS;
  * browsers remember it for the full max-age.
@@ -16,8 +21,6 @@ export interface Header {
 }
 
 export interface HeaderOptions {
-  /** `next dev` needs eval (source maps / HMR) and websockets; production does not. */
-  dev?: boolean;
   /** HSTS_MAX_AGE_SECONDS: unset or invalid = no HSTS header. */
   hstsMaxAgeSeconds?: string | undefined;
   /** HSTS_INCLUDE_SUBDOMAINS=1 */
@@ -26,12 +29,36 @@ export interface HeaderOptions {
 
 export const CSP_REPORT_PATH = "/api/csp-report";
 
-export function contentSecurityPolicy({ dev = false }: Pick<HeaderOptions, "dev"> = {}): string {
+export type CspMode = "report-only" | "enforce";
+
+/** `CSP_MODE`: exactly "enforce" enforces; anything else (unset, a typo, "Enforce ") is the safe default, report-only. */
+export function parseCspMode(raw: string | undefined): CspMode {
+  return raw === "enforce" ? "enforce" : "report-only";
+}
+
+export const cspHeaderName = (mode: CspMode) => (mode === "enforce" ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only");
+
+/** A fresh, unguessable, per-request nonce: 128 random bits, base64 (the character set CSP and Next.js accept). */
+export function generateNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+/**
+ * The policy. Scripts: our own origin plus the per-request nonce (Next.js puts the nonce on its own inline scripts and bundles, and on
+ * <Script>); no 'unsafe-inline', no 'strict-dynamic' (every script we load is same-origin: the theme script is a static file, not an
+ * inline one). Styles keep 'unsafe-inline' for now: the design system and React emit style="" attributes, which a nonce cannot cover;
+ * CSS injection is a much smaller risk than script injection (see the ADR). Cover art comes through our own image proxy, never
+ * straight from Discogs, so there is no third-party origin anywhere.
+ */
+export function contentSecurityPolicy({ dev = false, nonce }: { dev?: boolean; nonce?: string } = {}): string {
   const directives: Array<[string, string[]]> = [
     ["default-src", ["'self'"]],
-    ["script-src", ["'self'", "'unsafe-inline'", ...(dev ? ["'unsafe-eval'"] : [])]],
+    ["script-src", ["'self'", ...(nonce ? [`'nonce-${nonce}'`] : []), ...(dev ? ["'unsafe-eval'"] : [])]],
     ["style-src", ["'self'", "'unsafe-inline'"]],
-    // Cover art comes through our own image proxy (same origin), never straight from Discogs.
     ["img-src", ["'self'", "data:"]],
     ["font-src", ["'self'"]],
     ["connect-src", ["'self'", ...(dev ? ["ws:", "wss:"] : [])]],
@@ -58,7 +85,6 @@ export function securityHeaders(options: HeaderOptions = {}): Header[] {
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()" },
     { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
-    { key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicy({ dev: options.dev }) },
   ];
   const maxAge = parseHstsMaxAge(options.hstsMaxAgeSeconds);
   if (maxAge !== null) {

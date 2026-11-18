@@ -131,17 +131,32 @@ update account set access_token = null, refresh_token = null, id_token = null,
 
 ## 10. Security headers and CSP
 
-* Always on: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`.
-* **CSP is report-only** (`Content-Security-Policy-Report-Only`): it blocks nothing; browsers send violations to `/api/csp-report`,
-  which writes `[csp-report]` lines to the Vercel logs. Watch the logs for a few weeks. Real findings come from the site's own
-  pages; one-off reports from browser extensions are noise. The policy still allows inline scripts and styles (Next.js and the design
-  system need them). The next step is an enforcing, nonce-based policy once the reports are clean.
-* **The theme script and an enforcing CSP.** The page has one small inline script in `<head>` (`themeInitScript` in `src/lib/theme.ts`) that
-  applies the person's colour theme before the first paint. If the CSP is ever enforced without `'unsafe-inline'`, an inline script needs a
-  nonce or a hash. It is a static string, so a hash works: `'sha256-E8wGxUp1TXGpSP78ZT2mM7vN1sh3jeS0BcVvwoD8h/U='` (a unit test pins this value and
-  fails when the script changes, as a reminder to update it here). Next.js's own inline scripts need nonces anyway, so the choice will be
-  made once, for all of them. Do **not** add the hash to the report-only policy while it still has `'unsafe-inline'`: browsers then ignore
-  `'unsafe-inline'` and report Next's scripts as violations.
+* Always on (every response, `next.config.ts`): `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`,
+  `Cross-Origin-Opener-Policy`. HSTS only when you set it (below).
+* **The Content-Security-Policy is set per page request by `src/proxy.ts`** (it needs a fresh nonce each time) and has two modes, chosen by
+  `CSP_MODE`:
+
+  | `CSP_MODE` | Header | Effect |
+  | --- | --- | --- |
+  | unset, empty, `report-only` or anything else (default) | `Content-Security-Policy-Report-Only` | blocks **nothing**; browsers report violations to `/api/csp-report`, which logs `[csp-report]` lines |
+  | exactly `enforce` | `Content-Security-Policy` | the same policy, enforced |
+
+  The policy is strict in both modes: `script-src 'self' 'nonce-<per request>'` (no `'unsafe-inline'`, no `'unsafe-eval'`), everything else
+  `'self'`, no objects, no framing, `base-uri 'self'`. Styles still allow `'unsafe-inline'` (style attributes cannot carry a nonce; see
+  [ADR 0005](adr/0005-csp-rollout.md)). The theme script is the static file `/theme-init.js`, so there is no hash to keep in step.
+* **Rollout (report-only to enforcing).**
+  1. Deploy with `CSP_MODE` unset (report-only). Use the site normally in the three languages, signed in and out, and watch Vercel > Logs for
+     `[csp-report]` for a few days. A handful of reports that name a browser extension (`chrome-extension:`, `moz-extension:`, `blocked=inline`
+     on a page you did not change) are noise. A report that names one of our own `/_next/` files, `/ds/` files or a page of ours is a real
+     finding: fix it before enforcing.
+  2. Before the first enforcing deploy run the evidence locally: `npx playwright test --project=setup --project=csp` (zero violations on every
+     page and language) and, once, the whole suite with `CSP_MODE=enforce` (PowerShell: `$env:CSP_MODE="enforce"; npx playwright test`).
+  3. In Vercel > Settings > Environment Variables (Production) add `CSP_MODE` = `enforce`, **Redeploy**, then click through sign-in (email
+     and Google), search, a release card, the lists, the account page and the language and theme menus.
+* **Rollback.** Delete `CSP_MODE` (or set it to `report-only`) and **Redeploy**: the browser stops blocking at once for new page loads. Nothing
+  else changes. If a page is broken for one person, a browser extension is the usual cause: try a private window first.
+* **What to do with a new page or script.** Every page must stay dynamic (it reads the session); a static page cannot carry a nonce. Never add
+  an inline `<script>` or `dangerouslySetInnerHTML` script (a unit test fails the build). Load scripts from our own origin or with `<Script>`.
 * **HSTS is off until you set `HSTS_MAX_AGE_SECONDS`.** Only do that after you have confirmed the whole site works over HTTPS
   (every page, sign-in, the Google redirect and email links). Roll out in steps: `300`, then `86400`, then `31536000`. Add
   `HSTS_INCLUDE_SUBDOMAINS=1` only if every subdomain is HTTPS too. A browser remembers HSTS for the full period, so do not jump to a
@@ -272,3 +287,35 @@ while the loose 4x ceiling on all requests keeps a flood from hammering our data
 **The trade-off.** A single IP can now make up to 120 cached requests a minute instead of 30. That costs one Postgres read each and no Discogs
 call. It is not a new way to burn the Discogs budget: the cold allowance, the per-person cap and the token bucket are unchanged.
 
+
+## 18. CI and supply chain
+
+Workflows in `.github/workflows/` (all pinned to full commit SHAs with the version in a comment; every workflow declares `permissions:`;
+a unit test, `tests/unit/ci-supply-chain.test.ts`, fails if that erodes):
+
+| Workflow | When | What |
+| --- | --- | --- |
+| `ci.yml` job `checks` | push to `main`, every pull request | typecheck, lint, unit tests |
+| `ci.yml` job `audit` | same | `npm run audit:prod` (fails on a high or critical advisory in production dependencies) |
+| `ci.yml` job `e2e` | same | the whole Playwright suite against a production build, with **no secrets** |
+| `codeql.yml` | push to `main`, pull requests, Mondays | CodeQL for JavaScript/TypeScript (`security-extended`); results in the Security tab |
+| `secret-scan.yml` | push to `main`, pull requests | gitleaks over the whole history. Free for a personal account; a repository moved to an organisation needs a free `GITLEAKS_LICENSE` secret |
+| `.github/dependabot.yml` | weekly (Mondays) | npm and GitHub Actions updates, minor and patch grouped, **14-day cooldown** before a new release is proposed |
+
+**How the secret-free e2e job works.** The app uses the Neon serverless driver (WebSockets), so a plain Postgres is reached through
+Neon's open-source `wsproxy`: two service containers, both pinned by digest (`postgres:17-alpine` and `ghcr.io/neondatabase/wsproxy`),
+with the proxy allowed to reach only `postgres:5432`. The variable `NEON_WS_PROXY` (CI only) switches the driver to the proxy;
+`src/lib/neon-local.ts` ignores it for any `*.neon.tech` host, so it can never reroute a real Neon connection (unit-tested).
+The Discogs and Brevo servers are the mocks in `tests/mocks/discogs-mock.ts`, and every credential in `playwright.config.ts` is fake.
+On a failure the HTML report, traces and screenshots are uploaded as an artifact (7 days).
+
+**Status: not yet observed running on GitHub.** The workflows were written and their text checked locally, but nothing was pushed by the
+author of this change, so the first run on GitHub is the real test of the proxy wiring (the service containers could not be started on
+the Windows development machine, which has no Docker). If the `e2e` job fails at "Apply the migrations" or at the sign-up step, look at
+the proxy first: the run log of the `wsproxy` container, and that `NEON_WS_PROXY` reaches both `npm run db:migrate` and the app.
+
+**Reading a pull request from Dependabot.** Check the changelog, run the checks, merge. A GitHub Action update changes the SHA and the
+`# vX.Y.Z` comment together; if only one changed, something is wrong. Security updates ignore the cooldown on purpose.
+
+**Updating a pinned action by hand.** Get the *commit* SHA of the tag (`git ls-remote --tags https://github.com/<owner>/<action>.git`
+shows the tag object for annotated tags; use `<tag>^{}`), check the tag is at least two weeks old, and replace SHA and comment together.

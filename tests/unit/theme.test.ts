@@ -1,6 +1,7 @@
-import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_THEME, isTheme, parseTheme, resolveTheme, THEME_KEY, THEMES, themeInitScript, type Theme } from "@/lib/theme";
+import { DEFAULT_THEME, isTheme, parseTheme, resolveTheme, THEME_KEY, THEME_SCRIPT_PATH, THEMES, themeInitScript, type Theme } from "@/lib/theme";
 
 /**
  * The theme choice and the script that applies it before the first paint. The script is a plain string run in <head>, so these tests
@@ -78,14 +79,35 @@ describe("the script that runs in <head>", () => {
     }
   });
 
-  it("is static (no request data) and small, so a CSP hash can allow it", () => {
+  it("is static (no request data) and small", () => {
     expect(themeInitScript).not.toMatch(/\$\{|`/);
     expect(themeInitScript.length).toBeLessThan(400);
     expect(themeInitScript).toContain(THEME_KEY);
   });
 
-  it("its hash is pinned: if you change the script, update the CSP note in docs/operations.md (section 10) too", () => {
-    // Only matters if the CSP is ever ENFORCED without 'unsafe-inline': then this script needs 'sha256-<this>' (or a nonce).
-    expect(createHash("sha256").update(themeInitScript).digest("base64")).toBe("E8wGxUp1TXGpSP78ZT2mM7vN1sh3jeS0BcVvwoD8h/U=");
+  it("is served as the file /theme-init.js, byte for byte, as JavaScript, cacheable", async () => {
+    // A file, not an inline script: the Content-Security-Policy allows it with 'self', with no hash to keep in step with the script.
+    const { GET, dynamic } = await import("@/app/theme-init.js/route");
+    expect(THEME_SCRIPT_PATH).toBe("/theme-init.js");
+    expect(dynamic).toBe("force-static");
+    const res = GET();
+    expect(res.headers.get("content-type")).toMatch(/^text\/javascript/);
+    expect(res.headers.get("cache-control")).toMatch(/public/);
+    expect(await res.text()).toBe(themeInitScript);
+  });
+
+  it("is never inlined into a page: no inline script exists anywhere in the app's source (the CSP forbids them)", () => {
+    const dir = path.resolve(__dirname, "../../src");
+    const sources: string[] = [];
+    const walk = (d: string) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const full = path.join(d, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(tsx|ts)$/.test(e.name)) sources.push(full);
+      }
+    };
+    walk(dir);
+    const offenders = sources.filter((f) => /dangerouslySetInnerHTML|<script(?![^>]*\/>)[^>]*>\s*[^<\s]/.test(readFileSync(f, "utf8")));
+    expect(offenders.map((f) => path.relative(dir, f))).toEqual([]);
   });
 });

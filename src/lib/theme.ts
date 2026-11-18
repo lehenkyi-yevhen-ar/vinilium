@@ -22,10 +22,12 @@ export const parseTheme = (v: unknown): Theme => (isTheme(v) ? v : DEFAULT_THEME
 export const resolveTheme = (theme: Theme, systemPrefersLight: boolean): ResolvedTheme => (theme === "light" || (theme === "system" && systemPrefersLight) ? "light" : "dark");
 
 /**
- * Runs in <head>, before the first paint, so the page never flashes the wrong theme. A STATIC string (no request data in it), so it
- * can be allowed by a CSP hash if the CSP is ever enforced (see docs/operations.md, section 10). It mirrors `resolveTheme`; a unit
- * test runs it against a table of cases and checks both agree. Every access to storage and matchMedia is guarded.
+ * Runs in <head>, before the first paint, so the page never flashes the wrong theme. A STATIC string (no request data in it), served as
+ * the file /theme-init.js (src/app/theme-init.js/route.ts) so the Content-Security-Policy can allow it with 'self'. It mirrors
+ * `resolveTheme`; a unit test runs it against a table of cases and checks both agree. Every access to storage and matchMedia is guarded.
  */
+export const THEME_SCRIPT_PATH = "/theme-init.js";
+
 export const themeInitScript =
   `(function(){var d=document.documentElement,p="${DEFAULT_THEME}";` +
   `try{var s=localStorage.getItem("${THEME_KEY}");if(s==="dark"||s==="light"||s==="system")p=s}catch(e){}` +

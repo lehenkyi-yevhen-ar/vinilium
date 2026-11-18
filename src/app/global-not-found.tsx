@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { site } from "@/config/site";
 import { routing } from "@/i18n/routing";
-import { themeInitScript } from "@/lib/theme";
+import { THEME_SCRIPT_PATH } from "@/lib/theme";
 import en from "@/messages/en.json";
 import nb from "@/messages/nb.json";
 import uk from "@/messages/uk.json";
@@ -22,7 +22,8 @@ export default function GlobalNotFound() {
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="color-scheme" content="dark light" />
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {/* eslint-disable-next-line @next/next/no-sync-scripts -- on purpose: it must block rendering, or the page flashes the wrong theme */}
+        <script src={THEME_SCRIPT_PATH} />
         <link rel="stylesheet" href="/ds/tokens.css" />
         <link rel="stylesheet" href="/ds/components/bundle.css" />
       </head>
