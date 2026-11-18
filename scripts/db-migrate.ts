@@ -5,14 +5,16 @@
  * Prints the target (host and database, never the password) first, and refuses production without --production.
  */
 import fs from "node:fs";
-import { Pool } from "@neondatabase/serverless";
+import { neonConfig, Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
+import { applyLocalNeonProxy } from "../src/lib/neon-local";
 import { guardDatabase } from "./lib/db-guard";
 
 async function main() {
   const target = await guardDatabase({ purpose: "Apply database migrations", allowProduction: true });
   const files = (JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8")) as { entries: unknown[] }).entries.length;
+  applyLocalNeonProxy(neonConfig, process.env, target.url); // CI e2e only: inert unless NEON_WS_PROXY is set, never for *.neon.tech
   const pool = new Pool({ connectionString: target.url });
   const applied = async () => {
     try {

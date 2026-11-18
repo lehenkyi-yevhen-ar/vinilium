@@ -5,15 +5,25 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege: every job only reads the repository. No job needs a secret.
 permissions:
   contents: read
 
+# A newer push to the same branch or pull request replaces the run that is still going.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Every action is pinned to a FULL commit SHA (the version is in the comment). Dependabot proposes updates to both.
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -27,10 +37,91 @@ jobs:
     # Fails the build on a HIGH or CRITICAL advisory in anything that ships to production.
     # Moderate findings in build-time tooling (drizzle-kit -> esbuild) are listed by `npm run audit:all` but do not block.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
       - run: npm ci --ignore-scripts
       - run: npm run audit:prod
+
+  e2e:
+    # The whole browser suite, with NO secrets: a throwaway Postgres service container (reached through Neon's open-source websocket
+    # proxy, because the app uses the Neon serverless driver), the MOCK Discogs and MOCK Brevo servers (fake credentials inside the
+    # config), and a production build. It never touches a real database or a real API. See docs/operations.md, "CI".
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vinilium_e2e
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vinilium_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      wsproxy:
+        image: ghcr.io/neondatabase/wsproxy@sha256:7f2e2149aa6a57ba382a140102fba44f5053f3e44389ccc18adcecf896054efb
+        env:
+          # The proxy may only reach the Postgres service, nothing else.
+          ALLOW_ADDR_REGEX: "^postgres:5432$"
+          LOG_CONN_INFO: "false"
+        ports:
+          - 5433:80
+    env:
+      CI: "true"
+      # The ONLY database the e2e suite uses (the suite refuses anything else). The host name is the service container's; the Neon
+      # driver sends it to the proxy, which resolves it on the container network.
+      DEV_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/vinilium_e2e
+      NEON_WS_PROXY: localhost:5433/v1
+      NODE_OPTIONS: --dns-result-order=ipv4first
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Playwright version (the browser cache key)
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache the Playwright browsers
+        id: pw-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install the browser and its system libraries
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install the system libraries only (browser restored from the cache)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Wait for the Postgres proxy
+        run: curl --silent --output /dev/null --retry 30 --retry-delay 1 --retry-connrefused http://localhost:5433/v1
+      - name: Apply the migrations (to the throwaway Postgres)
+        run: npm run db:migrate
+
+      # Playwright builds the app (`next build`), starts it and the mock servers, then runs every project in order.
+      - name: Run the end-to-end suite
+        run: npx playwright test
+
+      - name: Upload the report, traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-failure-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
