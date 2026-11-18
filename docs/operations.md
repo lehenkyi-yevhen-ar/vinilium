@@ -237,7 +237,7 @@ Replies therefore reach your real inbox. If `NEXT_PUBLIC_CONTACT_EMAIL` is unset
   step: `mode`, `q`, `by` (search), `g` (artist), `n` (albums shown), `sp` (result pages loaded), `o` (other pressings open), `a` and `t`
   (artist and album title), `country`, `released`, `label` (filters), `vp` (pressing pages loaded). They are parsed in
   `src/lib/finder-state.ts`: invalid or tampered values fall back to defaults and the counters are capped (`n` 10, `sp` 5, `vp` 10).
-  Going back re-asks for the pages that were loaded; each is a search request, and the search limiter (30 a minute per IP) counts them.
+  Going back re-asks for the pages that were loaded; each is a search request, answered from the cache when it is fresh (see "Search limits" below: such requests do not use the IP's cold allowance).
 * **"How to search" keeps one setting in the browser's local storage** (`vinilium:search-help` = `closed`; not a cookie, never sent to
   us). The privacy page says so (section "Cookies"). If other things are ever stored on the device, change that sentence too.
 * **The theme switcher** (header, every screen): dark (the design system's default), light, or system. One local-storage key,
@@ -249,3 +249,26 @@ Replies therefore reach your real inbox. If `NEXT_PUBLIC_CONTACT_EMAIL` is unset
   `transform`, `filter` or `backdrop-filter` without checking `tests/e2e/phone-menus.spec.ts`.
 * **The "nothing arrived?" note** (`auth.emailNotArrived`) says the message may be in spam or junk because the sender address is not
   authenticated. **When you buy a domain and authenticate it in Brevo, revisit that wording** (and `docs/email-deliverability-test.md`).
+
+## 17. Search limits (per IP, per user, per person's cold fetches)
+
+Every `/api/discogs/*` call except the image proxy goes through `guardUser` (`src/server/discogs/http.ts`):
+
+| Limit | Counts | Default | Variable | Answer when over |
+| --- | --- | --- | --- | --- |
+| IP flood ceiling | **every** request from the IP, cached answers included | 120 a minute (4 x the next line) | derived | `429 rate_limited` + `Retry-After` |
+| IP cold allowance | a request that needs **at least one Discogs call** (counted once per request, not per record) | 30 a minute | `RL_SEARCH_IP_PER_MIN` | `429 throttled` (scope `discogs`) + `Retry-After`; nothing is sent to Discogs |
+| User ceiling | every request from the signed-in user | 60 a minute | `RL_SEARCH_USER_PER_MIN` | `429 rate_limited` |
+| Person's cold fetches | each uncached record in a batch (albums step, list pages) | 24 a minute | `RL_COLD_USER_PER_MIN` | the batch stops and reports `missing` + `retryAfter` |
+| Discogs itself | every call to Discogs, all users | 60 a minute (read from Discogs' headers) | token bucket in Postgres | `429 throttled` + countdown |
+
+**Why it is split.** The finder keeps its state in the URL, so a browser Back, a reload or a copied link re-asks for every page the
+state says is loaded (up to 5 search pages, 10 albums pages, 10 pressings pages). Those answers come from our cache and cost Discogs
+nothing, but they used to count against the same 30 a minute as a real, cold search, so a person who pressed Back a few times could lock
+their whole network out of searching. Now only a request that would call Discogs spends the IP's cold allowance (the protection of the
+shared Discogs budget is therefore the same or stricter than before: nothing changed for cold requests, which are still 30 a minute per IP),
+while the loose 4x ceiling on all requests keeps a flood from hammering our database.
+
+**The trade-off.** A single IP can now make up to 120 cached requests a minute instead of 30. That costs one Postgres read each and no Discogs
+call. It is not a new way to burn the Discogs budget: the cold allowance, the per-person cap and the token bucket are unchanged.
+

@@ -249,19 +249,17 @@ test("when Discogs says 'slow down' for long, the UI gets a 'throttled' state wi
   expect(recovered.status()).toBe(200);
 });
 
-test("our own per-IP limit answers 429 'rate_limited' with Retry-After, and does not affect other IPs", async ({ request }) => {
+test("Back / reload restores (the same cached page again and again) do not use up the per-IP limit, and do not call Discogs", async ({ request }) => {
   const q = `limit-${RUN}`;
+  const first = await search(request, q, 40); // the one cold look
+  expect(first.status()).toBe(200);
+  const calls = async () => ((await (await request.get(`${MOCK}/__log`)).json()) as unknown[]).length;
+  const before = await calls();
   const statuses: number[] = [];
-  let last;
-  for (let i = 0; i < 62; i++) {
-    last = await search(request, q, 40);
-    statuses.push(last.status());
-  }
-  expect(statuses.slice(0, 60)).toEqual(Array(60).fill(200)); // RL_SEARCH_IP_PER_MIN = 60 in this server
-  expect(statuses.slice(60)).toEqual([429, 429]);
-  expect(await last!.json()).toMatchObject({ error: "rate_limited", scope: "app" });
-  expect(Number(last!.headers()["retry-after"])).toBeGreaterThanOrEqual(1);
-
+  for (let i = 0; i < 75; i++) statuses.push((await search(request, q, 40)).status()); // more than the old 60 a minute
+  expect(statuses).toEqual(Array(75).fill(200)); // RL_SEARCH_IP_PER_MIN = 60 in this server: 60 cold and 240 requests of any kind
+  expect(await calls()).toBe(before); // nothing more reached the mock Discogs
+  // the unit tests (tests/unit/search-ip-limit.test.ts) cover the cold allowance and the flood ceiling, deterministically
   expect((await search(request, q, 41)).status()).toBe(200); // another IP is fine
 });
 

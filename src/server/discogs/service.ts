@@ -39,6 +39,13 @@ async function cached<T>(
   const hit = await getCached<T>(deps.db, key, now);
   if (hit) return { ok: true, data: hit.payload, cached: true, fetchedAt: hit.fetchedAt.toISOString() };
 
+  if (deps.coldLimit) {
+    // Not cached, so this request would spend Discogs budget: ask the caller's cold allowance first. Refused = the same answer as a
+    // Discogs throttle (a countdown on screen), and nothing is sent upstream.
+    const allowance = await deps.coldLimit();
+    if (!allowance.allowed) return { ok: false, error: "throttled", retryAfter: allowance.retryAfter };
+  }
+
   const out = await request();
   if (!out.ok) {
     return out.kind === "throttled"

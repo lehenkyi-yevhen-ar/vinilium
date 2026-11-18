@@ -1,6 +1,6 @@
 import { getDb } from "@/server/db";
 import { coldLimiter } from "@/server/discogs/cold-limit";
-import { badRequest, guardUser, masterIdsSchema, respond } from "@/server/discogs/http";
+import { badRequest, combineCold, guardUser, masterIdsSchema, respond } from "@/server/discogs/http";
 import { getMasters } from "@/server/discogs/service";
 
 /**
@@ -15,5 +15,5 @@ export async function GET(request: Request) {
   if ("response" in g) return g.response;
 
   const db = getDb();
-  return respond(await getMasters({ db, coldLimit: coldLimiter(db, g.userId) }, ids.data));
+  return respond(await getMasters({ db, coldLimit: combineCold(coldLimiter(db, g.userId), g.coldIp) }, ids.data));
 }
