@@ -5,8 +5,8 @@ import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/ds/Button";
 
 /**
- * "How to search": a collapsible block above the search form. Open for a first-time visitor; once they close it, it stays closed
- * on this device. The one setting lives in the browser's local storage (key below, value "closed"), is never sent anywhere and
+ * "How to search": a collapsible block above the search form. For a first-time visitor it is open on a desktop and COLLAPSED on a
+ * phone (640 px wide or less, where it would push the form off the screen); once they close it, it stays closed on this device. The one setting lives in the browser's local storage (key below, value "closed"), is never sent anywhere and
  * is not a cookie; the privacy page says so. Closing it again and opening it removes the setting.
  */
 const KEY = "vinilium:search-help";
@@ -15,13 +15,17 @@ export const HELP_ID = "search-help";
 const listeners = new Set<() => void>();
 /** What was chosen in this page's lifetime; covers a browser that blocks storage (the choice then lasts until the page is reloaded). */
 let chosen: boolean | null = null;
+/** Phone-sized screens: the block starts collapsed there unless the person opened it during this page's lifetime. */
+export const PHONE_QUERY = "(max-width: 640px)";
+const onPhone = () => typeof window.matchMedia === "function" && window.matchMedia(PHONE_QUERY).matches;
 const isClosed = () => {
   if (chosen !== null) return chosen;
   try {
-    return window.localStorage.getItem(KEY) === "closed";
+    if (window.localStorage.getItem(KEY) === "closed") return true;
   } catch {
-    return false; // storage blocked: behave like a first visit
+    /* storage blocked: behave like a first visit */
   }
+  return onPhone(); // a first visit: collapsed on a phone, open elsewhere
 };
 function remember(closed: boolean) {
   chosen = closed;
@@ -40,9 +44,13 @@ function subscribe(onChange: () => void) {
     onChange();
   };
   window.addEventListener("storage", onStorage);
+  // Rotating a phone or resizing the window across the breakpoint changes the default (a choice made on this page still wins).
+  const mq = typeof window.matchMedia === "function" ? window.matchMedia(PHONE_QUERY) : null;
+  mq?.addEventListener("change", onChange);
   return () => {
     listeners.delete(onChange);
     window.removeEventListener("storage", onStorage);
+    mq?.removeEventListener("change", onChange);
   };
 }
 

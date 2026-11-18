@@ -148,6 +148,12 @@ test.describe("signed in", () => {
 
   test("search start: How to search open (first visit)", async ({ page }) => {
     await page.goto("/en/search");
+    // A first visit: open on a desktop, collapsed on a phone (640 px or less); the scan runs with it open either way.
+    const phone = (page.viewportSize()?.width ?? 1280) <= 640;
+    if (phone) {
+      await expect(page.locator("details.x-help")).not.toHaveAttribute("open", "");
+      await page.locator("details.x-help summary").click();
+    }
     await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
     await settle(page);
     await scan(page, "search start, help open");
@@ -155,6 +161,7 @@ test.describe("signed in", () => {
 
   test("search start: How to search closed, and the example filled in", async ({ page }) => {
     await page.goto("/en/search");
+    if ((page.viewportSize()?.width ?? 1280) <= 640) await page.locator("details.x-help summary").click(); // collapsed by default on a phone
     await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
     await page.getByRole("button", { name: "Fill in this example" }).click();
     await expect(page.getByText("Example filled in. Press Search.")).toBeVisible();
@@ -176,6 +183,8 @@ test.describe("signed in", () => {
     test(`search start with the help open (${locale})`, async ({ page }) => {
       await page.goto(`/${locale}/search`);
       await expect(page.locator("details.x-help summary")).toHaveText(summary);
+      if ((page.viewportSize()?.width ?? 1280) <= 640) await page.locator("details.x-help summary").click(); // collapsed by default on a phone
+      await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
       await settle(page);
       await scan(page, `search start (${locale})`);
     });

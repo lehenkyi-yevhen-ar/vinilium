@@ -360,8 +360,12 @@ test.describe("other widgets at phone width (signed in)", () => {
     const page = await context.newPage();
     await page.goto("/en/search");
     const summary = page.locator("details.x-help summary");
-    await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
+    // On a phone a first visit starts COLLAPSED, so the form is on screen straight away.
+    await expect(page.locator("details.x-help")).not.toHaveAttribute("open", "");
+    expect(await centreIsInside(page, "#finder-q")).toEqual({ inside: true, fully: true });
     expect(await summary.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    await summary.tap();
+    await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
     await summary.tap();
     await expect(page.locator("details.x-help")).not.toHaveAttribute("open", "");
     expect(await centreIsInside(page, "#finder-q")).toEqual({ inside: true, fully: true });
