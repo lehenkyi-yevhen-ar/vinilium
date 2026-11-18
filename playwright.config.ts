@@ -20,7 +20,7 @@ export default defineConfig({
   fullyParallel: true,
   // CI keeps an HTML report plus a trace and a screenshot of every failure (uploaded as an artifact by the workflow); no retries, so a
   // flaky test is seen, not hidden.
-  reporter: process.env.CI ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]] : [["list"]],
+  reporter: process.env.CI ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }], ["json", { outputFile: "test-results/results.json" }]] : [["list"]],
   forbidOnly: !!process.env.CI,
   retries: 0,
   use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure", screenshot: "only-on-failure" },

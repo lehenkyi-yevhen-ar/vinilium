@@ -34,8 +34,8 @@ jobs:
       - run: npm test
 
   audit:
-    # Fails the build on a HIGH or CRITICAL advisory in anything that ships to production.
-    # Moderate findings in build-time tooling (drizzle-kit -> esbuild) are listed by `npm run audit:all` but do not block.
+    # scripts/audit-gate.ts: fails on any NEW high or critical advisory; an advisory passes (as a warning) only while it is on the reviewed,
+    # expiring allowlist .audit-allowlist.json. Moderate findings are listed, never blocking. See docs/operations.md, section 18.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -70,7 +70,7 @@ jobs:
         env:
           # The proxy may only reach the Postgres service, nothing else.
           ALLOW_ADDR_REGEX: "^postgres:5432$"
-          LOG_CONN_INFO: "false"
+          LOG_CONN_INFO: "true" # one line per connection (remote address and target, no credentials): read it if the database step fails
         ports:
           - 5433:80
     env:
@@ -78,7 +78,7 @@ jobs:
       # The ONLY database the e2e suite uses (the suite refuses anything else). The host name is the service container's; the Neon
       # driver sends it to the proxy, which resolves it on the container network.
       DEV_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/vinilium_e2e
-      NEON_WS_PROXY: localhost:5433/v1
+      NEON_WS_PROXY: 127.0.0.1:5433/v1 # an address, not "localhost": no IPv6 or DNS doubt
       NODE_OPTIONS: --dns-result-order=ipv4first
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -106,8 +106,10 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Wait for the Postgres proxy
-        run: curl --silent --output /dev/null --retry 30 --retry-delay 1 --retry-connrefused http://localhost:5433/v1
+      # Fail fast, naming the stage: (1) the proxy answers HTTP, (2) a websocket to it opens, (3) Postgres answers through it. Retries for
+      # about 40 s while the service containers finish starting. See docs/operations.md, section 18.
+      - name: Check the database path (proxy, websocket, Postgres)
+        run: npx tsx scripts/ci-db-probe.ts
       - name: Apply the migrations (to the throwaway Postgres)
         run: npm run db:migrate
 
@@ -115,6 +117,30 @@ jobs:
       - name: Run the end-to-end suite
         run: npx playwright test
 
+      - name: Show what failed (step summary)
+        if: always()
+        run: |
+          {
+            echo "### End-to-end run"
+            if [ -f test-results/results.json ]; then
+              echo "$(jq '[.. | objects | select(has("specs")) | .specs[]] | length' test-results/results.json) tests ran; $(jq '[.. | objects | select(has("specs")) | .specs[] | select(.ok==false)] | length' test-results/results.json) failed."
+              echo
+              jq -r '[.. | objects | select(has("specs")) | .specs[] | select(.ok==false) | "- `" + .file + "`: " + .title] | .[]' test-results/results.json | head -40
+            else
+              echo "No test results were written: the run stopped before the tests (see the failing step above)."
+            fi
+            echo
+            echo "Traces, screenshots and the HTML report are uploaded as the artifact **playwright-failure-${{ github.run_id }}** when the run fails (open playwright-report/index.html, or \`npx playwright show-trace <trace.zip>\`)."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Service container logs (database path failures)
+        if: failure()
+        run: |
+          for id in $(docker ps -a --format '{{.ID}}'); do
+            name=$(docker inspect --format '{{.Name}} {{.Config.Image}}' "$id" | sed 's/@sha256.*//')
+            echo "::group::docker logs $name"
+            docker logs --tail 60 "$id" 2>&1 | sed -E 's#postgres(ql)?://[^ ]+#<redacted-url>#g' || true
+            echo "::endgroup::"
+          done
       - name: Upload the report, traces and screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -14,7 +14,8 @@ describe("applyLocalNeonProxy (CI only: a plain Postgres behind Neon's wsproxy)"
   it("routes a non-Neon host through the proxy, over plain ws", () => {
     const cfg: NeonConfigLike = {};
     expect(applyLocalNeonProxy(cfg, { NEON_WS_PROXY: "localhost:5433/v1" }, url)).toBe(true);
-    expect((cfg.wsProxy as () => string)()).toBe("localhost:5433/v1");
+    // a string, so the driver appends ?address=<host>:<port> (a function would have to add it itself; without it the proxy refuses)
+    expect(cfg.wsProxy).toBe("localhost:5433/v1");
     expect(cfg).toMatchObject({ useSecureWebSocket: false, pipelineTLS: false, pipelineConnect: false });
   });
 
@@ -31,5 +32,35 @@ describe("applyLocalNeonProxy (CI only: a plain Postgres behind Neon's wsproxy)"
       expect(applyLocalNeonProxy({}, { NEON_WS_PROXY: bad }, url), bad).toBe(false);
     }
     expect(applyLocalNeonProxy({}, { NEON_WS_PROXY: "localhost:5433/v1" }, "not a url")).toBe(false);
+  });
+});
+
+describe("the address the Neon driver really asks the proxy for (regression: the CI e2e job failed here)", () => {
+  it("is /v1?address=<host>:<port>: wsproxy refuses a request without the target address", async () => {
+    const http = await import("node:http");
+    const { neonConfig, Pool } = await import("@neondatabase/serverless");
+    const seen: string[] = [];
+    const server = http.createServer((_q, r) => {
+      r.statusCode = 400;
+      r.end();
+    });
+    server.on("upgrade", (req, socket) => {
+      seen.push(req.url ?? "");
+      socket.destroy(); // record the request, then refuse it
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    const saved = { wsProxy: neonConfig.wsProxy, secure: neonConfig.useSecureWebSocket, tls: neonConfig.pipelineTLS, pipe: neonConfig.pipelineConnect };
+    try {
+      expect(applyLocalNeonProxy(neonConfig, { NEON_WS_PROXY: `127.0.0.1:${port}/v1` }, "postgresql://u:p@postgres:5432/db")).toBe(true);
+      const pool = new Pool({ connectionString: "postgresql://u:p@postgres:5432/db" });
+      pool.on("error", () => {});
+      await pool.query("select 1").catch(() => {});
+      await pool.end().catch(() => {});
+      expect(seen[0]).toBe("/v1?address=postgres:5432");
+    } finally {
+      Object.assign(neonConfig, { wsProxy: saved.wsProxy, useSecureWebSocket: saved.secure, pipelineTLS: saved.tls, pipelineConnect: saved.pipe });
+      server.close();
+    }
   });
 });

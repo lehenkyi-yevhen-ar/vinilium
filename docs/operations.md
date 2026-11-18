@@ -367,3 +367,54 @@ curl -H "Authorization: Bearer <CRON_SECRET>" "https://<domain>/api/cron/purge?d
 ```
 
 The end-to-end tests only ever call it with `?dryRun=1`, because the dev branch can hold copies of real accounts.
+
+### 18a. The CI e2e job fails at "Apply the migrations": what it means and how to reproduce it
+
+**What happened (2026-11-18, first run on GitHub).** `npm run db:migrate` printed `Migrations applied before: 0 of 3` and then
+`Failed query: CREATE SCHEMA IF NOT EXISTS "drizzle"` with empty parameters. The old script treated **any** error as "no migrations table yet" (so the "0 of 3"
+swallowed a failed connection) and drizzle's "Failed query" wrapper hides the real error in `error.cause`; the Neon driver reports a failed websocket as a bare
+`ErrorEvent` with no message. So the database was not reachable through the websocket path.
+
+**Root cause (verified locally for the part that is ours).** `src/lib/neon-local.ts` set `neonConfig.wsProxy` to a **function** returning the bare proxy address.
+The driver's own documentation (`node_modules/@neondatabase/serverless/CONFIG.md`) says only a **string** gets `?address=<host>:<port>` appended; a function must build
+that query itself. The proxy was therefore asked for `/v1` with **no target address**, and wsproxy (which matches the address against `ALLOW_ADDR_REGEX`) refused
+every connection. Recorded with a throwaway local server that logs what the driver requests: old config `-> /v1`, fixed config `-> /v1?address=postgres:5432`.
+It is now a string, with a regression test (`tests/unit/neon-local.test.ts`, "the address the Neon driver really asks the proxy for").
+**Not verified:** that the proxy and Postgres containers then work together in the Actions service network (no Docker here): only a run on GitHub shows that.
+
+**What changed so the next run says exactly where it breaks.**
+
+* `scripts/ci-db-probe.ts` runs before the migration and checks three stages, retrying for about 40 s: (1) the proxy answers HTTP, (2) a websocket to
+  `ws://<proxy>?address=postgres:5432` opens, (3) Postgres answers an SSLRequest through it. A failure prints the stage and a hint, and fails the job
+  immediately with an annotation.
+* `scripts/db-migrate.ts` proves the connection (`select 1`, several tries) and, on failure, prints the whole redacted `cause` chain including the
+  websocket address that was tried (`scripts/lib/db-error.ts`). Only a missing relation counts as "nothing applied yet".
+* The proxy logs every connection (`LOG_CONN_INFO`), and a `docker logs` step prints the last lines of both service containers on failure.
+* `NEON_WS_PROXY` is `127.0.0.1:5433/v1` (an address, not `localhost`, which removes any IPv6 or DNS doubt).
+* The run ends with a step summary listing the failed tests, and the HTML report, traces and screenshots are the `playwright-failure-<run>` artifact.
+
+**Reading a failure.** Stage 1 fails: the proxy container did not start or the port mapping is wrong (`ports: 5433:80`). Stage 2 fails or the socket closes at
+once: the proxy refused the address (it only allows `^postgres:5432$`) or cannot resolve or reach `postgres` (look at the `wsproxy` log: it prints the
+address it tried and the error). Stage 3 fails with an ErrorResponse or an unexpected byte: something answers that is not Postgres. Authentication errors
+appear in the migrate output (`28P01`): the credentials in the job's `DEV_DATABASE_URL` and the service's `POSTGRES_PASSWORD` must match.
+
+**Reproduce locally (Git Bash, Docker Desktop; not run by the author, so treat as untested).**
+
+```bash
+# ===== LOCAL COPY OF THE CI DATABASE PATH =====
+docker network create vinilium-e2e
+docker run -d --name vin-pg --network vinilium-e2e -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=vinilium_e2e \
+  postgres:17-alpine@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
+docker run -d --name vin-wsproxy --network vinilium-e2e -p 5433:80 -e ALLOW_ADDR_REGEX='^vin-pg:5432$' -e LOG_CONN_INFO=true \
+  ghcr.io/neondatabase/wsproxy@sha256:7f2e2149aa6a57ba382a140102fba44f5053f3e44389ccc18adcecf896054efb
+export DEV_DATABASE_URL='postgresql://postgres:postgres@vin-pg:5432/vinilium_e2e'   # the host name the PROXY resolves
+export NEON_WS_PROXY='127.0.0.1:5433/v1'
+export NODE_OPTIONS='--dns-result-order=ipv4first'
+npx tsx scripts/ci-db-probe.ts && npm run db:migrate
+docker logs vin-wsproxy; docker logs vin-pg | tail -20
+# then the suite (this is a throwaway database, never your DEV branch):
+CI=true npx playwright test
+# clean up:  docker rm -f vin-pg vin-wsproxy && docker network rm vinilium-e2e
+```
+
+**Still unverified until GitHub runs it again:** that the proxy image and Postgres image start in the Actions service network, and the root cause itself.

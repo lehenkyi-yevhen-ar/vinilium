@@ -27,6 +27,32 @@ jobs:
           languages: javascript-typescript
           build-mode: none
           queries: security-extended
+      # The analysis itself must always run (it fails the job on a real error). UPLOADING the results needs code scanning on this repository's
+      # plan (a private repository without GitHub Code Security cannot) and a token that can write security events (a pull request from a
+      # fork has none). So the upload is a separate step: when it cannot happen, the job says so and keeps the results as an artifact,
+      # instead of failing.
       - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           category: "/language:javascript-typescript"
+          upload: never
+          output: sarif-results
+      - name: Upload the results to code scanning
+        id: upload
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: sarif-results
+          category: "/language:javascript-typescript"
+      - name: Say so when the upload was not possible
+        if: steps.upload.outcome == 'failure'
+        run: |
+          echo "::warning title=CodeQL results not uploaded::The analysis ran, but the upload to code scanning failed (a private repository without GitHub Code Security, or a pull request from a fork). The results are attached to this run as the codeql-sarif artifact."
+          echo "### CodeQL: analysis ran, results NOT uploaded to code scanning (plan or fork). Download the codeql-sarif artifact." >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codeql-sarif
+          path: sarif-results/
+          retention-days: 14
+          if-no-files-found: ignore

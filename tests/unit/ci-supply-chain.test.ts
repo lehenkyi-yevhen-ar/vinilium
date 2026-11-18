@@ -61,6 +61,12 @@ describe("GitHub workflows", () => {
     expect(e2e).not.toMatch(/\bDATABASE_URL:\s*(?!postgresql:\/\/postgres:postgres@postgres)/m);
     expect(e2e).not.toMatch(/neon\.tech|api\.discogs\.com|api\.brevo\.com/);
     expect(e2e).toMatch(/upload-artifact/);
+    // fail fast with a named stage BEFORE the migration, and show what failed
+    expect(e2e.indexOf("scripts/ci-db-probe.ts")).toBeGreaterThan(-1);
+    expect(e2e.indexOf("scripts/ci-db-probe.ts")).toBeLessThan(e2e.indexOf("npm run db:migrate"));
+    expect(e2e).toMatch(/GITHUB_STEP_SUMMARY/);
+    expect(e2e).toMatch(/docker logs/);
+    expect(e2e).toMatch(/NEON_WS_PROXY: 127\.0\.0\.1:5433\/v1/);
     expect(e2e).toMatch(/if:\s*failure\(\)/);
   });
 });

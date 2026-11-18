@@ -35,7 +35,9 @@ export function applyLocalNeonProxy(config: NeonConfigLike, env: Record<string, 
   }
   const bare = decoded.replace(/\.+$/, "");
   if (bare === "neon.tech" || bare.endsWith(".neon.tech")) return false;
-  config.wsProxy = () => proxy;
+  // A STRING: the driver appends ?address=<host>:<port> to it (its CONFIG.md). A function form must build that query itself; the first version
+  // returned the bare proxy from a function, so wsproxy never got a target address and refused every connection (the CI e2e failure).
+  config.wsProxy = proxy;
   config.useSecureWebSocket = false;
   config.pipelineTLS = false;
   config.pipelineConnect = false;
