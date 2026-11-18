@@ -267,3 +267,22 @@ a.tabs__tab { text-decoration: none; min-height: var(--touch-target); }
    closed, slid-down state) has the same specificity as its own `.modal.is-open .modal__dialog { transform: none }` and comes after it,
    so an OPEN sheet stayed 40 px too low: its last button was cut off by the bottom of the screen (375x667, Delete account). Outrank it. */
 .modal.is-open:not(.modal--drawer) .modal__dialog { transform: none; }
+
+/* Touch targets: the design system's small buttons (36 px) and filter chips (32 px) are below the 44 px this project holds itself to
+   (the design system's own --touch-target). On a phone, or any touch screen, they grow to it; a desktop pointer keeps the compact size. */
+@media (max-width: 640px), (pointer: coarse) {
+  .btn.btn--sm { height: var(--touch-target); } /* .btn.btn--sm outranks the design system's .btn--sm whatever the stylesheet order */
+  .btn.btn--sm.btn--icon { width: var(--touch-target); }
+  button.tag, a.tag { height: var(--touch-target); } /* the design system fixes .tag at 32 px with `height`, so min-height would not win */
+}
+
+/* Forced colours (Windows high contrast): a button drawn only by its background colour loses its shape, because the system replaces the
+   colours but a border that is not there stays missing. Give every control a boundary of its own; outline takes no space, and the
+   design system's :focus-visible outline (more specific) still wins when the control has focus. */
+@media (forced-colors: active) {
+  .btn, button, .dd__trigger, .tag, a.btn { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .btn:focus-visible, button:focus-visible, .dd__trigger:focus-visible, .tag:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}
+
+/* Long words (the Ukrainian and Norwegian legal text has compounds) must wrap inside a 320 px screen instead of pushing the page sideways. */
+.x-legal, .x-legal li, .x-legal p { overflow-wrap: anywhere; }

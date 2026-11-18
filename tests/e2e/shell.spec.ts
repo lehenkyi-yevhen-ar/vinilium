@@ -45,7 +45,7 @@ test.describe("app shell", () => {
   test("no horizontal scroll and Discogs attribution present", async ({ page }) => {
     await page.goto("/en/sign-up");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect(overflow).toBe(0);
+    expect(overflow).toBeLessThanOrEqual(0); // negative in WebKit/Firefox with a classic scrollbar (innerWidth includes it)
     await expect(page.getByRole("link", { name: "Data provided by Discogs" })).toHaveAttribute("href", /discogs\.com/);
   });
 
@@ -78,7 +78,7 @@ test.describe("app shell", () => {
       // the prescribed Discogs notice is on this page too, in English
       await expect(page.getByText("is not affiliated with, sponsored or endorsed by Discogs.", { exact: false }).first()).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-      expect(overflow).toBe(0);
+      expect(overflow).toBeLessThanOrEqual(0); // negative in WebKit/Firefox with a classic scrollbar (innerWidth includes it)
     });
   }
 

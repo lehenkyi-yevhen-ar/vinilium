@@ -30,6 +30,10 @@ export default defineConfig({
     // Anonymous visitors: shell, contact page, "sign in to search".
     { name: "desktop", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", testMatch: /shell\.spec\.ts/, use: { ...devices["Pixel 7"] } },
+    // The same signed-out smoke tests in the other two engines (browsers installed with `npx playwright install firefox webkit`). Run them
+    // on their own: `npx playwright test --no-deps --project=firefox --project=webkit`. Not part of CI (a Chromium-only job today).
+    { name: "firefox", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Safari"] } },
     // The Discogs and lists APIs, signed in, against the MOCKED Discogs server. Serial: one limiter, one mock.
     {
       name: "discogs",
@@ -148,6 +152,24 @@ export default defineConfig({
       name: "csp",
       testMatch: /csp\.spec\.ts/,
       dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["auth-modes"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    // The Discogs attribution rule on every page that shows Discogs data, three languages (a crawler-style check).
+    {
+      name: "attribution",
+      testMatch: /attribution\.spec\.ts/,
+      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["csp"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    // Accessibility beyond axe: reflow at 320 and 640 px, text spacing, forced colours, reduced motion, 44 px targets, visible focus.
+    {
+      name: "a11y-extra",
+      testMatch: /a11y-extra\.spec\.ts/,
+      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["attribution"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
