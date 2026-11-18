@@ -16,7 +16,7 @@
     "db:studio": "tsx scripts/db-studio.ts",
     "discogs:smoke": "tsx --conditions=react-server scripts/discogs-smoke.ts",
     "db:status": "tsx scripts/db-status.ts",
-    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "audit:prod": "tsx scripts/audit-gate.ts",
     "audit:all": "npm audit",
     "i18n:export": "tsx scripts/i18n-export.ts",
     "i18n:import": "tsx scripts/i18n-import.ts",

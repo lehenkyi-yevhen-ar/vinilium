@@ -314,6 +314,12 @@ author of this change, so the first run on GitHub is the real test of the proxy 
 the Windows development machine, which has no Docker). If the `e2e` job fails at "Apply the migrations" or at the sign-up step, look at
 the proxy first: the run log of the `wsproxy` container, and that `NEON_WS_PROXY` reaches both `npm run db:migrate` and the app.
 
+**The audit gate.** `npm run audit:prod` (the CI job `audit`) runs `npm audit --omit=dev --json` and `scripts/audit-gate.ts`: any high or critical advisory fails
+unless it is listed in `.audit-allowlist.json` (one GHSA id per entry, a justification, a review date, an expiry date; wildcards and package-wide
+ignores are refused, an expired entry fails again). Allowed advisories print as warnings with their justification; moderate and low ones are listed only.
+To handle a new finding: read the advisory, check `npm ls <package>` for how it is reached, apply a fix if one is published (never `npm audit fix --force`),
+otherwise add a reviewed, short-lived entry and tell the owner. The current entry and the reasoning: `docs/decisions-needed.md`, 6b. Locally: `npm run audit:prod`.
+
 **Reading a pull request from Dependabot.** Check the changelog, run the checks, merge. A GitHub Action update changes the SHA and the
 `# vX.Y.Z` comment together; if only one changed, something is wrong. Security updates ignore the cooldown on purpose.
 

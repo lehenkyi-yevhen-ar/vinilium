@@ -52,16 +52,24 @@ private repositories; the gitleaks job works on a personal account.
 Not built. **Recommendation: not now.** The data is a wishlist; the risk is low and each factor adds support work for one operator. Revisit if
 the app grows past friends.
 
-## 6b. `npm run audit:prod` is red today (found 2026-11-18)
+## 6b. `npm run audit:prod` was red (2026-11-18): decided and implemented, for you to confirm
 
-`npm audit --omit=dev --audit-level=high` exits 1 with **6 high and 4 moderate** findings. The high ones are the picomatch ReDoS advisory, which
-npm lists as affecting every version (`*`) with **no patched release**: the installed 4.0.7 is already the latest. It is reached through
-`better-auth`'s optional peer `vitest` and `next-intl`'s `@parcel/watcher` (file watching at development time), not through a request path, but that
-reading is mine and was not verified in the code of those packages. The moderates are `esbuild` through `drizzle-kit` (a build-time tool). No
-dependency was changed in this run (the suggested "fixes" are downgrades: `drizzle-kit@0.18.1`, `vitest@3.1.4`). **The `audit` job in CI will therefore fail on GitHub until
-you decide.** Options: (a) leave it red and re-check weekly (Dependabot will propose a fix when one exists); (b) change the gate to
-`--audit-level=critical` meanwhile (weakens it: your call); (c) add an explicit, dated exception for this one advisory.
-**Recommendation: (c) if npm supports the exception you want, otherwise (a); do not silently lower the level.**
+**Facts (verified).** `npm audit --omit=dev` reports 10 findings: 4 moderate (esbuild, a development-server advisory, reached through `drizzle-kit`) and
+6 high, all the **same** advisory, picomatch GHSA-fc5q-39xc-vjpf (ReDoS in glob matching, range `<=4.0.7`). **4.0.7 is the latest release, so there is no
+patched version**; `npm audit fix` would only downgrade `vitest` and `drizzle-kit`, and nothing was run with `--force`. `package.json` is correct (vitest,
+vite, drizzle-kit, tsx are `devDependencies`); `--omit=dev` still lists them because `better-auth` names `vitest` and `drizzle-kit` as *optional peer*
+dependencies, which npm counts as production edges (the lockfile marks them `devOptional`). The only truly production path is
+`next-intl` -> `@parcel/watcher` -> `picomatch`; `next-intl` uses `@parcel/watcher` in its experimental message *extractor*, with a fixed list of
+ignore globs, and this app does not enable the extractor. `picomatch` appears in no traced serverless file (0 matches in `.next/server` and `.next/static`).
+Real impact for this app: none that a visitor can reach.
+
+**Decision implemented (option c).** `npm run audit:prod` is now `scripts/audit-gate.ts`: it fails on any **new** high or critical advisory, and passes with a
+warning on an advisory listed in `.audit-allowlist.json`. An entry covers one advisory id (no wildcards, no package-wide ignore), must carry a justification
+and a review date, and **stops working on its expiry date** (this one: 2026-12-31, 43 days), after which the job fails again until someone re-reviews it. An
+invalid allowlist fails the gate. Tests: `tests/unit/audit-gate.test.ts`.
+
+**What you still decide:** whether you accept that one exception (it is yours to veto: delete the entry and the gate goes red again). Re-check it
+when picomatch publishes a fix (Dependabot will propose it, with its 14-day cooldown), and in any case by 2026-12-31.
 
 ## 7. Items only you can check (not decisions, but open)
 
