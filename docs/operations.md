@@ -417,4 +417,25 @@ CI=true npx playwright test
 # clean up:  docker rm -f vin-pg vin-wsproxy && docker network rm vinilium-e2e
 ```
 
-**Still unverified until GitHub runs it again:** that the proxy image and Postgres image start in the Actions service network, and the root cause itself.
+**Status:** the proxy and Postgres containers were confirmed working together by the second run's log; what failed next is in 18c.
+
+### 18c. The CI e2e job, second run (2026-11-18, run 44290044943): what failed and why
+
+The first fix worked: in that run the probe printed `probe ok (attempt 1)` and `db:migrate` printed `Migrations applied now: 3 of 3`, so the Postgres and wsproxy service containers
+**do** work together in the Actions network (read from the log; this settles the "unverified" in 18a). The suite then stopped after 38 seconds, `30 passed, 27 failed, 492 did not run`. Two separate causes:
+
+1. **The test side used a second copy of the database driver (the root cause that matters).** The sign-in setup and the teardown failed with a bare `ErrorEvent` after 0.4 s. `@neondatabase/serverless` is a dual package (`require` loads `index.js`, `import()` loads `index.mjs`) and Playwright compiles test files to CommonJS, so `tests/helpers/e2e-db.ts` wrote the proxy setting to the CommonJS copy while the specs built their `Pool` from `await import(...)`, the ESM copy, which still tried a real `wss://postgres/v2`. Proved locally: a probe test printed `same neonConfig instance: false`. It never showed locally because with no `NEON_WS_PROXY` the setting is inert. Fix: every test-side connection comes from `e2ePool()` (one dynamic import for the config **and** the pool); `tests/unit/e2e-db-access.test.ts` fails if a spec builds its own pool. The failure text is now the redacted cause chain (`explainDbError`), not a bare event. Reproduced locally the CI way (below) and the setup passes through the proxy.
+2. **Firefox and WebKit projects ran on a Chromium-only runner.** `playwright.config.ts` defined them unconditionally (the comment said "not part of CI"); the job installs Chromium only, so 26 tests died with `Executable doesn't exist`. On CI they now exist only with `E2E_EXTRA_BROWSERS=1`; on a developer machine nothing changed.
+
+**A local, Docker-free copy of the CI path** (what the author used: a Postgres-compatible PGlite behind a small websocket-to-TCP bridge that answers like wsproxy, `CI=true`, `NEON_WS_PROXY=127.0.0.1:5433/v1`, host `postgres:5432` in `DEV_DATABASE_URL`, two workers) ran the probe, the migrations, the setup and the signed-out tests green. It is **not** a faithful Postgres: one test (`discogs.spec.ts`, "resolves albums' own titles...") failed there because the master rows were missing from `discogs_cache` right after the first request, and the same test **passed against the real DEV branch on Neon**. I did not find the cause inside PGlite's connection multiplexer; treat the PGlite result as a harness limit, and the GitHub run (real Postgres 17) as the verdict.
+
+**Slow test, fixed at the cause.** `discogs.spec.ts` "Back / reload restores..." sent 76 requests one after another; against the remote DEV branch each is a database round trip (about 0.4 s) and the test hit its 30 s limit. The repeats now go five at a time (the limiter counts requests, not timing), so it no longer depends on network distance.
+
+### 18b. Dated reminder: the picomatch audit exception expires on 2026-12-31
+
+`npm run audit:prod` passes today only because `.audit-allowlist.json` lists **one** advisory, picomatch GHSA-fc5q-39xc-vjpf (ReDoS in glob matching, range <=4.0.7, no patched release when it was reviewed on 2026-11-18). The entry **stops working on 2026-12-31**, and the `audit` job then fails on purpose. What to check, in order:
+
+1. `npm view picomatch version` and `npm view picomatch time --json`: is there a release above 4.0.7 that the advisory marks as fixed?
+2. `npm ls picomatch`: which paths still resolve to a vulnerable copy (the production path is `next-intl` > `@parcel/watcher` > `picomatch`; the rest is test tooling).
+3. A fix exists: accept Dependabot's pull request (it waits 14 days by design) or run `npm update picomatch`, run `npm run audit:prod` and the unit tests, then **delete the entry** from `.audit-allowlist.json` in the same commit.
+4. No fix yet: re-read the justification in the entry (extractor not enabled, no visitor-controlled pattern, no copy in the serverless output: `grep -rl picomatch .next/server .next/static` after a build), then move `reviewed` and `expires` forward in one small commit with the reason. Do not widen the entry (one advisory id, no wildcards: the gate refuses anything else).

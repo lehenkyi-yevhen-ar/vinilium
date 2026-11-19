@@ -89,3 +89,8 @@ README, operations (sections 10, 17, 18, 19), architecture with a mermaid diagra
 
 CodeQL URL check, gitleaks, audit and e2e were each investigated, fixed and documented (`docs/autonomous-run-report.md`, "Follow-up"). Commits: f33ac5f aee7ce5 eb013b5 d87cc5f.
 **Next step:** push, then read the four checks. Expected: checks, audit and the pull-request secret scan green; CodeQL shows whether the alert closed; e2e is the first run with the corrected websocket-proxy address; the full-history secret job reports 11 older findings until you decide (`docs/decisions-needed.md` 6c).
+
+## Follow-up 2: PR #1 after the push of 68e438e (2026-11-19): done, pending GitHub
+
+CI e2e (two root causes: the test side used a second copy of the Neon driver; Firefox/WebKit projects on a Chromium-only runner; plus a latency-bound test), the CodeQL alert (`tests/unit/input-fuzz.test.ts:209`, a URL-valued constant in `startsWith`, now guarded by a test for the whole class), full local runs (unit 663 passed; e2e 549 passed with report-only and 549 with `CSP_MODE=enforce`, DEV branch, 0 skipped), 6c, the picomatch reminder, `docs/merge-checklist.md` and the open items. Commits: 6a7a1ae 4e0b663 463b3d3 db5f5e8 and the docs commit. Details: `docs/autonomous-run-report.md`, "Follow-up 2".
+**Next step:** push, then read CI / e2e (the `masters` test is the one thing not reproduced faithfully), CodeQL and the full-history scan (still red until decision 6c).

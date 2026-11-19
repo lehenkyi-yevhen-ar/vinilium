@@ -1,7 +1,7 @@
 # Pre-launch checklist
 
-Tick each item yourself. "Verified" says what was actually checked and by whom; everything else is open. Last updated with the 2026-11
-hardening run (`docs/autonomous-run-report.md`).
+Tick each item yourself. "Verified" says what was actually checked and by whom; everything else is open. Last updated 2026-11-19 (PR #1 follow-up,
+`docs/autonomous-run-report.md`). The section "Known open items" at the end lists what is still undecided; none of it was decided by the agent.
 
 ## Legal and policy
 
@@ -27,7 +27,7 @@ hardening run (`docs/autonomous-run-report.md`).
 - [ ] Rotate nothing now, but know how: operations.md, section 3.
 - [ ] `CRON_SECRET` is set in Vercel (16+ characters) and the daily purge has run once (Vercel > Cron Jobs; `?dryRun=1` shows what it would delete).
 - [ ] **Repository visibility** decided (decision 5b): CodeQL and secret scanning on a private repository.
-- [ ] First **GitHub Actions run** is green: `checks`, `audit`, `e2e` (the secret-free e2e job has never run on GitHub), CodeQL, secret scan.
+- [ ] The **GitHub Actions run of PR #1** is green: `checks`, `audit`, `e2e`, CodeQL, secret scan (pull-request range). The `e2e` job failed on its first two runs (wrong proxy address, then the test side using a second copy of the database driver, plus Firefox/WebKit projects on a Chromium-only runner); both fixed, see the run report. The full-history secret scan stays red until decision 6c is made.
       Then turn on branch protection for `main` and Dependabot alerts.
 
 ## Content and credits
@@ -61,3 +61,24 @@ hardening run (`docs/autonomous-run-report.md`).
 - [ ] The manual accessibility checks in operations.md, section 11 (keyboard only, 200% and 400% zoom, a screen reader, forced colours).
 - [ ] **Real devices**: the automated runs use Chromium (desktop and a phone emulation). A real iPhone (Safari), a real Android phone and
       Firefox desktop have **not** been tested by anyone; do a pass before announcing the site.
+
+## Dependencies
+
+- [ ] **picomatch audit exception expires on 2026-12-31** (`.audit-allowlist.json`, advisory GHSA-fc5q-39xc-vjpf). Before that date: `npm view picomatch version` (the exception was granted because 4.0.7 was the latest and had no fix); `npm ls picomatch` (who still pulls a vulnerable one); if a patched release exists, take Dependabot's update (14-day cooldown), re-run `npm run audit:prod`, and **delete the entry** from `.audit-allowlist.json`. If there is still no fix, re-review the justification and move `expires` and `reviewed` forward in one small commit. After the date the `audit` job fails on purpose until one of the two is done.
+
+## Known open items (undecided: kept visible, not decided by the agent)
+
+- [ ] **Sign-in methods and email** (decision 1): keep email + password (mails go to spam, accepted), go invite-only with `AUTH_SIGNUP_ALLOWLIST`, or Google-only with `AUTH_EMAIL_PASSWORD_ENABLED=false`. Whether a password-only account can come back through Google with the same email is untested.
+- [ ] **Google "Testing mode" behaviour is unexplained**: a third account that is not on the test-users list signed in. Find out why before relying on the list as an access control.
+- [ ] **Publishing the Google app**, and whether Google accepts `vercel.app` as an authorized domain: **unverified** (no custom domain is planned).
+- [ ] **14 open `[NEEDS LEGAL REVIEW]` marks** (`npm run legal:checklist`).
+- [ ] **Native-speaker review of uk and nb**: `docs/i18n/review-uk-nb.csv` (import with `npm run i18n:import`) and `docs/i18n/doubtful-strings.md`.
+- [ ] **HSTS**: only after HTTPS is confirmed everywhere (decision 3); `HSTS_MAX_AGE_SECONDS` stays unset until then.
+- [ ] **CSP enforce rollout**: report-only first, read `[csp-report]` for about a week, then `CSP_MODE=enforce` (decision 2). `CSP_MODE` stays report-only on the first deploy of PR #1.
+- [ ] **Discogs Application Name and Description Policy**: check the name and description registered at Discogs.
+- [ ] **`APP_CONTACT`** = `https://vinilium.vercel.app/en/contact` in Vercel (Production).
+- [ ] **Repository visibility** (decision 5b): private for now; CodeQL upload and secret scanning depend on the plan.
+- [ ] **Lis design-system licence and font credits** (KyivType Sans, CC BY-ND 4.0: do not modify or convert the font files).
+- [ ] **DEV cleanup SQL not yet run** (`docs/ops/dev-cleanup.sql`, DEV branch `br-empty-band-b9f6dxji`, in the Neon SQL Editor, by you).
+- [ ] **Secret-history decision** (decision 6c): the seven test-file fingerprints can be listed now; the four `.env.example` ones only after you decide whether to rotate.
+- [ ] **Safari and real-device coverage is unverified**: Chromium (desktop and phone emulation) is tested in CI; Firefox and WebKit only run the signed-out smoke tests, on a developer machine.

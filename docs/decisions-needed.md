@@ -88,21 +88,52 @@ until you decide.
 * **`CRON_SECRET`: rotate only if** the value in Vercel equals one of the strings that were committed (`cron-secret-0123456789`, `SECRET-CRON-0123456789`,
   `e2e-cron-secret-0123456789`). They were made up for tests, so a real random value cannot match; compare once by eye. Rotation has no user-visible effect (section 3 of `operations.md`).
 
-Fingerprints to paste into `.gitleaksignore` once you have decided (each needs a one-line reason above it; the file's test requires comments):
+### What to do, in this order
+
+**Step 1: the seven made-up test strings (safe now).** They are fixtures in test files (`0123456789abcdef...`, `test-secret-...`, a cron secret of digits), made up for a test and never used for anything. Append this block to `.gitleaksignore` (the file's test requires the comment lines; each entry matches exactly one line of one commit, so it can never hide a future secret):
 
 ```
+# Seven made-up test fixtures in old commits (reviewed 2026-11-19): strings invented for a test, never a credential, never used anywhere.
+# Commit 9f3db890 (email providers and sign-up modes): the fake keys of the Brevo/Resend provider tests and the auth-modes spec.
 9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/e2e/auth-modes.spec.ts:generic-api-key:233
 9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/e2e/auth-modes.spec.ts:generic-api-key:252
 9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/unit/email-providers.test.ts:generic-api-key:139
+# Commit b01c7c9b: the fake session and cron secrets in the Playwright config and the unit-test env helper.
 b01c7c9bcf94f00be1b09f03267909c8ea2b55d8:playwright.config.ts:generic-api-key:53
 b01c7c9bcf94f00be1b09f03267909c8ea2b55d8:tests/helpers/env.ts:generic-api-key:21
+# Commit a6013f44 (the first commit): fake session secrets set inside two unit tests.
 a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:tests/unit/auth-links.test.ts:generic-api-key:5
 a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:tests/unit/email.test.ts:generic-api-key:9
+```
+
+Verified: all seven lines exist at those commits and all seven commits are ancestors of `origin/main`. **Not re-run here:** gitleaks itself was not installed in this session, so the fingerprints come from the earlier scan (2026-11-18); the first full-history run on GitHub after you add them will confirm them.
+
+**Step 2: the four findings in the first commit's `.env.example`: NOT allow-listed, on purpose.** They are lines 12 (`BETTER_AUTH_SECRET`), 20 (`GOOGLE_CLIENT_SECRET`), 25 (`RESEND_API_KEY`) and 45 (`DISCOGS_CONSUMER_SECRET`) of commit `a6013f44`. Their values look random and I cannot prove they were placeholders. **Add the block below only after you have decided that nothing real was ever in them (or after you rotated what was):**
+
+```
+# Four values in the first commit's .env.example (a6013f44), reviewed by the owner on <DATE>: <made-up placeholders, never used> OR <real values that were
+# ROTATED on <DATE>, so the leaked values no longer work>. Pick one sentence and delete the other.
 a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:12
 a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:20
 a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:25
 a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:45
 ```
+
+**Effect on the "full history" job** (`Secret scan`, push to `main`, weekly, manual): today it reports 11 findings and fails. After step 1: 4 findings, still failing. After step 1 and step 2: 0 findings, green. Rotating does **not** turn the job green by itself: history stays as it is (this repository's history was not and will not be rewritten by the agent), so the job only goes green once the fingerprints are listed. That is the right order: rotate first (the old value is then dead), then list the fingerprint, with the date and the reason in the comment. The pull-request scan (the range of the PR) is already green and is unaffected.
+
+### Rotation checklist (names only: no value is ever written here)
+
+Do this **only if** any value in the first commit's `.env.example` was ever a real credential, or you are not sure. If you are sure they were placeholders, skip it and go to step 2. Order matters: new value first, revoke the old one last, so there is no gap (`docs/operations.md`, section 3).
+
+| # | Name | Rotate when | Where | What breaks and how long | How to verify |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `BETTER_AUTH_SECRET` | the value in the first commit was ever used in Vercel (Production) | Vercel > Settings > Environment Variables: a new random value (`openssl rand -base64 32`) | **Everyone is signed out**; nothing is lost; nobody needs to reset a password | Redeploy, open the site in a private window, sign in again; `/api/health` is 200 |
+| 2 | `GOOGLE_CLIENT_SECRET` | the Google client secret of the first commit was ever the real one | Google Cloud > Google Auth Platform > Clients > add a NEW secret; put it in Vercel; Redeploy; **then** disable and delete the old one | Nothing for users if the order is kept; Google sign-in fails between "old deleted" and "Redeploy done" | Sign in with Google on the live site after the Redeploy |
+| 3 | `DISCOGS_CONSUMER_KEY` and `DISCOGS_CONSUMER_SECRET` | the Discogs pair of the first commit was ever the real application key | Discogs > Settings > Developers > your application: generate a new pair, put **both** in Vercel, Redeploy | Until updated, release details show the "not set up" or error state | Open a release card on the live site; the Vercel log shows no `discogs` 401 |
+| 4 | `RESEND_API_KEY` | only if Resend was ever really used (this app sends through Brevo) | Resend > API Keys: delete the key | Nothing (unused) | n/a |
+| 5 | `CRON_SECRET` | only if the value in Vercel equals one of the made-up strings committed in tests (`cron-secret-0123456789`, `SECRET-CRON-0123456789`, `e2e-cron-secret-0123456789`); a random value cannot | Vercel: a new value of 16+ characters | Nothing user-visible; Vercel Cron sends the new value by itself | `curl -H "Authorization: Bearer <value>" ".../api/cron/purge?dryRun=1"` answers 200 (run it in your shell; do not paste the value anywhere) |
+
+After any change in Vercel: **Redeploy** (Deployments > the latest > Redeploy; variables are read at deploy time). Then read the Vercel logs for a few minutes for `401`, `403` or `[email]` errors. Brevo (`BREVO_API_KEY`) is not in the first commit, so it is not part of this list.
 
 (The local branch `backup/pre-history-rewrite` has 6 more findings in commits `65477321` and `38dfea4b`; that branch is not on GitHub, so CI never sees them.)
 

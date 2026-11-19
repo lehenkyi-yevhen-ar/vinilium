@@ -191,3 +191,86 @@ Four checks failed on the pull request. Each: root cause, change, what is verifi
 ## Totals
 
 Unit: **657 passed, 0 failed, 0 skipped** (49 files); typecheck and lint clean. e2e was not re-run for this follow-up: only CI, test-fixture and URL-guard code changed; the Origin-check change is covered by the new unit tests but the existing e2e write tests were not re-run.
+
+---
+
+# Follow-up 2: pull request #1 after the push of 68e438e (2026-11-19)
+
+Written for the owner. Nothing was pushed by the agent; production was never touched. Database target of every e2e run below: **the DEV branch via `DEV_DATABASE_URL`** (stated before each run), except the runs marked "local CI copy" (an empty in-memory Postgres under the host name `postgres`, which cannot reach Neon). Only the e2e user and its rows were created and deleted.
+
+## What GitHub showed (read with `gh`, GET only)
+
+* `CI / checks`, `CI / audit`, `Secret scan` (PR range): green. `CI / e2e` (run 44290044943): red. CodeQL: one open alert, `js/incomplete-url-substring-sanitization`, High, **`tests/unit/input-fuzz.test.ts:209`**, message "'http://discogs.test' may be followed by an arbitrary host name".
+
+## Task 1: CI / e2e, two root causes (both verified)
+
+The log: probe ok, `Migrations applied now: 3 of 3` (so the first fix worked and the service containers work together), then `Running 549 tests using 2 workers`, `27 failed, 492 did not run, 30 passed (38.1s)`.
+
+1. **The test side used a second copy of the driver.** The sign-in setup failed after 0.4 s and the teardown printed "cleanup skipped: ErrorEvent". `@neondatabase/serverless` is a dual package (`require` gives `index.js`, `import()` gives `index.mjs`); Playwright compiles tests to CommonJS, so `e2e-db.ts` set `wsProxy` on the CommonJS copy while the specs built their `Pool` from `await import(...)` (the ESM copy), which tried a real `wss://postgres/v2`. Evidence: a throwaway Playwright test printed `same neonConfig instance: false`. Invisible locally because with no `NEON_WS_PROXY` the setting is inert. Fix: `e2ePool()` (config and pool from one import), used by every spec, the setup and the teardown; `explainDbError()` prints the redacted cause chain instead of a bare event; `tests/unit/e2e-db-access.test.ts` fails if a spec builds its own pool or imports the driver.
+2. **Firefox and WebKit projects on a Chromium-only runner.** 26 failures `Executable doesn't exist at .../firefox-1572/...`. The config defined both projects unconditionally while its comment said "not part of CI". Now they exist on CI only with `E2E_EXTRA_BROWSERS=1`; unit-tested both ways.
+
+**Differences between CI and local that I checked, not assumed:**
+
+| Difference | Result |
+| --- | --- |
+| Clean database, only migrations | Reproduced with an empty PGlite behind a websocket bridge; migrations (3 of 3), setup and the signed-out tests pass |
+| Websocket proxy, IPv4/IPv6, ports | Same `NEON_WS_PROXY=127.0.0.1:5433/v1` and `--dns-result-order=ipv4first`; the real run's log shows the probe succeeding |
+| 2 workers, `CI=true` (no server reuse, html and json reporters, `forbidOnly`, no retries) | Used in the local CI copy |
+| Browser installation | Cause 2 above |
+| Env vars (`CSP_MODE`, cron secret, mock URLs) | Set by `playwright.config.ts` for the server, not read from the job: identical |
+| Our per-IP limiters, one runner IP | Every project uses its own `x-forwarded-for` from 203.0.113.0/24; unchanged and passing |
+| Global timeout vs slow tests | One test was latency-bound (below); the job limit is 60 minutes and the full local run takes about 30 |
+| Test-order dependence | Projects are chained by `dependencies`; the full run passed in that order twice (report-only, enforce) |
+
+**A slow test, fixed at the cause.** `discogs.spec.ts` "Back / reload restores..." made 76 sequential requests; each is a database round trip (about 0.4 s to Neon), so it hit the 30 s limit **on DEV** (it had passed before; next to the CI Postgres it is fast). The repeats now go five at a time. No timeout was raised.
+
+**Not reproduced faithfully, stated plainly.** In the local CI copy one test (`discogs.spec.ts` "resolves albums' own titles ...") failed because the `master` rows were not in `discogs_cache` right after the first request; the same test **passed against real Postgres (the Neon DEV branch)** in three separate runs. Two direct experiments (concurrent inserts and concurrent selects through the same bridge, 40 and 100 rounds) found no lost or wrong rows, so I did **not** find the cause and cannot call it a harness artifact with certainty. It is the one thing the GitHub run (Postgres 17) must confirm; if `masters` fails there, the first place to look is the `persist()` writes in `batchCached` (`src/server/discogs/service.ts`) under a slower connection.
+
+**Teardown leak found and fixed on the way.** The limiter key shape `app:<scope>:ipcold:<ip>` (added with the Back/reload fix) did not match the teardown pattern, so the suite left counters behind (DEV `rate_limit`: 6 rows before, 85 after the two full runs, 63 after the fixed teardown). They are counters, not personal data, and the retention purge removes them; the teardown now also deletes the `ipcold` counters of the 203.0.113.0/24 test addresses and the limiter counters of the e2e users it deletes (keyed to the id of a row the suite created). DEV users stayed at 3, `user_items` and `discogs_cache` at 0.
+
+**Readable failures (already in the workflow, now fed by better errors):** failing test names in the step summary, the HTML report, traces and screenshots as the `playwright-failure-<run>` artifact, `docker logs` of both service containers, redacted cause chains in the setup, teardown and migrate output. Section 18c of `docs/operations.md` explains this run.
+
+## Task 2: CodeQL
+
+* **Root cause.** `expect(u.startsWith(BASE), u).toBe(true)` with `const BASE = "http://discogs.test"`. `startsWith` accepts `http://discogs.test.evil.example/x`. My earlier repository scan looked for URL **literals** inside `includes/startsWith/...` and missed a **constant** holding a URL. The earlier fix (`f33ac5f`) therefore left this line, which is why the alert persisted.
+* **Fix.** `expect(new URL(u).origin).toBe(new URL(BASE).origin)`. A scan, and then a permanent test, `tests/unit/url-substring-guard.test.ts`, check `src`, `scripts` and `tests` for `startsWith/endsWith/includes/indexOf/lastIndexOf` with a URL or host, literal or constant (and template prefixes): zero other hits. `host.endsWith(".neon.tech")` on an already parsed, lower-cased hostname is a dot-boundary suffix check and is allowed. Also checked: no `.replace(/https?:\/\//...)` on a security path (the two found are a test helper turning a mail link into a path and the mock server rewriting image hosts) and no unanchored host regex. The image proxy allow-list was not touched.
+* **Verified locally:** the tests. **Only GitHub can confirm** that the alert closes. If it stays open, dismiss it in GitHub with: *"False positive: test assertion on the origin of a URL our own code built; production code parses URLs with the URL class and compares exact hosts (tests/unit/url-checks.test.ts, tests/unit/url-substring-guard.test.ts)."* I do not expect to need it: the flagged expression no longer exists.
+
+## Task 3: full local runs (DEV branch, own rows only)
+
+| Run | Result |
+| --- | --- |
+| typecheck | exit 0 |
+| lint | exit 0 (after ignoring Playwright's generated report folders, see below) |
+| unit, full | **663 passed, 0 failed, 0 skipped** (51 files; was 657) |
+| e2e full, `CSP_MODE` unset (report-only), 8 workers, includes the Firefox and WebKit shell tests | **549 passed, 0 failed, 0 skipped** (30.2 min) |
+| e2e full, `CSP_MODE=enforce` | **549 passed, 0 failed, 0 skipped** (30.6 min) |
+
+The same-site Origin check in `src/server/auth/request-user.ts` (hostile-origin hardening) is exercised by the write e2e tests (library, keyboard, phone menus, auth-modes): all passed in both runs. No test was skipped. Not covered: real Safari, real phones.
+
+`npm run lint` failed with 133 errors once, from `playwright-report/` (minified viewer code written by my `CI=true` runs; git-ignored but not ESLint-ignored); it is now in the ESLint ignores.
+
+## Tasks 4 to 7 (documents)
+
+* `docs/decisions-needed.md` 6c: the exact seven `.gitleaksignore` lines (test fixtures only), the four `.env.example` lines **not** to add yet, the effect on the full-history job (11 findings now, 4 after the first block, 0 after both), and a rotation checklist by name. gitleaks itself was not installed in this session, so the fingerprints were checked for existence (all eleven lines exist in commits that are ancestors of `origin/main`) but not re-scanned.
+* Picomatch expiry (2026-12-31): `docs/pre-launch-checklist.md` ("Dependencies") and `docs/operations.md` section 18b.
+* `docs/merge-checklist.md`: what Vercel does after the merge, variables by name, `CSP_MODE` staying report-only, the daily cron, `/api/health`, verification, rollback (Hobby: previous production deployment only, per Vercel's documentation; unverified for your plan), a hand smoke checklist. **No migration is needed** (`git diff main --stat -- drizzle src/server/db/schema.ts` is empty).
+* `docs/pre-launch-checklist.md` "Known open items": every item you listed, undecided.
+
+## New commits (`git --no-pager log origin/autonomous/hardening..HEAD --oneline`)
+
+| Hash | Message | Gate on its own tree |
+| --- | --- | --- |
+| 6a7a1ae | CI e2e: one copy of the database driver on the test side (root cause of the setup/teardown failure), no Firefox/WebKit on the Chromium-only runner | typecheck 0, lint 0, unit 661 passed |
+| 4e0b663 | e2e: send the 75 repeated searches five at a time (76 sequential round trips hit the 30 s test limit against a remote database) | typecheck 0, lint 0, unit 661 passed |
+| 463b3d3 | lint: ignore Playwright's generated report and results folders | typecheck 0, lint 0, unit 661 passed |
+| db5f5e8 | CodeQL: compare the exact origin in input-fuzz.test.ts:209, plus a guard test for the whole class | typecheck 0, lint 0, unit 663 passed |
+| (next) | Docs: follow-up 2 (CI e2e root causes, CodeQL, merge checklist, 6c, reminders, open items) | docs only |
+
+Each code commit was checked out alone in a temporary git worktree (shared node_modules) and run through typecheck, lint and the whole unit suite.
+
+## Still only GitHub can confirm
+
+1. CI / e2e passes end to end on the runner (2 vCPU, Postgres 17 behind wsproxy), in particular the `masters` test above and the total duration.
+2. The CodeQL alert closes.
+3. The full-history secret scan stays red until you decide 6c.
