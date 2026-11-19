@@ -195,7 +195,11 @@ test('"Show more albums" and the opened "Other pressings" section survive Back a
   // a release without a master: its card carries the state, and Back returns to the albums (still 2 views, section open)
   await page.getByRole("link", { name: "Open release" }).first().click();
   await expect(page).toHaveURL(/\/en\/release\/7000/);
-  await page.getByRole("link", { name: /^Back to (pressings|albums)$/ }).click();
+  // Wait for the card itself (the mock's record for 7000 has no master, like the entry in the albums list): the Back link is then "Back to albums" before
+  // and after the data arrives. The first version clicked "Back to (pressings|albums)" at once and passed or failed on whether the record had arrived yet
+  // (the mock said master_id 500, so once it had, the link correctly led to that master: the CI failure of finder-nav-390).
+  await expect(page.getByRole("heading", { level: 1, name: "Odd Pressing 0" })).toBeVisible();
+  await page.getByRole("link", { name: "Back to albums", exact: true }).click();
   await expectSameAddress(page, albumsUrl);
 
   // reload and the browser's Back button
@@ -207,6 +211,28 @@ test('"Show more albums" and the opened "Other pressings" section survive Back a
   await page.goBack();
   await expect(cards(page)).toHaveCount(16, { timeout: 60_000 });
   await expect(section).toHaveAttribute("open", "");
+});
+
+test("a release card opened from a pressings page: its Back link does not point at the albums while the card loads, then leads to those pressings", async ({ page }) => {
+  // The address of a card opened from a master's pressings page carries the master's title (t) but not its id; the id comes with the release record.
+  // Until then the link must not guess: it used to read "Back to albums" and switch to "Back to pressings" after the record arrived, so a tap in
+  // between went to the wrong place.
+  let open!: () => void;
+  const gate = new Promise<void>((resolve) => (open = resolve));
+  await page.route("**/api/discogs/releases/11", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.goto(`/en/release/11?mode=track&q=back-${RUN}&g=cobalt+parade&n=1&a=Cobalt+Parade&t=Glass+Harbor`);
+  await expect(page.getByTestId("back-pending")).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Back to (albums|pressings|search)$/ })).toHaveCount(0); // nothing to tap yet, so nothing wrong to tap
+  open();
+  const back = page.getByRole("link", { name: "Back to pressings", exact: true });
+  await expect(back).toBeVisible();
+  await expect(back).toHaveAttribute("href", /\/en\/master\/500\?/);
+  await expect(page.getByTestId("back-pending")).toHaveCount(0);
+  await back.click();
+  await steps.pressings(page);
 });
 
 test("the 'try as artist / album' links keep what they can, and 'without the artist' drops only the artist", async ({ page }) => {
