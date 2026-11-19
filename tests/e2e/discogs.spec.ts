@@ -257,7 +257,9 @@ test("Back / reload restores (the same cached page again and again) do not use u
   const calls = async () => ((await (await request.get(`${MOCK}/__log`)).json()) as unknown[]).length;
   const before = await calls();
   const statuses: number[] = [];
-  for (let i = 0; i < 75; i++) statuses.push((await search(request, q, 40)).status()); // more than the old 60 a minute
+  // 75 repeats (more than the old 60 a minute), five at a time: every request is a database round trip, so 75 one after another took ~30 s against
+  // a remote DEV branch and hit the test timeout (a latency problem of the test, not of the app). The limiter counts requests, not their timing.
+  for (let i = 0; i < 75; i += 5) statuses.push(...(await Promise.all(Array.from({ length: 5 }, () => search(request, q, 40)))).map((r) => r.status()));
   expect(statuses).toEqual(Array(75).fill(200)); // RL_SEARCH_IP_PER_MIN = 60 in this server: 60 cold and 240 requests of any kind
   expect(await calls()).toBe(before); // nothing more reached the mock Discogs
   // the unit tests (tests/unit/search-ip-limit.test.ts) cover the cold allowance and the flood ceiling, deterministically
