@@ -4,7 +4,7 @@ import type { ApiErrorBody, DiscogsResult } from "@/lib/discogs/types";
 import { getRequestUserId, isCrossSite } from "@/server/auth/request-user";
 import { getDb } from "@/server/db";
 import { limits } from "@/server/limits";
-import { clientIp, hit } from "@/server/rate-limit";
+import { clientIp, hit, LIMITER_RETRY_AFTER_SECONDS, LimiterUnavailableError } from "@/server/rate-limit";
 import { stripControl } from "@/lib/text";
 import { MAX_SEARCH_PAGES, MAX_VERSION_PAGES } from "./config";
 
@@ -14,6 +14,11 @@ export function errorResponse(status: number, body: ApiErrorBody): Response {
   const headers: Record<string, string> = { ...NO_STORE };
   if (body.retryAfter !== undefined) headers["Retry-After"] = String(body.retryAfter);
   return Response.json(body, { status, headers });
+}
+
+/** The limiter's counter could not be reached: fail CLOSED with a structured, retryable answer (not an unhandled 500, and never "let it through"). */
+export function limiterUnavailable(): Response {
+  return errorResponse(503, { error: "unavailable", retryAfter: LIMITER_RETRY_AFTER_SECONDS, message: "Please try again in a moment." });
 }
 
 /** The answer of a cold-fetch allowance (see cold-limit.ts): `allowed`, or how many seconds until there is room again. */
@@ -55,8 +60,14 @@ export async function guardUser(
   const cfg = limits();
   const ip = clientIp(request.headers);
   const ipCeiling = scope === "search" ? cfg.search.ipAll : cfg.image.ip;
-  const byIp = await hit(db, { key: `${scope}:ip:${ip}`, limit: ipCeiling, windowSec: cfg.windowSec });
-  const byUser = await hit(db, { key: `${scope}:user:${userId}`, limit: cfg[scope].user, windowSec: cfg.windowSec });
+  let byIp, byUser;
+  try {
+    byIp = await hit(db, { key: `${scope}:ip:${ip}`, limit: ipCeiling, windowSec: cfg.windowSec });
+    byUser = await hit(db, { key: `${scope}:user:${userId}`, limit: cfg[scope].user, windowSec: cfg.windowSec });
+  } catch (error) {
+    if (error instanceof LimiterUnavailableError) return { response: limiterUnavailable() }; // fail closed
+    throw error;
+  }
   const blocked = [byIp, byUser].filter((r) => !r.allowed).sort((a, b) => b.retryAfter - a.retryAfter)[0];
   if (blocked) return { response: errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: blocked.retryAfter }) };
 
@@ -64,10 +75,14 @@ export async function guardUser(
   // result: a batch calls this from several workers at once, and they must all wait for the same single charge.
   let charged: Promise<ColdAllowance> | null = null;
   const coldIp: ColdLimit = () =>
-    (charged ??= hit(db, { key: `${scope}:ipcold:${ip}`, limit: cfg.search.ip, windowSec: cfg.windowSec }).then((r) => ({
-      allowed: r.allowed,
-      retryAfter: r.retryAfter,
-    })));
+    (charged ??= hit(db, { key: `${scope}:ipcold:${ip}`, limit: cfg.search.ip, windowSec: cfg.windowSec }).then(
+      (r) => ({ allowed: r.allowed, retryAfter: r.retryAfter }),
+      (error) => {
+        // fail closed: no counter, no Discogs call (the shared 60/min budget); the screen shows its "waiting" countdown
+        if (error instanceof LimiterUnavailableError) return { allowed: false, retryAfter: LIMITER_RETRY_AFTER_SECONDS };
+        throw error;
+      },
+    ));
   return { userId, coldIp };
 }
 

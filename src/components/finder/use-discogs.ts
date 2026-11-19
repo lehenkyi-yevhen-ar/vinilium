@@ -27,7 +27,7 @@ export async function fetchDiscogs<T>(url: string, signal?: AbortSignal): Promis
       const body = (await res.json()) as { data: T; cached: boolean; fetchedAt: string };
       return { kind: "ok", data: body.data, cached: body.cached, fetchedAt: body.fetchedAt };
     }
-    const body = (await res.json().catch(() => ({}))) as { retryAfter?: number; scope?: "discogs" | "app" };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; retryAfter?: number; scope?: "discogs" | "app" };
     switch (res.status) {
       case 401:
         return { kind: "unauthorized" };
@@ -38,7 +38,9 @@ export async function fetchDiscogs<T>(url: string, signal?: AbortSignal): Promis
         return { kind: "throttled", retryAfter: Math.max(1, Math.ceil(body.retryAfter ?? (header || 5))), scope: body.scope === "app" ? "app" : "discogs" };
       }
       case 503:
-        return { kind: "unconfigured" };
+        // "unconfigured" = no Discogs credentials (the "not set up" screen). Any other 503 (our limiter could not reach its counter: "unavailable") is
+        // short-lived: the generic error screen with its Retry button.
+        return body.error === "unconfigured" ? { kind: "unconfigured" } : { kind: "error" };
       default:
         return { kind: "error" };
     }
