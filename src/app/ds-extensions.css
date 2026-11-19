@@ -187,6 +187,9 @@ body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; bac
       select variant (account page, .select.dd__trigger) keeps the design system's layout. */
 .dd[data-dd="menu"] > .dd__trigger.btn { justify-content: center; gap: var(--space-2); padding-right: var(--space-5); }
 .dd[data-dd="menu"] > .dd__trigger.btn.btn--icon { padding-inline: 0; }
+/* The same rule turns every direct svg of an open trigger by 180deg (it is the chevron's flip): our own icons must not turn. It flipped the
+   moon of the theme button upside down while its menu was open (the sun and the globe are symmetric, so nobody noticed). */
+.dd[data-dd="menu"].is-open > .dd__trigger.btn > svg { transform: none; }
 
 /* 2. A menu surface must not let the page show through. .glass-strong is a 72-74% tint that relies on backdrop-filter, and a
       backdrop-filter inside the navbar's own backdrop-filter blurs nothing of the page (the navbar is its backdrop root): the heading

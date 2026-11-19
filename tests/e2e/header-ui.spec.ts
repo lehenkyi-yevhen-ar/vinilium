@@ -194,6 +194,28 @@ test("the focus ring of the theme button is whole: visible, not clipped by an an
   }
 });
 
+// The design system turns every direct svg of an OPEN .dd__trigger by 180deg (a chevron's flip). The moon of the theme button was shown
+// upside down while its menu was open: no icon of a header menu trigger may be transformed.
+for (const vp of VIEWPORTS.slice(0, 2)) {
+  for (const scheme of SCHEMES) {
+    test(`the icons of the header menu buttons are not turned while the menu is open: ${vp.name} ${scheme}`, async ({ browser, baseURL }) => {
+      const { context, page } = await openPage(browser, baseURL, vp, scheme, "/en");
+      for (const root of [THEME_ROOT, LANG_ROOT]) {
+        await openMenu(page, root, vp);
+        const transforms = await page.evaluate((sel) => {
+          const icons = [...document.querySelectorAll<SVGElement>(`${sel} .dd__trigger > svg`)].filter((s) => s.getBoundingClientRect().width > 0);
+          return icons.map((s) => getComputedStyle(s).transform);
+        }, root);
+        expect(transforms.length, `visible icon in ${root}`).toBeGreaterThanOrEqual(1);
+        for (const t of transforms) expect(t, `${root} icon is not transformed (${vp.name} ${scheme})`).toBe("none");
+        await page.keyboard.press("Escape");
+        await expect(page.locator(`${root}.is-open`)).toHaveCount(0);
+      }
+      await context.close();
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------
 // 2. Rows of the theme menu
 
