@@ -4,7 +4,8 @@ import type { ApiErrorBody, DiscogsResult } from "@/lib/discogs/types";
 import { getRequestUserId, isCrossSite } from "@/server/auth/request-user";
 import { getDb } from "@/server/db";
 import { limits } from "@/server/limits";
-import { clientIp, hit } from "@/server/rate-limit";
+import { clientIp, hit, LIMITER_RETRY_AFTER_SECONDS, LimiterUnavailableError } from "@/server/rate-limit";
+import { stripControl } from "@/lib/text";
 import { MAX_SEARCH_PAGES, MAX_VERSION_PAGES } from "./config";
 
 const NO_STORE = { "Cache-Control": "private, no-store" } as const;
@@ -15,12 +16,40 @@ export function errorResponse(status: number, body: ApiErrorBody): Response {
   return Response.json(body, { status, headers });
 }
 
+/** The limiter's counter could not be reached: fail CLOSED with a structured, retryable answer (not an unhandled 500, and never "let it through"). */
+export function limiterUnavailable(): Response {
+  return errorResponse(503, { error: "unavailable", retryAfter: LIMITER_RETRY_AFTER_SECONDS, message: "Please try again in a moment." });
+}
+
+/** The answer of a cold-fetch allowance (see cold-limit.ts): `allowed`, or how many seconds until there is room again. */
+export type ColdAllowance = { allowed: boolean; retryAfter: number };
+export type ColdLimit = () => Promise<ColdAllowance>;
+
+/** Several cold limits as one: the first one that refuses wins (and nothing after it is charged). */
+export function combineCold(...limits: ColdLimit[]): ColdLimit {
+  return async () => {
+    for (const l of limits) {
+      const r = await l();
+      if (!r.allowed) return r;
+    }
+    return { allowed: true, retryAfter: 0 };
+  };
+}
+
 /**
  * Gate for every Discogs endpoint: (1) only our own pages may call it (browsers label cross-site requests), (2) the caller
- * must be signed in, (3) our own limits, per IP AND per user. Returns a ready error response, or null to proceed.
+ * must be signed in, (3) our own limits, per IP AND per user. Returns a ready error response, or the user id plus `coldIp`.
  * Sign-in is required because the Terms forbid giving third parties access to the Content and the 60/min budget is shared.
+ *
+ * For `search`, the per-IP limit is split in two (see limits().search): every request counts against a loose flood ceiling here,
+ * but only a request that actually needs a Discogs call spends the IP's COLD allowance: the route hands `coldIp` to the service,
+ * which calls it once, just before the first upstream call. A reload or Back that is answered from the cache therefore costs the
+ * shared Discogs budget nothing and does not use up the cold allowance either.
  */
-export async function guardUser(request: Request, scope: "search" | "image"): Promise<{ response: Response } | { userId: string }> {
+export async function guardUser(
+  request: Request,
+  scope: "search" | "image",
+): Promise<{ response: Response } | { userId: string; coldIp: ColdLimit }> {
   if (isCrossSite(request)) {
     return { response: errorResponse(403, { error: "forbidden", message: "This endpoint is only available to this site's own pages." }) };
   }
@@ -30,10 +59,31 @@ export async function guardUser(request: Request, scope: "search" | "image"): Pr
   const db = getDb();
   const cfg = limits();
   const ip = clientIp(request.headers);
-  const byIp = await hit(db, { key: `${scope}:ip:${ip}`, limit: cfg[scope].ip, windowSec: cfg.windowSec });
-  const byUser = await hit(db, { key: `${scope}:user:${userId}`, limit: cfg[scope].user, windowSec: cfg.windowSec });
+  const ipCeiling = scope === "search" ? cfg.search.ipAll : cfg.image.ip;
+  let byIp, byUser;
+  try {
+    byIp = await hit(db, { key: `${scope}:ip:${ip}`, limit: ipCeiling, windowSec: cfg.windowSec });
+    byUser = await hit(db, { key: `${scope}:user:${userId}`, limit: cfg[scope].user, windowSec: cfg.windowSec });
+  } catch (error) {
+    if (error instanceof LimiterUnavailableError) return { response: limiterUnavailable() }; // fail closed
+    throw error;
+  }
   const blocked = [byIp, byUser].filter((r) => !r.allowed).sort((a, b) => b.retryAfter - a.retryAfter)[0];
-  return blocked ? { response: errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: blocked.retryAfter }) } : { userId };
+  if (blocked) return { response: errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: blocked.retryAfter }) };
+
+  // One unit per request, taken on the first call; later calls in the same request reuse the answer. The PROMISE is kept, not the
+  // result: a batch calls this from several workers at once, and they must all wait for the same single charge.
+  let charged: Promise<ColdAllowance> | null = null;
+  const coldIp: ColdLimit = () =>
+    (charged ??= hit(db, { key: `${scope}:ipcold:${ip}`, limit: cfg.search.ip, windowSec: cfg.windowSec }).then(
+      (r) => ({ allowed: r.allowed, retryAfter: r.retryAfter }),
+      (error) => {
+        // fail closed: no counter, no Discogs call (the shared 60/min budget); the screen shows its "waiting" countdown
+        if (error instanceof LimiterUnavailableError) return { allowed: false, retryAfter: LIMITER_RETRY_AFTER_SECONDS };
+        throw error;
+      },
+    ));
+  return { userId, coldIp };
 }
 
 /** Same checks, for endpoints that do not need the user id: a ready error response, or null to proceed. */
@@ -60,12 +110,12 @@ export function respond<T>(result: DiscogsResult<T>): Response {
 }
 
 export const searchQuerySchema = z.object({
-  q: z.string().transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " ")).pipe(z.string().min(1).max(100)),
+  q: z.string().transform((s) => stripControl(s).normalize("NFC").trim().replace(/\s+/g, " ")).pipe(z.string().min(1).max(100)),
   mode: z.enum(["track", "artist", "album"]),
   /** Optional artist to narrow a track or album search to. */
   by: z
     .string()
-    .transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " "))
+    .transform((s) => stripControl(s).normalize("NFC").trim().replace(/\s+/g, " "))
     .pipe(z.string().max(100))
     .optional()
     .transform((s) => s || undefined),
@@ -74,7 +124,7 @@ export const searchQuerySchema = z.object({
 
 const optionalText = z
   .string()
-  .transform((s) => s.normalize("NFC").trim().replace(/\s+/g, " "))
+  .transform((s) => stripControl(s).normalize("NFC").trim().replace(/\s+/g, " "))
   .pipe(z.string().max(100))
   .optional()
   .transform((s) => s || undefined);

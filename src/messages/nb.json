@@ -27,6 +27,13 @@
     "search": "Søk",
     "lists": "Mine lister"
   },
+  "theme": {
+    "label": "Tema",
+    "dark": "Mørk",
+    "light": "Lys",
+    "system": "System",
+    "systemHint": "Følger enheten din"
+  },
   "locales": {
     "uk": "Українська",
     "en": "English",
@@ -153,6 +160,11 @@
     "title": "Siden finnes ikke",
     "text": "Den siden finnes ikke, eller den er flyttet.",
     "home": "Tilbake til forsiden"
+  },
+  "errorPage": {
+    "title": "Noe gikk galt",
+    "text": "En uventet feil stoppet denne siden. Listene dine er trygge. Prøv igjen, eller gå tilbake til forsiden.",
+    "retry": "Prøv igjen"
   },
   "email": {
     "verify": {
@@ -486,6 +498,7 @@
       "s2Sessions": "Innloggingene dine: en tilfeldig øktidentifikator, når den utløper, og IP-adressen og nettleserbeskrivelsen (user agent) til enheten du logget inn fra.",
       "s2Lists": "Listene dine: Discogs-utgivelsesnumrene du legger til, hvilken liste hver ligger på (ønskeliste eller samling), dine egne notater og standvurderinger, og datoer.",
       "s2Counters": "Forespørselstellere: for å beskytte tjenesten mot misbruk teller vi forespørsler per IP-adresse og per konto i omtrent ett minutt om gangen.",
+      "s2Logs": "Serverlogger: hostingleverandøren vår, Vercel, behandler tekniske forespørselsdata, som IP-adressen din, tidspunkt, adressen som ble forespørt og resultatet, og fører logger for drift og sikkerhet. [NEEDS LEGAL REVIEW] Hvor lenge Vercel beholder loggene.",
       "s2Emails": "E-poster: bekreftelses- og tilbakestillingsmeldinger sendes via Brevo, som får e-postadressen og navnet ditt til dette formålet. Svar på disse meldingene går til kontaktadressen vår.",
       "s3Title": "Hva vi ikke gjør",
       "s3P1": "Ingen analyse, ingen reklame, ingen sporing av hva du gjør på andre nettsteder og ingen betalingsdata. Vi ber aldri om Discogs-kontoen eller passordet ditt: platedetaljer hentes av serveren vår med tjenestens egne Discogs-opplysninger.",
@@ -493,8 +506,8 @@
       "s4P1": "Platedetaljer (titler, artister, omslag, sporlister) kommer fra Discogs. Serveren vår henter dem; nettleseren din kontakter ikke Discogs for dette. En kortvarig hurtigbuffer (høyst 6 timer) holder dataene for alle brukere samlet og inneholder ingenting om deg. Lenker til discogs.com fører til Discogs’ eget nettsted, som har egne regler. Vinilium er ikke tilknyttet Discogs.",
       "s5Title": "Informasjonskapsler",
       "s5P1": "Vi bruker to informasjonskapsler, begge strengt nødvendige: innloggingsøkten og en som husker språket ditt. Det finnes ingen analyse- eller reklamekapsler, så det er ikke noe banner. Hvis det endres, endres denne siden og et varsel først.",
-      "s5P3": "Nettleseren din lagrer også én liten innstilling i lokal lagring, ikke i en informasjonskapsel: om du har lukket hjelpen «Slik søker du» på søkesiden. Den blir værende på enheten din og sendes aldri til oss.",
-      "s5P2": "[NEEDS LEGAL REVIEW] Om denne tilnærmingen til informasjonskapsler oppfyller reglene som gjelder i operatørens land og i brukernes land.",
+      "s5P3": "Nettleseren din kan også lagre opptil to små innstillinger i lokal lagring (ikke i informasjonskapsler): om du har lukket hjelpen «Slik søker du» på søkesiden, og fargetemaet du valgte (mørkt, lyst eller system). De blir værende på enheten din og sendes aldri til oss.",
+      "s5P2": "[NEEDS LEGAL REVIEW] Om denne tilnærmingen til informasjonskapsler og lokal lagring oppfyller reglene som gjelder i operatørens land og i brukernes land.",
       "s6Title": "Hvem andre som er involvert",
       "s6Intro": "Tjenester vi bruker for å drive Vinilium:",
       "s6Hosting": "Vercel: drift av nettstedet og serverkoden.",
@@ -504,11 +517,11 @@
       "s6Discogs": "Discogs: kilden til platedetaljer (se over).",
       "s6P1": "[NEEDS LEGAL REVIEW] Hvor disse leverandørene behandler data (også utenfor EU/EØS), hvilke avtaler som dekker det, og hvordan det formuleres.",
       "s7Title": "Hvor lenge vi beholder det",
-      "s7P1": "Kontoen og listene dine beholdes til du sletter kontoen. Innloggingsøkter utløper av seg selv. Forespørselstellere varer omtrent ett minutt.",
+      "s7P1": "Kontoen og listene dine beholdes til du sletter kontoen. Innloggingsøkter utløper av seg selv og slettes etterpå. Forespørselstellere slettes av en daglig opprydding, så de beholdes høyst omtrent ett døgn.",
       "s7P2": "[NEEDS LEGAL REVIEW] Nøyaktige lagringstider, inkludert hvor lenge sikkerhetskopier av databasen beholder slettede data (det avhenger av databaseabonnementet og må fylles inn av operatøren).",
       "s8Title": "Valgene dine",
       "s8Delete": "Slette: Konto > «Slett kontoen min» fjerner kontoen, øktene og listene dine umiddelbart.",
-      "s8Export": "Eksportere: Konto > «Last ned dataene mine» gir deg navn, e-post, språk og lister som en fil; listene kan også eksporteres som CSV eller JSON fra listesiden.",
+      "s8Export": "Eksportere: Konto > «Last ned dataene mine» gir deg navn, e-post, språk, bildeadresse (hvis du logget inn med Google), registreringsdato og lister som en fil; listene kan også eksporteres som CSV eller JSON fra listesiden.",
       "s8Correct": "Rette: du kan endre språk under Konto. For å endre navn eller e-post, bruk kontaktsiden.",
       "s8P1": "[NEEDS LEGAL REVIEW] En beskrivelse av dine rettigheter (for eksempel innsyn, retting, sletting, dataportabilitet, innsigelse og klage til tilsynsmyndighet) tilpasset operatørens land.",
       "s9Title": "Barn",

@@ -55,3 +55,23 @@ looks worse to filters than being honest.
 
 For each mailbox: inbox or spam, time to arrive, the From address shown, and whether the Reply address was your contact address. Do
 not paste any link from the emails (they are credentials) and do not paste keys.
+
+## What reduces the chance of landing in spam without a domain
+
+None of this makes a message authenticated (that needs SPF, DKIM and DMARC on a domain you own: ADR 0004), and **nothing here has been measured
+with real mailboxes**; the hand test above is the only evidence. These are the things the app already does or you can do:
+
+* **A plain-text part with every email**, next to the HTML (the Brevo call sends `textContent`; `tests/unit/email-providers.test.ts` checks it
+  carries the link). Messages with only HTML score worse with most filters.
+* **Short, neutral subjects** and no spammy words, no capital letters, no exclamation marks, no emoji (today: "Verify your email for {appName}" and "Reset your {appName} password", in `email.verify.subject` and
+  `email.reset.subject` in `src/messages/*.json`; keep them like that when editing).
+* **One link per message** (the verification or reset link), no tracking pixels, no images, no link shorteners; the link points at the site's own
+  address.
+* **A real `Reply-To`** (`NEXT_PUBLIC_CONTACT_EMAIL`): a sender whose replies work looks less like a bulk sender.
+* **A stable sender name** (`EMAIL_FROM_NAME`) and address; do not change them often.
+* **Low, steady volume**: the free plan's 300 a day is also a reputation limit; a burst of sign-ups from one address range looks like abuse
+  (`AUTH_SIGNUP_ALLOWLIST` and the per-IP limits are the brake).
+* **Tell people** (the app does, on every screen that sends an email): check the spam folder and mark the message "not spam" or add the sender to
+  contacts; one such action trains that person's filter.
+* **Do not send test mail to many addresses** from the production sender; use your own few mailboxes.
+* Once a domain exists: authenticate it in Brevo (SPF, DKIM) and publish a DMARC record; then revisit `auth.emailNotArrived` and ADR 0004.

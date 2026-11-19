@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FAKE_AUTH_SECRET } from "../helpers/fake-secrets";
 
 // `next/server` -> after() is only valid inside a request; sendAuthEmail itself doesn't use it.
 vi.mock("next/server", () => ({ after: (fn: () => void) => fn() }));
@@ -6,7 +7,7 @@ vi.mock("next/server", () => ({ after: (fn: () => void) => fn() }));
 beforeEach(() => {
   vi.resetModules();
   process.env.DATABASE_URL = "postgresql://localhost/db";
-  process.env.BETTER_AUTH_SECRET = "0123456789abcdef0123456789abcdef";
+  process.env.BETTER_AUTH_SECRET = FAKE_AUTH_SECRET;
   process.env.BETTER_AUTH_URL = "http://localhost:3000";
   delete process.env.RESEND_API_KEY;
   delete process.env.BREVO_API_KEY;

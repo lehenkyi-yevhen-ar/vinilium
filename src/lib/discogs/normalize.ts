@@ -32,7 +32,7 @@ export function discogsUrlFor(type: "release" | "master" | "artist", id: number,
   let path = `/${type}/${id}`;
   if (typeof uri === "string") {
     let candidate: string | null = null;
-    if (uri.startsWith("/")) candidate = uri;
+    if (uri.startsWith("/") && !uri.startsWith("//")) candidate = uri;
     else {
       try {
         const u = new URL(uri);
@@ -41,7 +41,7 @@ export function discogsUrlFor(type: "release" | "master" | "artist", id: number,
         /* not a URL */
       }
     }
-    if (candidate && /^\/[A-Za-z0-9._~%/-]+$/.test(candidate)) path = candidate;
+    if (candidate && !candidate.startsWith("//") && /^\/[A-Za-z0-9._~%/-]+$/.test(candidate)) path = candidate;
   }
   return `https://www.discogs.com${path}`;
 }

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { e2ePool } from "../helpers/e2e-db";
 
 /**
  * Keyboard behaviour, scripted: what a keyboard-only person needs and a scan cannot prove. Desktop viewport, signed in, MOCKED
@@ -17,8 +17,7 @@ test.beforeAll(async ({ browser }) => {
   userId = (await (await ctx.request.get("http://localhost:3200/api/auth/get-session")).json())?.user?.id;
   await ctx.close();
   expect(userId).toBeTruthy();
-  const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl() }); // DEV database only
+  const pool = await e2ePool(); // DEV database only
   try {
     await pool.query("delete from user_items where user_id = $1", [userId]);
     await pool.query(
@@ -32,8 +31,7 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-  const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl() });
+  const pool = await e2ePool();
   try {
     if (userId) await pool.query("delete from user_items where user_id = $1", [userId]);
   } finally {
@@ -167,7 +165,8 @@ test("the language menu opens from the keyboard, closes with Escape and returns 
   const trigger = page.getByRole("button", { name: /Language/ });
   await trigger.focus();
   await page.keyboard.press("Enter");
-  const menu = page.locator(".dd--right .dd__menu");
+  // The language menu's own dropdown: the header has two (language and theme), both `.dd--right`, so scope it to the trigger's menu.
+  const menu = page.locator(".dd--right", { has: trigger }).locator(".dd__menu");
   await expect(menu).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();

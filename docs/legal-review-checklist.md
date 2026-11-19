@@ -18,7 +18,7 @@ Also fill in (these are placeholders on the pages until set):
 | --- | --- | --- |
 | 1 | `legal.draftBanner` | Draft: a lawyer has not reviewed this text. Passages marked  must be checked and the marks removed before launch. |
 | 2 | `legal.privacy.s1P2` | How the operator is identified: a private individual shown only under a project name or nickname, with the contact address below. Whether that identification is enough for users in the EU or Norway, and whether anything more (for example a postal address) is required, must be checked. The operator’s legal role for personal data (for example “controller”) and any registration or data-protection contact also belong here. |
-| 3 | `legal.privacy.s5P2` | Whether this cookie approach satisfies the rules that apply in the operator’s country and to the users’ countries. |
+| 3 | `legal.privacy.s5P2` | Whether this approach to cookies and local storage satisfies the rules that apply in the operator’s country and to the users’ countries. |
 | 4 | `legal.privacy.s6P1` | Where these providers process data (including outside the EU/EEA), the agreements that cover it, and the wording about them. |
 | 5 | `legal.privacy.s7P2` | Exact retention periods, including how long database backups keep deleted data (this depends on the database plan and is to be filled in by the operator). |
 | 6 | `legal.privacy.s8P1` | A statement of your legal rights (such as access, correction, erasure, portability, objection, and complaint to a supervisory authority) suitable for the operator’s country. |

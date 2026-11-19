@@ -5,11 +5,12 @@ import { emailPasswordEnabled } from "@/lib/auth-flags";
 import { LegalDocument } from "@/components/legal/LegalDocument";
 import { buildSections } from "@/components/legal/build-sections";
 import { resolveLocale } from "@/i18n/locale";
+import { publicMetadata } from "@/lib/seo";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/privacy">): Promise<Metadata> {
   const locale = await resolveLocale(params);
   const t = await getTranslations({ locale, namespace: "legal.privacy" });
-  return { title: t("title"), description: t("metaDescription") };
+  return publicMetadata(locale, "/privacy", { title: t("title"), description: t("metaDescription") });
 }
 
 /** Read per request: the text follows AUTH_EMAIL_PASSWORD_ENABLED (no password or email lines in Google-only mode). */
@@ -26,7 +27,7 @@ export default async function PrivacyPage({ params }: PageProps<"/[locale]/priva
   const withPasswords = emailPasswordEnabled();
   const sections = buildSections(tp, [
     { id: "s1", paragraphs: ["P1", "P2"] },
-    { id: "s2", intro: true, items: withPasswords ? ["Account", "Sessions", "Lists", "Counters", "Emails"] : ["AccountGoogleOnly", "Sessions", "Lists", "Counters"] },
+    { id: "s2", intro: true, items: withPasswords ? ["Account", "Sessions", "Lists", "Counters", "Logs", "Emails"] : ["AccountGoogleOnly", "Sessions", "Lists", "Counters", "Logs"] },
     { id: "s3", paragraphs: ["P1"] },
     { id: "s4", paragraphs: ["P1"] },
     { id: "s5", paragraphs: ["P1", "P3", "P2"] },

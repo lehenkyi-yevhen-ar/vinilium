@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentSecurityPolicy, CSP_REPORT_PATH, parseCspReports, parseHstsMaxAge, securityHeaders } from "@/lib/security-headers";
+import { contentSecurityPolicy, CSP_REPORT_PATH, cspHeaderName, generateNonce, parseCspMode, parseCspReports, parseHstsMaxAge, securityHeaders } from "@/lib/security-headers";
 
 const byKey = (h: Array<{ key: string; value: string }>) => Object.fromEntries(h.map((x) => [x.key, x.value]));
 
@@ -24,16 +24,43 @@ describe("securityHeaders", () => {
     expect(parseHstsMaxAge(" 600 ")).toBe(600);
   });
 
-  it("ships the CSP as REPORT-ONLY, never enforcing", () => {
+  it("carries NO Content-Security-Policy: that needs a per-request nonce and is set by src/proxy.ts", () => {
     const h = byKey(securityHeaders());
-    expect(h["Content-Security-Policy-Report-Only"]).toBeDefined();
+    expect(h["Content-Security-Policy-Report-Only"]).toBeUndefined();
     expect(h["Content-Security-Policy"]).toBeUndefined();
+  });
+});
+
+describe("CSP mode", () => {
+  it("is report-only unless it is exactly 'enforce' (a typo can never turn enforcement on or off by accident)", () => {
+    expect(parseCspMode(undefined)).toBe("report-only");
+    expect(parseCspMode("")).toBe("report-only");
+    expect(parseCspMode("report-only")).toBe("report-only");
+    for (const bad of ["Enforce", "ENFORCE", " enforce", "enforce ", "true", "1", "on", "enforcing"]) expect(parseCspMode(bad), bad).toBe("report-only");
+    expect(parseCspMode("enforce")).toBe("enforce");
+  });
+
+  it("names the header the browser reads", () => {
+    expect(cspHeaderName("enforce")).toBe("Content-Security-Policy");
+    expect(cspHeaderName("report-only")).toBe("Content-Security-Policy-Report-Only");
+  });
+});
+
+describe("generateNonce", () => {
+  it("is 128 random bits in base64, different every time, and in the form Next.js and CSP accept", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 500; i++) {
+      const n = generateNonce();
+      expect(n).toMatch(/^[A-Za-z0-9+/]{22}==$/); // 16 bytes
+      seen.add(n);
+    }
+    expect(seen.size).toBe(500);
   });
 });
 
 describe("contentSecurityPolicy", () => {
   it("only allows our own origin, forbids objects, framing and base-uri tricks, and reports", () => {
-    const csp = contentSecurityPolicy();
+    const csp = contentSecurityPolicy({ nonce: "abc" });
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
@@ -44,11 +71,21 @@ describe("contentSecurityPolicy", () => {
     expect(csp).not.toMatch(/\*/);
   });
 
+  it("allows scripts from our origin and the request's nonce ONLY: no unsafe-inline, no unsafe-eval, no strict-dynamic", () => {
+    const script = contentSecurityPolicy({ nonce: "AAAAAAAAAAAAAAAAAAAAAA==" }).split("; ").find((d) => d.startsWith("script-src "))!;
+    expect(script).toBe("script-src 'self' 'nonce-AAAAAAAAAAAAAAAAAAAAAA=='");
+    expect(script).not.toMatch(/unsafe-inline|unsafe-eval|strict-dynamic|data:|blob:/);
+  });
+
+  it("keeps style-src 'unsafe-inline' (style attributes cannot carry a nonce) and says so in one place", () => {
+    expect(contentSecurityPolicy({ nonce: "x" })).toContain("style-src 'self' 'unsafe-inline'");
+  });
+
   it("allows eval and websockets only in development", () => {
-    expect(contentSecurityPolicy({ dev: false })).not.toContain("unsafe-eval");
-    expect(contentSecurityPolicy({ dev: false })).not.toContain("ws:");
-    expect(contentSecurityPolicy({ dev: true })).toContain("'unsafe-eval'");
-    expect(contentSecurityPolicy({ dev: true })).toContain("ws:");
+    expect(contentSecurityPolicy({ dev: false, nonce: "x" })).not.toContain("unsafe-eval");
+    expect(contentSecurityPolicy({ dev: false, nonce: "x" })).not.toContain("ws:");
+    expect(contentSecurityPolicy({ dev: true, nonce: "x" })).toContain("'unsafe-eval'");
+    expect(contentSecurityPolicy({ dev: true, nonce: "x" })).toContain("ws:");
   });
 });
 

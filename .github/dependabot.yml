@@ -1,0 +1,41 @@
+version: 2
+
+# Weekly update pull requests for npm and for the GitHub Actions in .github/workflows (which are pinned to commit SHAs: Dependabot
+# updates the SHA and the version comment together).
+#
+# `cooldown` makes Dependabot wait before it proposes a version that has just been published, so a compromised or yanked release is
+# normally noticed before it reaches us. 14 days for every kind of bump. Security updates are NOT delayed by it.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Oslo
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 14
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Oslo
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 14
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+    commit-message:
+      prefix: "ci"

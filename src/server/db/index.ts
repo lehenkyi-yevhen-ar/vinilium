@@ -1,6 +1,7 @@
 import "server-only";
-import { Pool } from "@neondatabase/serverless";
+import { neonConfig, Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
+import { applyLocalNeonProxy } from "@/lib/neon-local";
 import { databaseTarget } from "./target";
 import * as schema from "./schema";
 
@@ -14,7 +15,9 @@ import * as schema from "./schema";
 const g = globalThis as unknown as { __vinilium_db?: ReturnType<typeof create> };
 
 function create() {
-  const pool = new Pool({ connectionString: databaseTarget().url });
+  const { url } = databaseTarget();
+  applyLocalNeonProxy(neonConfig, process.env, url); // inert unless NEON_WS_PROXY is set, and never for a *.neon.tech host (CI e2e only)
+  const pool = new Pool({ connectionString: url });
   return drizzle(pool, { schema });
 }
 

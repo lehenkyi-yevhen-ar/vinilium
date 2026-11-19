@@ -12,6 +12,8 @@ export interface AccountProfile {
   emailVerified: boolean;
   locale: string | null;
   createdAt: Date;
+  /** The picture address Google provided (a password account has none). */
+  image?: string | null;
 }
 
 export function buildAccountExport(profile: AccountProfile, items: StoredItemJson[], exportedAt = new Date()) {
@@ -22,6 +24,7 @@ export function buildAccountExport(profile: AccountProfile, items: StoredItemJso
       email: profile.email,
       emailVerified: profile.emailVerified,
       language: profile.locale ?? "en",
+      pictureUrl: profile.image ?? null,
       createdAt: profile.createdAt.toISOString(),
     },
     lists: { columns: [...EXPORT_COLUMNS], items: items.map(exportRow) },

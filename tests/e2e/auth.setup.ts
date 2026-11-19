@@ -1,5 +1,5 @@
 import { expect, test as setup } from "@playwright/test";
-import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { e2ePool, explainDbError } from "../helpers/e2e-db";
 
 export const STORAGE_STATE = "tests/.auth/user.json";
 const PASSWORD = "E2e-Password-123";
@@ -18,10 +18,11 @@ setup("create a verified e2e user and sign in", async ({ request, baseURL }) => 
   const up = await request.post("/api/auth/sign-up/email", { data: { name: "E2E User", email, password: PASSWORD, locale: "en" }, headers: { origin } });
   expect(up.ok(), "sign-up").toBe(true);
 
-  const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl() });
+  const pool = await e2ePool();
   try {
     await pool.query('update "user" set email_verified = true where email = $1', [email]);
+  } catch (error) {
+    throw explainDbError("setup (marking the e2e user verified)", error);
   } finally {
     await pool.end();
   }

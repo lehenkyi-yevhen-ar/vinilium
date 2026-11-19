@@ -204,6 +204,11 @@ const server = http.createServer((req, res) => {
       // The list screens' records: every id is its own record, so a test can tell the cards apart.
       const id = Number(m[1]);
       body = localise({ ...releasePayload, id, master_id: 0, title: `Library Record ${id}`, uri: `https://www.discogs.com/release/${id}-Library-Record` });
+    } else if (Number(m[1]) >= 7000 && Number(m[1]) < 7100) {
+      // The standalone releases some finder specs inject into the albums list ("Odd Pressing <n>", kind release, no master): the release record must
+      // agree with that, or its Back link legitimately points at a master page (it used to say master_id 500, which made finder-nav-390 depend on timing).
+      const n = Number(m[1]) - 7000;
+      body = localise({ ...releasePayload, id: Number(m[1]), master_id: 0, title: `Odd Pressing ${n}`, year: 2020 + n, released: String(2020 + n), uri: `https://www.discogs.com/release/${m[1]}-Odd-Pressing` });
     } else {
       body = localise({ ...releasePayload, id: Number(m[1]) });
     }

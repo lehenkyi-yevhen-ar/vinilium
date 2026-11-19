@@ -20,12 +20,34 @@ test.beforeEach(async ({ context }, testInfo) => {
 const help = (page: Page) => page.locator("details.x-help");
 const summary = (page: Page) => help(page).locator("summary");
 const stored = (page: Page) => page.evaluate(() => window.localStorage.getItem("vinilium:search-help"));
+/** A first visit: open on a desktop, collapsed on a phone (640 px wide or less). */
+const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 640;
+const expectFirstVisit = async (page: Page) => {
+  if (isPhone(page)) await expect(help(page)).not.toHaveAttribute("open", "");
+  else await expect(help(page)).toHaveAttribute("open", "");
+};
+/** Make it open regardless of the viewport (a phone first visit starts collapsed): click only when it is not open. */
+const ensureOpen = async (page: Page) => {
+  if (isPhone(page)) {
+    await expect(help(page)).not.toHaveAttribute("open", "");
+    await summary(page).click();
+  }
+  await expect(help(page)).toHaveAttribute("open", "");
+};
 const noOverflow = async (page: Page) => expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
 
-test("a first-time visitor sees the help open, with the three ways, the steps and the tips", async ({ page }) => {
+test("a first-time visitor sees the help (open on a desktop, collapsed at 640 px and below) with the three ways, the steps and the tips", async ({ page }) => {
   await page.goto("/en/search");
   await expect(summary(page)).toHaveText("How to search");
-  await expect(help(page)).toHaveAttribute("open", "");
+  await expectFirstVisit(page);
+  if (isPhone(page)) {
+    // collapsed: the form is right there, the content is hidden, and nothing was stored by looking
+    await expect(page.locator("#finder-q")).toBeInViewport();
+    await expect(help(page).getByText("By track name", { exact: false })).toBeHidden();
+    expect(await stored(page)).toBeNull();
+  }
+  await ensureOpen(page);
+  expect(await stored(page)).toBeNull(); // opening it is the default state: nothing is remembered
   // three ways to search
   await expect(help(page).getByText("By track name", { exact: false })).toBeVisible();
   await expect(help(page).getByText("By artist", { exact: false })).toBeVisible();
@@ -54,7 +76,7 @@ test("a first-time visitor sees the help open, with the three ways, the steps an
 
 test("closing it is remembered on this device (local storage only, no cookie), and opening it again forgets it", async ({ page, context }) => {
   await page.goto("/en/search");
-  await expect(help(page)).toHaveAttribute("open", "");
+  await ensureOpen(page);
   const cookiesBefore = (await context.cookies()).map((c) => c.name).sort();
 
   await summary(page).click();
@@ -69,21 +91,23 @@ test("closing it is remembered on this device (local storage only, no cookie), a
   await page.goto("/en/search?mode=artist&q=anything"); // and on other search addresses
   await expect(help(page)).not.toHaveAttribute("open", "");
 
-  await summary(page).click(); // open it again: the setting is removed, so it is the default (open) from now on
+  await summary(page).click(); // open it again: the setting is removed, so it is the default from now on
   await expect(help(page)).toHaveAttribute("open", "");
   expect(await stored(page)).toBeNull();
   await page.reload();
-  await expect(help(page)).toHaveAttribute("open", "");
+  await expectFirstVisit(page); // open on a desktop; on a phone the default is collapsed again
 });
 
 test("it works from the keyboard", async ({ page }) => {
   await page.goto("/en/search");
-  await expect(help(page)).toHaveAttribute("open", "");
+  await expectFirstVisit(page);
   await summary(page).focus();
   await page.keyboard.press("Enter");
-  await expect(help(page)).not.toHaveAttribute("open", "");
+  if (isPhone(page)) await expect(help(page)).toHaveAttribute("open", "");
+  else await expect(help(page)).not.toHaveAttribute("open", "");
   await page.keyboard.press("Space");
-  await expect(help(page)).toHaveAttribute("open", "");
+  if (isPhone(page)) await expect(help(page)).not.toHaveAttribute("open", "");
+  else await expect(help(page)).toHaveAttribute("open", "");
 });
 
 test("a line under the input explains each mode", async ({ page }) => {
@@ -99,6 +123,7 @@ test("a line under the input explains each mode", async ({ page }) => {
 
 test("the example fills the form (it does not search), announces itself, and a real search replaces it", async ({ page }) => {
   await page.goto("/en/search?mode=album&q=something");
+  await ensureOpen(page);
   await page.getByRole("button", { name: "Fill in this example" }).click();
   await expect(page.getByText("Example filled in. Press Search.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Track", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -116,7 +141,7 @@ test("the example fills the form (it does not search), announces itself, and a r
 
 test("an empty result points to the tips, and the tips open without changing what is remembered", async ({ page }) => {
   await page.goto("/en/search");
-  await expect(help(page)).toHaveAttribute("open", "");
+  await ensureOpen(page);
   await summary(page).click(); // the person has closed the help earlier
   expect(await stored(page)).toBe("closed");
 
@@ -141,7 +166,7 @@ for (const [locale, title, hint, example, empty] of [
   test(`the help speaks ${locale}`, async ({ page }) => {
     await page.goto(`/${locale}/search`);
     await expect(summary(page)).toHaveText(title);
-    await expect(help(page)).toHaveAttribute("open", "");
+    await ensureOpen(page);
     await expect(page.locator("#finder-q-help")).toHaveText(hint);
     await expect(help(page).getByRole("button", { name: example })).toBeVisible();
     await expect(help(page).locator("ol li")).toHaveCount(5);
@@ -153,12 +178,14 @@ for (const [locale, title, hint, example, empty] of [
 }
 
 // Opt-in: E2E_SHOTS=<folder> saves screenshots of the help for a visual check (not an assertion; nothing runs without the variable).
+if (process.env.E2E_SHOTS)
 test("screenshots of the help (only with E2E_SHOTS)", async ({ page }, testInfo) => {
-  test.skip(!process.env.E2E_SHOTS, "set E2E_SHOTS=<folder> to save screenshots");
   const dir = process.env.E2E_SHOTS!;
   const tag = testInfo.project.name;
   await page.goto("/en/search");
-  await expect(help(page)).toHaveAttribute("open", "");
+  await expectFirstVisit(page);
+  await page.screenshot({ path: `${dir}/${tag}-help-first-visit.png` });
+  await ensureOpen(page);
   await page.screenshot({ path: `${dir}/${tag}-help-open.png` });
   await page.screenshot({ path: `${dir}/${tag}-help-open-full.png`, fullPage: true });
   await summary(page).click();

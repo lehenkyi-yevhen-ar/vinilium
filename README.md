@@ -3,9 +3,12 @@
 Find vinyl pressings, keep a wishlist and a collection. Next.js (App Router) + TypeScript, Neon Postgres + Drizzle,
 Better Auth, `next-intl` (uk / en / nb), and the **Ліс** design system. Discogs is used read-only as a data source.
 
-> Status: **Milestone 1 of 5** (scaffold, design system, i18n, Neon + migrations, auth). Search, lists and the
-> Discogs client arrive in later milestones. See [docs/data-model.md](docs/data-model.md) and
-> [docs/discogs-compliance.md](docs/discogs-compliance.md).
+> Status: feature-complete for the current scope (sign-in, the finder, Wishlist and Collection, privacy and terms drafts), and hardened in
+> the 2026-11 run. Start with [docs/architecture.md](docs/architecture.md), then [docs/operations.md](docs/operations.md). The rules that
+> must never be weakened are in [docs/discogs-compliance.md](docs/discogs-compliance.md); what is stored about people is in
+> [docs/data-inventory.md](docs/data-inventory.md); the threats considered are in [docs/threat-model.md](docs/threat-model.md); the open
+> decisions are in [docs/decisions-needed.md](docs/decisions-needed.md) and the launch list in [docs/pre-launch-checklist.md](docs/pre-launch-checklist.md).
+> Contributing and security reports: [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md).
 
 ## Placeholders to replace before launch
 
@@ -58,9 +61,11 @@ npm run dev                     # http://localhost:3000
 | `DISCOGS_CONSUMER_KEY` / `DISCOGS_CONSUMER_SECRET` | one of the two styles | App credentials (`Authorization: Discogs key=..., secret=...`). Set both or neither. **Preferred over `DISCOGS_TOKEN` when both are set.** Server-only. |
 | `DISCOGS_CACHE_TTL_SECONDS` | no | The ONE TTL for everything cached from Discogs (cache rows and the image proxy's `Cache-Control`). Default `14400` (4 h); **maximum** `21600` (6 h): the Discogs Terms forbid showing older Content, so larger values are capped. |
 | `CRON_SECRET` | prod | 16+ chars. Protects `GET /api/cron/purge`; the endpoint is disabled without it. Vercel Cron sends it automatically. |
-| `RL_SEARCH_IP_PER_MIN`, `RL_SEARCH_USER_PER_MIN`, `RL_IMAGE_IP_PER_MIN`, `RL_IMAGE_USER_PER_MIN` | no | Our own request limits (defaults 30 / 60 / 300 / 600). |
+| `RL_SEARCH_IP_PER_MIN`, `RL_SEARCH_USER_PER_MIN`, `RL_IMAGE_IP_PER_MIN`, `RL_IMAGE_USER_PER_MIN` | no | Our own request limits (defaults 30 / 60 / 300 / 600). `RL_SEARCH_IP_PER_MIN` is the number of **cold** requests (ones that need a Discogs call) one IP may make a minute; requests answered from the cache (a browser Back, a reload) do not use it, and instead count against a flood ceiling of **4 times** that number for all requests from the IP. See "Search limits" in [docs/operations.md](docs/operations.md). |
 | `RL_COLD_USER_PER_MIN` | no | Cold (uncached) Discogs lookups one person may cause per minute (default **24**: two cold pages of 12). Over it the screen shows "Waiting for Discogs" with a countdown. Why 24: Discogs allows ~60/min for the whole app, so two heavy users leave a fifth for everyone else. |
 | `NEXT_PUBLIC_OPERATOR_NAME`, `NEXT_PUBLIC_OPERATOR_COUNTRY` | before launch | Who runs the service, shown in the privacy policy and terms. Unset = a visible `[... TO BE FILLED]` placeholder. |
+| `CSP_MODE` | no | `report-only` (default) or exactly `enforce`: the Content-Security-Policy that `src/proxy.ts` sends with a nonce per page request. Anything else is report-only. Rollout and rollback: [docs/operations.md](docs/operations.md) section 10. |
+| `NEON_WS_PROXY` | CI only | `host:port/v1` of Neon's websocket proxy, so the secret-free CI e2e job can use a plain Postgres container. Ignored for any `*.neon.tech` host. Never set it in a real environment. |
 | `HSTS_MAX_AGE_SECONDS`, `HSTS_INCLUDE_SUBDOMAINS` | no | **Unset = no HSTS header.** Set only after the whole site is confirmed to work over HTTPS, and raise in steps (300, 86400, 31536000). `HSTS_INCLUDE_SUBDOMAINS=1` adds `includeSubDomains`. See [docs/operations.md](docs/operations.md). |
 | `DISCOGS_API_BASE` | never | Tests only: points the client at the mock server. Do not set in a real environment. |
 
@@ -206,7 +211,8 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
 | `GET\|PUT\|PATCH\|DELETE /api/lists/items/:releaseId` | The signed-in user's wishlist / collection entry for one pressing (`PUT {"list":"wishlist"\|"collection"}` adds or moves; `PATCH {notes?, conditionMedia?, conditionSleeve?}` edits the user's own fields, condition on the Collection only). |
 | `GET /api/lists/items?list=&q=&sort=&dir=&page=&pageSize=` | One page of the signed-in user's stored items (no Discogs content). |
 | `GET /api/lists/export?format=csv\|json` | The user's own list data as a download (10 per minute). |
-| `GET /api/cron/purge` | Deletes expired cache rows. Needs `Authorization: Bearer $CRON_SECRET`. |
+| `GET /api/cron/purge` | The daily retention purge (expired cache rows, verification rows and sessions, old limiter counters; never accounts or lists). `?dryRun=1` only counts. Needs `Authorization: Bearer $CRON_SECRET`. |
+| `GET /api/health` | `{status, version, db}` for an uptime monitor; no secrets, no personal data, no Discogs call. |
 
 * **Credentials**: `DISCOGS_CONSUMER_KEY` + `DISCOGS_CONSUMER_SECRET` win over `DISCOGS_TOKEN` when both are set.
 * **Throttling**: one Postgres token bucket shared by all instances. The limit is read from Discogs' own
@@ -237,11 +243,15 @@ Details and the open licensing questions: [docs/discogs-integration.md](docs/dis
 
 ## Security and accessibility (milestone 5)
 
-* **Headers** (`src/lib/security-headers.ts`, applied in `next.config.ts`): nosniff, frame denial, referrer and permissions policies, and a
-  **report-only** CSP whose reports land in the server log as `[csp-report]`. HSTS is opt-in (`HSTS_MAX_AGE_SECONDS`).
+* **Headers** (`src/lib/security-headers.ts`, applied in `next.config.ts`): nosniff, frame denial, referrer and permissions policies. The
+  **Content-Security-Policy** is set per page request by `src/proxy.ts` with a nonce (`script-src 'self' 'nonce-...'`, no `'unsafe-inline'`),
+  **report-only by default** and enforcing with `CSP_MODE=enforce` ([ADR 0005](docs/adr/0005-csp-rollout.md)); reports land in the server log
+  as `[csp-report]`. HSTS is opt-in (`HSTS_MAX_AGE_SECONDS`).
+* **Health and metrics**: `GET /api/health` for an uptime monitor; one `[metrics]` log line a minute ([docs/operations.md](docs/operations.md) section 19).
 * **Image proxy / SSRF**: exact host allow-list, https only, no credentials, ports or IP literals, redirects followed by hand for at most
   2 hops with every hop re-validated, no SVG, 8 MB cap enforced while streaming. Covered by `tests/unit/discogs-image*.test.ts`.
-* **CI** (`.github/workflows/ci.yml`): typecheck, lint, unit tests and `npm run audit:prod`.
+* **CI** (`.github/workflows/`): typecheck, lint, unit tests, `npm run audit:prod`, the secret-free end-to-end suite, CodeQL and a secret scan;
+  Dependabot with a 14-day cooldown; every action pinned to a commit SHA ([docs/operations.md](docs/operations.md) section 18).
 * **Accessibility**: axe (WCAG 2.0-2.2 A/AA) runs over the main screens in the light and dark themes (desktop) and on a phone, plus
   scripted keyboard tests. What a tool cannot judge is the manual checklist in [docs/operations.md](docs/operations.md).
 * **Operations runbook**: [docs/operations.md](docs/operations.md) (logs, rotating secrets, backups, Discogs throttling or revocation,

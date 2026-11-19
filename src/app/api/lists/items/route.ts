@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { stripControl } from "@/lib/text";
 import { isListName, isSortKey, PAGE_SIZES } from "@/lib/lists/rules";
 import { getDb } from "@/server/db";
 import { badRequest } from "@/server/discogs/http";
@@ -7,7 +8,7 @@ import { queryItems } from "@/server/lists/items";
 
 const querySchema = z.object({
   list: z.string().refine(isListName),
-  q: z.string().max(200).optional(),
+  q: z.string().max(200).transform(stripControl).optional(),
   sort: z.string().refine(isSortKey).optional(),
   dir: z.enum(["asc", "desc"]).optional(),
   page: z.coerce.number().int().min(1).max(100_000).optional(),

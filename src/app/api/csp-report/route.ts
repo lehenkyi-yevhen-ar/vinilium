@@ -20,7 +20,8 @@ export async function POST(request: Request) {
       console.warn(`[csp-report] ${v.directive} blocked=${v.blocked || "-"} page=${v.document || "-"} source=${v.source || "-"}`);
     }
   } catch {
-    // malformed JSON or a database hiccup: a report is best-effort
+    // malformed JSON or a database hiccup (LimiterUnavailableError included): a report is best-effort and this endpoint protects nothing but log
+    // volume, so it fails OPEN (the report is dropped, the page is never affected)
   }
   return new Response(null, { status: 204 });
 }

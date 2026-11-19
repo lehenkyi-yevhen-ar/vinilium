@@ -1,5 +1,5 @@
 import { expect as baseExpect, request as pwRequest, test, type Locator, type Page } from "@playwright/test";
-import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { e2ePool } from "../helpers/e2e-db";
 
 /**
  * The Wishlist and Collection screens end to end, signed in, in a real browser, against the MOCKED Discogs server and the
@@ -53,8 +53,7 @@ async function seed(page: Page, rows: Row[] = baseRows()) {
     userId = session?.user?.id;
     expect(userId, "the e2e user is signed in").toBeTruthy();
   }
-  const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl() }); // DEV database only (refuses production)
+  const pool = await e2ePool(); // DEV database only (refuses production)
   try {
     await pool.query("delete from user_items where user_id = $1", [userId]);
     if (rows.length) {

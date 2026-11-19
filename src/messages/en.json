@@ -27,6 +27,13 @@
     "search": "Search",
     "lists": "My lists"
   },
+  "theme": {
+    "label": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System",
+    "systemHint": "Follows your device"
+  },
   "locales": {
     "uk": "Українська",
     "en": "English",
@@ -153,6 +160,11 @@
     "title": "Page not found",
     "text": "That page does not exist or was moved.",
     "home": "Back to the home page"
+  },
+  "errorPage": {
+    "title": "Something went wrong",
+    "text": "An unexpected error stopped this page. Your lists are safe. Try again, or go back to the home page.",
+    "retry": "Try again"
   },
   "email": {
     "verify": {
@@ -486,6 +498,7 @@
       "s2Sessions": "Your sign-ins: a random session identifier, when it expires, and the IP address and browser description (user agent) of the device you signed in from.",
       "s2Lists": "Your lists: the Discogs release numbers you add, which list each is on (Wishlist or Collection), your own notes and condition grades, and dates.",
       "s2Counters": "Request counters: to protect the service from misuse we count requests per IP address and per account for about a minute at a time.",
+      "s2Logs": "Server logs: our hosting provider, Vercel, processes technical request data such as your IP address, the time, the address requested and the result, and keeps logs to run and secure the service. [NEEDS LEGAL REVIEW] How long Vercel keeps these logs.",
       "s2Emails": "Emails: verification and password-reset messages are sent through Brevo, which receives your email address and name for that purpose. Replies to these messages go to our contact address.",
       "s3Title": "What we do not do",
       "s3P1": "No analytics, no advertising, no tracking of what you do on other sites, no payment data. We never ask for your Discogs account or password: record details are fetched by our server with the service’s own Discogs credentials.",
@@ -493,8 +506,8 @@
       "s4P1": "Record details (titles, artists, covers, track lists) come from Discogs. Our server asks Discogs for them; your browser does not contact Discogs for them. A short-lived cache (at most 6 hours) holds that data for all users together and contains nothing about you. Links to discogs.com lead to Discogs’ own site, which has its own policies. Vinilium is not affiliated with Discogs.",
       "s5Title": "Cookies",
       "s5P1": "We use two cookies, both strictly necessary: the sign-in session cookie, and a cookie that remembers your language. There are no analytics or advertising cookies, so there is no cookie banner. If that ever changes, this page and a notice will change first.",
-      "s5P3": "Your browser also keeps one small setting in its local storage, not a cookie: whether you closed the “How to search” help on the search page. It stays on your device and is never sent to us.",
-      "s5P2": "[NEEDS LEGAL REVIEW] Whether this cookie approach satisfies the rules that apply in the operator’s country and to the users’ countries.",
+      "s5P3": "Your browser may also keep up to two small settings in its local storage (not in cookies): whether you closed the “How to search” help on the search page, and the colour theme you chose (dark, light or system). They stay on your device and are never sent to us.",
+      "s5P2": "[NEEDS LEGAL REVIEW] Whether this approach to cookies and local storage satisfies the rules that apply in the operator’s country and to the users’ countries.",
       "s6Title": "Who else is involved",
       "s6Intro": "Services we use to run Vinilium:",
       "s6Hosting": "Vercel: hosting of the website and its server code.",
@@ -504,11 +517,11 @@
       "s6Discogs": "Discogs: the source of record details (see above).",
       "s6P1": "[NEEDS LEGAL REVIEW] Where these providers process data (including outside the EU/EEA), the agreements that cover it, and the wording about them.",
       "s7Title": "How long we keep it",
-      "s7P1": "Your account and lists stay until you delete your account. Sign-in sessions expire on their own. Request counters last about a minute.",
+      "s7P1": "Your account and lists stay until you delete your account. Sign-in sessions expire on their own and are deleted afterwards. Request counters are removed by a daily clean-up, so they are kept for about a day at most.",
       "s7P2": "[NEEDS LEGAL REVIEW] Exact retention periods, including how long database backups keep deleted data (this depends on the database plan and is to be filled in by the operator).",
       "s8Title": "Your choices",
       "s8Delete": "Delete: Account > “Delete my account” removes your account, sessions and lists right away.",
-      "s8Export": "Export: Account > “Download my data” gives you your name, email, language and lists as a file; your lists can also be exported as CSV or JSON from the lists page.",
+      "s8Export": "Export: Account > “Download my data” gives you your name, email, language, picture address (if you signed in with Google), sign-up date and lists as a file; your lists can also be exported as CSV or JSON from the lists page.",
       "s8Correct": "Correct: you can change your language in Account. To change your name or email, use the contact page.",
       "s8P1": "[NEEDS LEGAL REVIEW] A statement of your legal rights (such as access, correction, erasure, portability, objection, and complaint to a supervisory authority) suitable for the operator’s country.",
       "s9Title": "Children",

@@ -1,8 +1,8 @@
 import "server-only";
 import { getRequestUserId, isCrossSite, originMatches } from "@/server/auth/request-user";
 import { getDb } from "@/server/db";
-import { errorResponse } from "@/server/discogs/http";
-import { hit } from "@/server/rate-limit";
+import { errorResponse, limiterUnavailable } from "@/server/discogs/http";
+import { hit, LimiterUnavailableError } from "@/server/rate-limit";
 
 export const NO_STORE = { "Cache-Control": "private, no-store" } as const;
 
@@ -20,8 +20,13 @@ export async function gateLists(
   const userId = await getRequestUserId(request.headers);
   if (!userId) return { response: errorResponse(401, { error: "unauthorized" }) };
   if (opts.limit) {
-    const r = await hit(getDb(), { key: `${opts.limit.key}:${userId}`, limit: opts.limit.max, windowSec: opts.limit.windowSec });
-    if (!r.allowed) return { response: errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: r.retryAfter }) };
+    try {
+      const r = await hit(getDb(), { key: `${opts.limit.key}:${userId}`, limit: opts.limit.max, windowSec: opts.limit.windowSec });
+      if (!r.allowed) return { response: errorResponse(429, { error: "rate_limited", scope: "app", retryAfter: r.retryAfter }) };
+    } catch (error) {
+      if (error instanceof LimiterUnavailableError) return { response: limiterUnavailable() }; // fail closed: a write or export is not let through unchecked
+      throw error;
+    }
   }
   return { userId };
 }

@@ -11,11 +11,16 @@ test.describe("app shell", () => {
     await expect(page.getByRole("navigation", { name: "Головна навігація" }).first()).toBeVisible();
   });
 
-  test("language switcher changes the URL, <html lang> and remembers the choice", async ({ page, isMobile }) => {
-    test.skip(isMobile, "covered on desktop; the mobile layout uses the same component");
+  test("language switcher changes the URL, <html lang> and remembers the choice (desktop AND phone: the phone opens a bottom sheet)", async ({ page }) => {
     await page.goto("/en");
-    await page.getByRole("button", { name: /Language/ }).click();
-    await page.getByRole("menuitem", { name: "Norsk bokmål" }).click();
+    // A click that lands before the page has hydrated opens nothing (WebKit: 6 of 20 runs). Click again until the menu is there, but never while it
+    // already is (a late first click must not be undone by a second one): this is the test waiting for hydration, not a retry of a failure.
+    const norsk = page.getByRole("menuitem", { name: "Norsk bokmål" });
+    await expect(async () => {
+      if (!(await norsk.isVisible())) await page.getByRole("button", { name: /Language/ }).click();
+      await expect(norsk).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
+    await norsk.click(); // Playwright refuses a click when another element covers the target
     await expect(page).toHaveURL(/\/nb$/);
     await expect(page.locator("html")).toHaveAttribute("lang", "nb");
     expect((await page.context().cookies()).find((c) => c.name === "NEXT_LOCALE")?.value).toBe("nb");
@@ -46,7 +51,7 @@ test.describe("app shell", () => {
   test("no horizontal scroll and Discogs attribution present", async ({ page }) => {
     await page.goto("/en/sign-up");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect(overflow).toBe(0);
+    expect(overflow).toBeLessThanOrEqual(0); // negative in WebKit/Firefox with a classic scrollbar (innerWidth includes it)
     await expect(page.getByRole("link", { name: "Data provided by Discogs" })).toHaveAttribute("href", /discogs\.com/);
   });
 
@@ -79,7 +84,7 @@ test.describe("app shell", () => {
       // the prescribed Discogs notice is on this page too, in English
       await expect(page.getByText("is not affiliated with, sponsored or endorsed by Discogs.", { exact: false }).first()).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-      expect(overflow).toBe(0);
+      expect(overflow).toBeLessThanOrEqual(0); // negative in WebKit/Firefox with a classic scrollbar (innerWidth includes it)
     });
   }
 

@@ -1,17 +1,29 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { e2ePool } from "../helpers/e2e-db";
 
 /**
  * Automated accessibility audit (axe-core, WCAG 2.0/2.1/2.2 A and AA rules) of the main screens, run in LIGHT and DARK themes on a
- * desktop viewport and once on a phone viewport (see the a11y-* projects in playwright.config.ts). The theme follows the OS colour
- * scheme, which each project sets. A scan only finds what a tool can find: keyboard, focus and screen-reader wording are checked
+ * desktop viewport and once on a phone viewport (see the a11y-* projects in playwright.config.ts). The theme is chosen the way a person
+ * chooses it (the theme switcher's storage key), set from each project's colour scheme. A scan only finds what a tool can find: keyboard, focus and screen-reader wording are checked
  * separately (keyboard.spec.ts) and by hand (docs/operations.md, "Accessibility checks").
  *
  * Runs against the MOCKED Discogs server and the DEV database (never production).
  */
 test.skip(!process.env.E2E_HAS_DB, "Needs DEV_DATABASE_URL (the dev branch).");
 test.setTimeout(120_000);
+
+// The app's default theme is the design system's (dark) whatever the device prefers; the a11y-light project asks for light the way a
+// person would: through the theme switcher's one local-storage key.
+test.beforeEach(async ({ page, colorScheme }) => {
+  await page.addInitScript((scheme) => {
+    try {
+      localStorage.setItem("vinilium:theme", scheme === "light" ? "light" : "dark");
+    } catch {
+      /* storage blocked: nothing to do */
+    }
+  }, colorScheme);
+});
 
 const MOCK = "http://localhost:3201";
 const BASE = 810_000_000 + (Date.now() % 80_000_000);
@@ -86,8 +98,7 @@ test.describe("signed in", () => {
 
   test.beforeEach(async () => {
     expect(userId, "the e2e user is signed in").toBeTruthy();
-    const { Pool } = await import("@neondatabase/serverless");
-    const pool = new Pool({ connectionString: e2eDatabaseUrl() }); // DEV database only
+    const pool = await e2ePool(); // DEV database only
     try {
       await pool.query("delete from user_items where user_id = $1", [userId]);
       await pool.query(
@@ -111,8 +122,7 @@ test.describe("signed in", () => {
   });
 
   test.afterAll(async () => {
-    const { Pool } = await import("@neondatabase/serverless");
-    const pool = new Pool({ connectionString: e2eDatabaseUrl() });
+    const pool = await e2ePool();
     try {
       if (userId) await pool.query("delete from user_items where user_id = $1", [userId]);
     } finally {
@@ -136,6 +146,12 @@ test.describe("signed in", () => {
 
   test("search start: How to search open (first visit)", async ({ page }) => {
     await page.goto("/en/search");
+    // A first visit: open on a desktop, collapsed on a phone (640 px or less); the scan runs with it open either way.
+    const phone = (page.viewportSize()?.width ?? 1280) <= 640;
+    if (phone) {
+      await expect(page.locator("details.x-help")).not.toHaveAttribute("open", "");
+      await page.locator("details.x-help summary").click();
+    }
     await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
     await settle(page);
     await scan(page, "search start, help open");
@@ -143,6 +159,7 @@ test.describe("signed in", () => {
 
   test("search start: How to search closed, and the example filled in", async ({ page }) => {
     await page.goto("/en/search");
+    if ((page.viewportSize()?.width ?? 1280) <= 640) await page.locator("details.x-help summary").click(); // collapsed by default on a phone
     await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
     await page.getByRole("button", { name: "Fill in this example" }).click();
     await expect(page.getByText("Example filled in. Press Search.")).toBeVisible();
@@ -164,6 +181,8 @@ test.describe("signed in", () => {
     test(`search start with the help open (${locale})`, async ({ page }) => {
       await page.goto(`/${locale}/search`);
       await expect(page.locator("details.x-help summary")).toHaveText(summary);
+      if ((page.viewportSize()?.width ?? 1280) <= 640) await page.locator("details.x-help summary").click(); // collapsed by default on a phone
+      await expect(page.locator("details.x-help")).toHaveAttribute("open", "");
       await settle(page);
       await scan(page, `search start (${locale})`);
     });

@@ -92,3 +92,24 @@ d. **Attribution** next to every block of Discogs data, enforced screen by scree
 * **Application name policy** (rule 13): not provided, so "Vinilium" is unchecked against it.
 * **Account email monitoring** (rule 10) and the developer's age/ownership (rule 11).
 * Server-side scripts that hold a valid session can still call the endpoints; the per-user rate limits are the control for that.
+
+## Rule, code and test
+
+Each rule of the table above, mapped to the code that meets it and the test that would fail if it stopped being met. "Owner" rows are not
+code. Reviewed 2026-11 (hardening run); a rule with no test says so.
+
+| # | Rule | Code | Test |
+| --- | --- | --- | --- |
+| 1 | Exact non-affiliation notice, prominent | `footer.discogsNotice` (English in all languages), `src/components/SiteFooter.tsx` | `tests/unit/messages.test.ts` (string equality), `tests/e2e/shell.spec.ts`, `tests/e2e/attribution.spec.ts` (every page, three languages) |
+| 2 | "Data provided by Discogs." with a link next to every block of data, no nofollow | `src/components/DiscogsAttribution.tsx` and its use in `src/components/finder/` and `src/components/library/` | `tests/e2e/attribution.spec.ts` (crawler over every page that shows data: link to discogs.com, no nofollow, `noopener`), `tests/e2e/finder.spec.ts`, `tests/e2e/library.spec.ts` |
+| 3 | Never show Content more than 6 h old | `cacheTtlSeconds()` caps at 21600 s (`src/server/discogs/config.ts`); lists refetch at 5.5 h; `oldestFetchedAt` of a batch | `tests/unit/discogs-cache.test.ts` ("can never exceed 6 hours"), `tests/e2e/library.spec.ts` (5.5 h refresh) |
+| 4 | Do not store Content longer than necessary | TTL on every `discogs_cache` row; purge on every cache write and daily (`src/server/retention.ts`); no `releases` table; no stored images | `tests/unit/discogs-cache.test.ts`, `tests/unit/retention.test.ts`, `tests/unit/data-inventory.test.ts` (no column outside the inventory) |
+| 5 | Restricted data (marketplace, prices, user data) not used | Whitelisting normalisers; no price or marketplace field survives | `tests/unit/discogs-normalize.test.ts`, `tests/unit/discogs-releases-batch.test.ts` ("without price or marketplace fields") |
+| 6 | CC0 data may be used | n/a | n/a |
+| 7 | No commercial use, no giving third parties access | Sign-in on every Discogs route; no ads, donations, affiliate links or sharing pages; CSP allows no third-party origin | `tests/unit/discogs-http.test.ts` (401 for anonymous callers), `tests/unit/security-headers.test.ts` (no third-party origin); the no-ads rule is a review rule, **no test** |
+| 8 | Do not circumvent the rate limit | Postgres token bucket shared by all instances; cold allowances; bounded retries with backoff and jitter | `tests/unit/token-bucket.test.ts`, `tests/unit/search-ip-limit.test.ts`, `tests/unit/cold-fetch-cap.test.ts`, `tests/unit/discogs-client.test.ts`, `tests/unit/metrics.test.ts` |
+| 9 | No scraping, no replication of Content | Cache is TTL-bound and holds our whitelisted shape; sign-in, per-user and per-IP limits | `tests/unit/discogs-http.test.ts`, `tests/unit/input-fuzz.test.ts` (only exact Discogs paths ever go upstream) |
+| 10 | Access can be revoked at any time | `unconfigured` and `upstream` states; lists keep working | `tests/unit/discogs-client.test.ts`, `tests/e2e/discogs.spec.ts`; the operator's steps are in `docs/operations.md`, section 6 |
+| 11 | Age and identity of the developer | Owner | n/a |
+| 12 | No incompatible licence | Owner | n/a |
+| 13 | Application Name and Description Policy | Owner | n/a |

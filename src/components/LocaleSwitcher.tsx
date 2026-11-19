@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { routing, type Locale } from "@/i18n/routing";
 import { authClient } from "@/lib/auth-client";
-import { useDS } from "@/ds/use-ds";
+import { setDropdownValue, useDS } from "@/ds/use-ds";
 import { GlobeIcon } from "@/ds/icons";
 
 /**
@@ -30,6 +30,8 @@ export function LocaleSwitcher({
   const ref = useRef<HTMLDivElement>(null);
 
   useDS(ref);
+  // The menu highlights the CURRENT language when it opens (the design system reads data-value once, so tell it when it changes).
+  useEffect(() => setDropdownValue(ref.current, locale), [locale]);
 
   useEffect(() => {
     const el = ref.current;
@@ -69,7 +71,8 @@ export function LocaleSwitcher({
 
   return (
     <div className="x-contents" ref={ref}>
-      <div className="dd dd--right" data-dd="menu">
+      {/* data-value: the design system highlights (and scrolls to) the CURRENT language when the menu opens, not the first row. */}
+      <div className="dd dd--right" data-dd="menu" data-value={locale}>
         {/* Visible text is the short code ("EN"): the accessible name starts with it (WCAG 2.5.3 Label in Name). */}
         <button type="button" className="btn btn--ghost dd__trigger" aria-label={`${locale.toUpperCase()}, ${t("language")}: ${tl(locale)}`}>
           <GlobeIcon />

@@ -42,16 +42,15 @@ describe("guard: sign-in required, then per-IP and per-user limits", () => {
     expect((await guard(req({ cookie: COOKIE }), "search"))?.status).toBe(401);
   });
 
-  it("limits a signed-in caller by IP", async () => {
+  it("limits a signed-in caller by IP (all requests: 4 x RL_SEARCH_IP_PER_MIN, the cold allowance is covered in search-ip-limit.test.ts)", async () => {
     signedIn();
     const { guard } = await import("@/server/discogs/http");
     const call = (id: string) => {
       getSession.mockResolvedValue({ user: { id } });
       return guard(req({ cookie: COOKIE, "x-forwarded-for": "198.51.100.7" }), "search");
     };
-    expect(await call("a")).toBeNull();
-    expect(await call("b")).toBeNull();
-    const blocked = await call("c"); // three different users behind one IP: the IP limit (2) stops it
+    for (let i = 0; i < 8; i++) expect(await call(`u${i}`)).toBeNull(); // RL_SEARCH_IP_PER_MIN = 2, so the ceiling is 8
+    const blocked = await call("c"); // nine different users behind one IP: the IP ceiling stops it
     expect(blocked?.status).toBe(429);
     expect(Number(blocked?.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
     expect(await blocked?.json()).toMatchObject({ error: "rate_limited", scope: "app" });
@@ -71,9 +70,8 @@ describe("guard: sign-in required, then per-IP and per-user limits", () => {
     signedIn();
     const { guard } = await import("@/server/discogs/http");
     const h = { cookie: COOKIE, "x-forwarded-for": "198.51.100.9" };
-    await guard(req(h), "search");
-    await guard(req(h), "search");
-    expect((await guard(req(h), "search"))?.status).toBe(429);
+    for (let i = 0; i < 3; i++) expect(await guard(req(h), "search")).toBeNull();
+    expect((await guard(req(h), "search"))?.status).toBe(429); // the per-user search limit (3)
     expect(await guard(req(h), "image")).toBeNull();
   });
 

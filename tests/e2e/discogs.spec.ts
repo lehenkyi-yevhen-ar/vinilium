@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { mergeGroups } from "../../src/lib/discogs/group";
 import type { ArtistGroup } from "../../src/lib/discogs/types";
+import { FAKE_E2E_CRON_SECRET } from "../helpers/fake-secrets";
 
 /**
  * The Discogs flow end to end, against the MOCKED Discogs server (tests/mocks/discogs-mock.ts, FAKE credentials):
@@ -249,19 +250,19 @@ test("when Discogs says 'slow down' for long, the UI gets a 'throttled' state wi
   expect(recovered.status()).toBe(200);
 });
 
-test("our own per-IP limit answers 429 'rate_limited' with Retry-After, and does not affect other IPs", async ({ request }) => {
+test("Back / reload restores (the same cached page again and again) do not use up the per-IP limit, and do not call Discogs", async ({ request }) => {
   const q = `limit-${RUN}`;
+  const first = await search(request, q, 40); // the one cold look
+  expect(first.status()).toBe(200);
+  const calls = async () => ((await (await request.get(`${MOCK}/__log`)).json()) as unknown[]).length;
+  const before = await calls();
   const statuses: number[] = [];
-  let last;
-  for (let i = 0; i < 62; i++) {
-    last = await search(request, q, 40);
-    statuses.push(last.status());
-  }
-  expect(statuses.slice(0, 60)).toEqual(Array(60).fill(200)); // RL_SEARCH_IP_PER_MIN = 60 in this server
-  expect(statuses.slice(60)).toEqual([429, 429]);
-  expect(await last!.json()).toMatchObject({ error: "rate_limited", scope: "app" });
-  expect(Number(last!.headers()["retry-after"])).toBeGreaterThanOrEqual(1);
-
+  // 75 repeats (more than the old 60 a minute), five at a time: every request is a database round trip, so 75 one after another took ~30 s against
+  // a remote DEV branch and hit the test timeout (a latency problem of the test, not of the app). The limiter counts requests, not their timing.
+  for (let i = 0; i < 75; i += 5) statuses.push(...(await Promise.all(Array.from({ length: 5 }, () => search(request, q, 40)))).map((r) => r.status()));
+  expect(statuses).toEqual(Array(75).fill(200)); // RL_SEARCH_IP_PER_MIN = 60 in this server: 60 cold and 240 requests of any kind
+  expect(await calls()).toBe(before); // nothing more reached the mock Discogs
+  // the unit tests (tests/unit/search-ip-limit.test.ts) cover the cold allowance and the flood ceiling, deterministically
   expect((await search(request, q, 41)).status()).toBe(200); // another IP is fine
 });
 
@@ -276,12 +277,13 @@ test("refuses browser requests that come from another site (no hotlinking / thir
 test("the purge endpoint requires the cron secret", async ({ request }) => {
   expect((await request.get("/api/cron/purge")).status()).toBe(401);
   expect((await request.get("/api/cron/purge", { headers: { authorization: "Bearer wrong" } })).status()).toBe(401);
-  const ok = await request.get("/api/cron/purge", { headers: { authorization: "Bearer e2e-cron-secret-0123456789" } });
+  // ALWAYS ?dryRun=1 here: the real purge deletes expired sessions, verification rows and old counters, and the dev branch holds copies
+  // of real accounts that an e2e run must never modify. The deleting behaviour is covered on an embedded Postgres (tests/unit/retention.test.ts).
+  const ok = await request.get("/api/cron/purge?dryRun=1", { headers: { authorization: `Bearer ${FAKE_E2E_CRON_SECRET}` } });
   expect(ok.status()).toBe(200);
   const body = await ok.json();
-  expect(body).toMatchObject({ ok: true });
-  expect(typeof body.cacheRows).toBe("number");
-  expect(typeof body.rateLimitRows).toBe("number");
+  expect(body).toMatchObject({ ok: true, dryRun: true });
+  for (const k of ["cacheRows", "verificationRows", "sessionRows", "rateLimitRows"]) expect(typeof body[k], k).toBe("number");
 });
 
 test.describe("signed out", () => {

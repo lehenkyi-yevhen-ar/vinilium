@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { resolveLocale } from "@/i18n/locale";
 import { ButtonLink } from "@/ds/ButtonLink";
 import { StatusMessage } from "@/ds/StatusMessage";
+import { publicMetadata } from "@/lib/seo";
 import { getSession } from "@/server/auth/session";
+
+export async function generateMetadata({ params }: PageProps<"/[locale]">): Promise<Metadata> {
+  const locale = await resolveLocale(params);
+  const t = await getTranslations({ locale, namespace: "meta" });
+  return publicMetadata(locale, "", { description: t("description") });
+}
 
 export default async function HomePage({ params, searchParams }: PageProps<"/[locale]">) {
   const locale = await resolveLocale(params);

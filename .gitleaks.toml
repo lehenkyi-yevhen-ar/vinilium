@@ -1,0 +1,11 @@
+# gitleaks configuration (used by .github/workflows/secret-scan.yml and for local runs: gitleaks git --config .gitleaks.toml).
+#
+# It extends the DEFAULT rules unchanged: no rule is switched off and nothing is allow-listed here by path or by pattern.
+#
+# Reviewed findings in history are listed one by one, by exact fingerprint (commit:path:rule:line), in .gitleaksignore next to this
+# file, with the reason. (A [[allowlists]] block with `condition = "AND"` could say the same, but needs a newer gitleaks than the
+# 8.24.3 the pinned action runs; a fingerprint is the most exact form there is.)
+title = "Vinilium"
+
+[extend]
+useDefault = true

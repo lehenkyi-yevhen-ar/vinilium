@@ -1,6 +1,7 @@
 import "server-only";
 import { apiBase, bucketId, userAgent } from "./config";
 import { resolveDiscogsAuth } from "./credentials";
+import { count } from "@/server/metrics";
 import { acquireToken, blockFor, parseRateHeaders, recordObserved, type AppDb } from "./token-bucket";
 
 export interface RateInfo {
@@ -83,6 +84,7 @@ export async function discogsGet(path: string, params: Record<string, string | n
     if (!taken.ok) {
       const waitMs = taken.retryAfterSec * 1000;
       if (waitMs > cfg.maxSingleWaitMs || waited + waitMs > cfg.maxTotalWaitMs) {
+        count("throttled");
         return { ok: false, kind: "throttled", retryAfter: taken.retryAfterSec };
       }
       const jittered = waitMs + Math.round(random() * 250);
@@ -92,6 +94,7 @@ export async function discogsGet(path: string, params: Record<string, string | n
     }
 
     // 2. The request.
+    count("discogs_calls");
     let res: Response;
     try {
       res = await f(url, {
@@ -108,6 +111,7 @@ export async function discogsGet(path: string, params: Record<string, string | n
           continue;
         }
       }
+      count("upstream_errors");
       return { ok: false, kind: "upstream", status: null };
     }
 
@@ -123,6 +127,7 @@ export async function discogsGet(path: string, params: Record<string, string | n
       const delay = Math.max((headerSecs ?? 0) * 1000, backoffMs(attempt, random), 1_000);
       attempt++;
       await blockFor(db, { id, seconds: delay / 1000, now: clock() }).catch(() => {});
+      count("throttled");
       if (attempt > cfg.maxRetries || delay > cfg.maxSingleWaitMs || waited + delay > cfg.maxTotalWaitMs) {
         return { ok: false, kind: "throttled", retryAfter: Math.ceil(delay / 1000) };
       }
@@ -141,11 +146,15 @@ export async function discogsGet(path: string, params: Record<string, string | n
         continue;
       }
     }
-    if (!res.ok) return { ok: false, kind: "upstream", status: res.status };
+    if (!res.ok) {
+      count("upstream_errors");
+      return { ok: false, kind: "upstream", status: res.status };
+    }
 
     try {
       return { ok: true, json: await res.json(), status: res.status, rate };
     } catch {
+      count("upstream_errors");
       return { ok: false, kind: "upstream", status: res.status };
     }
   }

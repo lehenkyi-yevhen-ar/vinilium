@@ -1,3 +1,4 @@
+import { FAKE_AUTH_SECRET } from "./fake-secrets";
 const MANAGED = [
   "DISCOGS_TOKEN",
   "DISCOGS_CONSUMER_KEY",
@@ -18,7 +19,7 @@ export function setEnv(overrides: Record<string, string> = {}) {
   for (const k of MANAGED) delete process.env[k];
   Object.assign(process.env, {
     DATABASE_URL: "postgresql://u:p@localhost/db",
-    BETTER_AUTH_SECRET: "0123456789abcdef0123456789abcdef",
+    BETTER_AUTH_SECRET: FAKE_AUTH_SECRET,
     BETTER_AUTH_URL: "http://localhost:3000",
     DISCOGS_CONSUMER_KEY: "test-key",
     DISCOGS_CONSUMER_SECRET: "test-secret",

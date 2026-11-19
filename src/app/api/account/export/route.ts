@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const [u] = await db.select().from(schema.user).where(eq(schema.user.id, g.userId)).limit(1);
   if (!u) return errorResponse(401, { error: "unauthorized" });
 
-  const body = accountExportJson({ name: u.name, email: u.email, emailVerified: u.emailVerified, locale: (u as { locale?: string | null }).locale ?? null, createdAt: u.createdAt }, await allItems(db, g.userId));
+  const body = accountExportJson({ name: u.name, email: u.email, emailVerified: u.emailVerified, locale: (u as { locale?: string | null }).locale ?? null, createdAt: u.createdAt, image: u.image }, await allItems(db, g.userId));
   return new Response(body, {
     headers: {
       "Cache-Control": "private, no-store",

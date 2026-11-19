@@ -32,6 +32,9 @@ export function ReleaseView({ releaseId }: { releaseId: number }) {
   const params = useSearchParams();
   const fs = parseFinder(params);
   const master = parseMaster(params);
+  // A card opened from a master's pressings page carries that master's title in the address (`t`), but not its id: the id comes with the release
+  // itself. Until it arrives the Back link must not guess (it used to say "Back to albums" and then switch to "Back to pressings" under the finger).
+  const fromPressings = Boolean(master.t);
   const stepLabels = (["track", "artist", "album", "pressing"] as const).map((k) => f(`steps.${k}`));
 
   return (
@@ -44,6 +47,10 @@ export function ReleaseView({ releaseId }: { releaseId: number }) {
         >
           <ChevronLeftIcon /> {t("backToPressings")}
         </Link>
+      ) : state.kind === "loading" && fromPressings ? (
+        <span className="link x-link-block" aria-disabled="true" data-testid="back-pending">
+          <ChevronLeftIcon /> {t("backToPressings")}
+        </span>
       ) : fs.q ? (
         <Link className="link x-link-block" href={{ pathname: "/search", query: albumsBackQuery(fs, { a: master.a ?? r?.artist ?? null }) }}>
           <ChevronLeftIcon /> {t("backToAlbums")}

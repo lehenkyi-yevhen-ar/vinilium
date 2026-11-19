@@ -29,7 +29,11 @@ export function originMatches(request: Request): boolean {
   if (!origin) return true; // non-browser clients and same-origin GETs
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
   try {
-    return host !== null && new URL(origin).host === host;
+    const u = new URL(origin);
+    // An Origin header is exactly scheme://host[:port]. Anything the parser had to "repair" (a backslash, a percent-encoded dot, a path,
+    // userinfo) is not what a browser sends, so it is refused instead of being compared after the repair.
+    if (u.origin.toLowerCase() !== origin.toLowerCase()) return false;
+    return host !== null && u.host === host.toLowerCase();
   } catch {
     return false;
   }

@@ -1,0 +1,10 @@
+# gitleaks: reviewed findings in HISTORY, one exact fingerprint each (commit:path:rule:line). No path, rule or pattern is ignored as a
+# whole: a new finding anywhere, including in the same file, still fails the scan. A fingerprint can only match the one line of the one
+# commit named, so these entries can never hide a future secret.
+#
+# Both are test fixtures from commits a5a9e2d and b56d329 (docs/autonomous-run-report.md): `setEnv({ CRON_SECRET: "<fake 22-char string>" })`.
+# The strings were made up for the test, were never used anywhere, and are not credentials. The current tests build their fake secrets from a
+# repeated character (tests/helpers/fake-secrets.ts) so they no longer look like keys; history cannot be rewritten, so the two old lines are
+# listed here.
+a5a9e2dd65e2be7443243ed00146464db8c05155:tests/unit/retention.test.ts:generic-api-key:17
+b56d329a23504eea784560619f0afef04af09834:tests/unit/health.test.ts:generic-api-key:20

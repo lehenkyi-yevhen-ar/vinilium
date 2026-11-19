@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { FAKE_AUTH_SECRET } from "../helpers/fake-secrets";
 
 beforeEach(() => {
   process.env.DATABASE_URL = "postgresql://u:p@localhost/db";
-  process.env.BETTER_AUTH_SECRET = "0123456789abcdef0123456789abcdef";
+  process.env.BETTER_AUTH_SECRET = FAKE_AUTH_SECRET;
   process.env.BETTER_AUTH_URL = "http://localhost:3000";
 });
 

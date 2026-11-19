@@ -3,11 +3,12 @@ import { getTranslations } from "next-intl/server";
 import { site } from "@/config/site";
 import { Link } from "@/i18n/navigation";
 import { resolveLocale } from "@/i18n/locale";
+import { publicMetadata } from "@/lib/seo";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/contact">): Promise<Metadata> {
   const locale = await resolveLocale(params);
   const t = await getTranslations({ locale, namespace: "contact" });
-  return { title: t("title"), description: t("lead") };
+  return publicMetadata(locale, "/contact", { title: t("title"), description: t("lead") });
 }
 
 /** Public. The address and (optional) Telegram link come from NEXT_PUBLIC_CONTACT_* via `site.contact`. */

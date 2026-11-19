@@ -1,6 +1,6 @@
 import "server-only";
 import { limits } from "@/server/limits";
-import { hit } from "@/server/rate-limit";
+import { hit, LIMITER_RETRY_AFTER_SECONDS, LimiterUnavailableError } from "@/server/rate-limit";
 import type { AppDb } from "./token-bucket";
 
 export interface ColdLimit {
@@ -16,7 +16,13 @@ export interface ColdLimit {
 export function coldLimiter(db: AppDb, userId: string, opts: { limit?: number; now?: () => number } = {}): () => Promise<ColdLimit> {
   const limit = opts.limit ?? limits().coldFetch.user;
   return async () => {
-    const r = await hit(db, { key: `cold:user:${userId}`, limit, windowSec: 60, now: opts.now?.() });
-    return { allowed: r.allowed, retryAfter: r.retryAfter };
+    try {
+      const r = await hit(db, { key: `cold:user:${userId}`, limit, windowSec: 60, now: opts.now?.() });
+      return { allowed: r.allowed, retryAfter: r.retryAfter };
+    } catch (error) {
+      // fail CLOSED: with no counter there is no way to know the person is within their allowance, and an uncounted fetch spends the shared Discogs budget
+      if (error instanceof LimiterUnavailableError) return { allowed: false, retryAfter: LIMITER_RETRY_AFTER_SECONDS };
+      throw error;
+    }
   };
 }

@@ -5,6 +5,7 @@ import { ButtonLink } from "@/ds/ButtonLink";
 import { ListIcon, SearchIcon, UserIcon } from "@/ds/icons";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { SignOutButton } from "./SignOutButton";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 
 export async function SiteHeader({ signedIn, userName }: { signedIn: boolean; userName?: string }) {
   const t = await getTranslations("nav");
@@ -27,6 +28,7 @@ export async function SiteHeader({ signedIn, userName }: { signedIn: boolean; us
                 <span>{t("lists")}</span>
               </ButtonLink>
             ) : null}
+            <ThemeSwitcher />
             <LocaleSwitcher signedIn={signedIn} />
             {signedIn ? (
               <>
