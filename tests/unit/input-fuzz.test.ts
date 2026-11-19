@@ -205,7 +205,8 @@ describe("fuzz: the Discogs routes", () => {
     // Whatever was asked, the only addresses that ever went out are the exact Discogs paths we build ourselves.
     expect(upstreamUrls.length).toBeGreaterThan(20);
     for (const u of upstreamUrls) {
-      expect(u.startsWith(BASE), u).toBe(true);
+      // exact origin (scheme, host and port), not a string prefix: "http://discogs.test.evil.example/x" also starts with BASE
+      expect(new URL(u).origin, u).toBe(new URL(BASE).origin);
       expect(new URL(u).pathname, u).toMatch(/^\/(database\/search|masters\/[1-9]\d{0,9}(\/versions)?|releases\/[1-9]\d{0,9})$/);
     }
   });
