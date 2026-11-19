@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { e2ePool } from "../helpers/e2e-db";
 
 /**
  * Keyboard behaviour, scripted: what a keyboard-only person needs and a scan cannot prove. Desktop viewport, signed in, MOCKED
@@ -17,8 +17,7 @@ test.beforeAll(async ({ browser }) => {
   userId = (await (await ctx.request.get("http://localhost:3200/api/auth/get-session")).json())?.user?.id;
   await ctx.close();
   expect(userId).toBeTruthy();
-  const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl() }); // DEV database only
+  const pool = await e2ePool(); // DEV database only
   try {
     await pool.query("delete from user_items where user_id = $1", [userId]);
     await pool.query(
@@ -32,8 +31,7 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-  const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl() });
+  const pool = await e2ePool();
   try {
     if (userId) await pool.query("delete from user_items where user_id = $1", [userId]);
   } finally {

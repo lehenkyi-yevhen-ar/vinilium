@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect as baseExpect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { e2ePool } from "../helpers/e2e-db";
 import { inspectOpenMenu, type MenuReport } from "../helpers/phone-menus";
 
 /**
@@ -244,8 +244,7 @@ test.describe("other widgets at phone width (signed in)", () => {
   });
 
   const withPool = async (fn: (query: (sql: string, args?: unknown[]) => Promise<unknown>) => Promise<void>) => {
-    const { Pool } = await import("@neondatabase/serverless");
-    const pool = new Pool({ connectionString: e2eDatabaseUrl() }); // DEV database only
+    const pool = await e2ePool(); // DEV database only
     try {
       await fn((sql, args) => pool.query(sql, args));
     } finally {

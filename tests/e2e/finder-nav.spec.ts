@@ -278,9 +278,8 @@ test("a signed-out visitor who follows a finder link signs in and lands on the S
   const password = "E2e-Password-123";
   const up = await request.post("/api/auth/sign-up/email", { data: { name: "Nav User", email, password, locale: "en" }, headers: { origin: baseURL! } });
   expect(up.ok(), "sign-up").toBe(true);
-  const { e2eDatabaseUrl } = await import("../helpers/e2e-db");
-  const { Pool } = await import("@neondatabase/serverless");
-  const pool = new Pool({ connectionString: e2eDatabaseUrl() });
+  const { e2ePool } = await import("../helpers/e2e-db");
+  const pool = await e2ePool();
   try {
     await pool.query('update "user" set email_verified = true where email = $1', [email]);
   } finally {

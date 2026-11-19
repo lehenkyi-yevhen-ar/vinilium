@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { e2eDatabaseUrl } from "../helpers/e2e-db";
+import { e2ePool } from "../helpers/e2e-db";
 
 /**
  * Automated accessibility audit (axe-core, WCAG 2.0/2.1/2.2 A and AA rules) of the main screens, run in LIGHT and DARK themes on a
@@ -98,8 +98,7 @@ test.describe("signed in", () => {
 
   test.beforeEach(async () => {
     expect(userId, "the e2e user is signed in").toBeTruthy();
-    const { Pool } = await import("@neondatabase/serverless");
-    const pool = new Pool({ connectionString: e2eDatabaseUrl() }); // DEV database only
+    const pool = await e2ePool(); // DEV database only
     try {
       await pool.query("delete from user_items where user_id = $1", [userId]);
       await pool.query(
@@ -123,8 +122,7 @@ test.describe("signed in", () => {
   });
 
   test.afterAll(async () => {
-    const { Pool } = await import("@neondatabase/serverless");
-    const pool = new Pool({ connectionString: e2eDatabaseUrl() });
+    const pool = await e2ePool();
     try {
       if (userId) await pool.query("delete from user_items where user_id = $1", [userId]);
     } finally {

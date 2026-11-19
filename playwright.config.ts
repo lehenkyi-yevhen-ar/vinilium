@@ -14,6 +14,8 @@ const MOCK_PORT = 3201;
 const hasDb = true; // e2eDatabaseUrl() throws when there is no dev database, so a run that gets here has one
 // The Discogs flow needs a real Postgres (cache, token bucket, limiter). Without one its tests skip, loudly.
 process.env.E2E_HAS_DB = hasDb ? "1" : "";
+// Firefox and WebKit: always on a developer machine (as before); on CI only when asked for, because the job installs Chromium alone.
+const extraBrowsers = !process.env.CI || process.env.E2E_EXTRA_BROWSERS === "1";
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -32,9 +34,14 @@ export default defineConfig({
     { name: "desktop", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", testMatch: /shell\.spec\.ts/, use: { ...devices["Pixel 7"] } },
     // The same signed-out smoke tests in the other two engines (browsers installed with `npx playwright install firefox webkit`). Run them
-    // on their own: `npx playwright test --no-deps --project=firefox --project=webkit`. Not part of CI (a Chromium-only job today).
-    { name: "firefox", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },
-    { name: "webkit", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Safari"] } },
+    // on their own: `npx playwright test --no-deps --project=firefox --project=webkit`. The CI job installs Chromium only, so on CI these two
+    // projects exist only when E2E_EXTRA_BROWSERS=1 (the first PR run listed them and failed 26 tests with "Executable doesn't exist").
+    ...(extraBrowsers
+      ? [
+          { name: "firefox", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },
+          { name: "webkit", testMatch: /shell\.spec\.ts/, use: { ...devices["Desktop Safari"] } },
+        ]
+      : []),
     // The Discogs and lists APIs, signed in, against the MOCKED Discogs server. Serial: one limiter, one mock.
     {
       name: "discogs",
