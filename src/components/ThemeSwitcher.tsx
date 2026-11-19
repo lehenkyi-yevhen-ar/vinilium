@@ -116,7 +116,7 @@ export function ThemeSwitcher() {
         </button>
         <div className="dd__menu glass-strong">
           {options.map((o) => (
-            <div key={o.value} className="dd__opt" data-value={o.value} data-label={o.label} aria-current={o.value === theme ? "true" : undefined}>
+            <div key={o.value} className={o.hint ? "dd__opt x-opt--hint" : "dd__opt"} data-value={o.value} data-label={o.label} aria-current={o.value === theme ? "true" : undefined}>
               {o.icon}
               <span>
                 {o.label}

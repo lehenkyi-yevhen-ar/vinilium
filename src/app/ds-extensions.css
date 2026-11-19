@@ -179,6 +179,36 @@ body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; bac
 [data-theme="light"] .x-theme .x-theme__sun { display: inline; }
 .x-theme .dd__opt small { display: block; }
 
+/* ---- Header menu triggers (theme, language) and every .dd menu surface ----
+   1. The design system's .dd__trigger is made for a select with a chevron: padding-right 12px and justify-content: space-between. It comes
+      LATER in the bundle than .btn--icon (padding: 0), so on our 44px icon button it left a 32px content box and pushed the icon to its
+      left edge: 12px off centre (measured: icon centre 829.28 against button centre 841.28 at 1280px). On the language button (globe + "UK")
+      the padding was 20px left and 12px right. A menu trigger has no chevron, so it gets the plain button's centred layout back. The
+      select variant (account page, .select.dd__trigger) keeps the design system's layout. */
+.dd[data-dd="menu"] > .dd__trigger.btn { justify-content: center; gap: var(--space-2); padding-right: var(--space-5); }
+.dd[data-dd="menu"] > .dd__trigger.btn.btn--icon { padding-inline: 0; }
+
+/* 2. A menu surface must not let the page show through. .glass-strong is a 72-74% tint that relies on backdrop-filter, and a
+      backdrop-filter inside the navbar's own backdrop-filter blurs nothing of the page (the navbar is its backdrop root): the heading
+      behind the open menu stayed sharp and readable through it. The design system's own opaque surface token is used instead (the same
+      one it falls back to under prefers-reduced-transparency), keeping the soft highlight on top. */
+.dd__menu.glass-strong {
+  background: radial-gradient(120% 60% at 20% 0%, var(--glass-spec-soft), transparent 60%), var(--color-surface-raised);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 3. A row with a hint (theme "System"): the icon sits on the FIRST line, not in the middle of two lines, and the hint has its own
+      breathing room. The text block may shrink and wrap (long uk/nb strings, 375px) instead of pushing the check mark out. */
+.dd__opt > span { min-width: 0; overflow-wrap: break-word; }
+.dd__opt.x-opt--hint { align-items: flex-start; }
+.dd__opt.x-opt--hint > .lead-ic { margin-top: 2px; margin-top: calc((1lh - var(--icon-md)) / 2); }
+.dd__opt.x-opt--hint small { margin-top: 2px; }
+@media (max-width: 640px) {
+  /* the phone sheet's rows are 48px tall with the text centred: the first line of a two-line row starts where a one-line row's does */
+  .dd .dd__opt.x-opt--hint { padding-block: 12px; padding-block: calc((48px - 1lh) / 2); }
+}
+
 /* The current choice in a MENU (language, theme; a select already has the design system's check) is marked by a check mark and weight, not by colour alone. */
 .dd[data-dd="menu"] .dd__opt[aria-current="true"] { font-weight: 600; }
 .dd[data-dd="menu"] .dd__opt[aria-current="true"]::after { content: "✓"; margin-left: auto; color: var(--color-primary); font-weight: 700; }
