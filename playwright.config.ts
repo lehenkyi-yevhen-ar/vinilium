@@ -109,6 +109,16 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
     },
+    // The header's icon buttons and the theme menu, measured: centring, row layout, opaque surface, axe with the menu open. Builds its own
+    // contexts (desktop and phones).
+    {
+      name: "header-ui",
+      testMatch: /header-ui\.spec\.ts/,
+      dependencies: ["setup"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
     // The Wishlist / Collection screens (milestone 4). After the finder, one after the other: the same mock and Discogs bucket.
     {
       name: "library-desktop",
