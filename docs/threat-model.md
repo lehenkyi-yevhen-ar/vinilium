@@ -93,3 +93,4 @@ user (`getRequestUserId`); "same-site" means a request the browser labels cross-
 
 Error bodies carry a code and a fixed message only (`errorResponse`); the fuzz test asserts no stack, path, SQL or connection string appears in any answer.
 Gaps: reads of `/api/lists/items` have no limiter of their own; `/api/health` and `/api/csp-report` are open by nature.
+When the limiter's own counter cannot be written (a database error) every caller fails in a deliberate way and never lets a request through unchecked: search, images, masters and lists answer a structured 503 with `Retry-After`, the cold-fetch allowance answers "not allowed, retry in 2 s", and only `/api/csp-report` fails open (it protects only log volume). A race in creating a counter (two simultaneous first requests) used to surface as a 500 and is fixed; see `docs/operations.md` section 17a.

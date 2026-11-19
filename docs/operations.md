@@ -288,6 +288,26 @@ while the loose 4x ceiling on all requests keeps a flood from hammering our data
 call. It is not a new way to burn the Discogs budget: the cold allowance, the per-person cap and the token bucket are unchanged.
 
 
+### 17a. The limiter's counter row, and what happens when it cannot be written
+
+**The bug (found in the CI log of PR #1, fixed 2026-11-19).** `hit()` in `src/server/rate-limit.ts` wrote its counter with `insert into rate_limit (id, key, ...) values (<key>, <key>, ...) on conflict (key) do update`. The table has two unique indexes, the primary key `id` and `key`, and `ON CONFLICT (key)` arbitrates only the second. Two requests that **create the same counter at the same instant** could therefore collide on the primary key instead and fail with `23505 duplicate key value violates unique constraint "rate_limit_pkey"`. Only the creation can race: once the row exists, updates queue on the row lock. Reproduced on a real Postgres (the DEV branch): 10 connections firing `hit()` on the same brand-new key at once, 60 to 100 rounds: **2 of 600, 7 of 1000 and 8 of 1000 calls failed with 23505; after the fix 0 of 3000** (`scripts/limiter-race.ts`, run by `tests/e2e/limiter-concurrency.spec.ts`). PGlite cannot show it (one connection); a deterministic version (a row that already holds the id the old code chose) is in `tests/unit/rate-limit-concurrency.test.ts`, and it fails on the old code with the same message as the CI log.
+
+**Who was affected.** Not a security hole (a failed write never let anything through) and not data loss, but a real defect for production users: whoever creates a counter while sending several requests at once. The typical case is the first page of results after an idle period: a counter is purged an hour after its window ended (`/api/cron/purge`), so the next burst of thumbnails (`/api/discogs/image`, all hitting `image:user:<id>` and `image:ip:<ip>` together) could lose the race. The failed call was an unhandled exception, so Next answered an empty **500**: that cover stayed a placeholder (the page already falls back when an image fails), a failed search or masters request showed the generic error screen with its Retry button, a failed list write showed its error. A retry always worked, because the row existed by then. Measured rate against Neon from a test process: about 0.7 % of simultaneous first-creations; it needs real concurrency, so it is rarer in practice.
+
+**The fix.** The row id is now a fresh random UUID, not the key. The only possible collision is then on `key`, which `ON CONFLICT (key)` turns into an update. That is also what Better Auth does for its own rows in the same table (its adapter generates the id and looks rows up only by `key`; it also retries a lost creation race itself, so its auth-endpoint limiter was never exposed). Rows already stored with id = key keep working, because they are matched by `key`: **code-only change, no migration, nothing to run on production.** As a second line of defence a `23505` is retried once (the row exists by then), and counts are not lost or reset twice: every call sees its own count, the stored count is exact, and the window resets exactly once (tests in `tests/unit/rate-limit-concurrency.test.ts`).
+
+**What happens when the counter cannot be written at all (database error).** `hit()` throws `LimiterUnavailableError` and each caller decides, on purpose, and never silently skips a protection:
+
+| Caller | Policy | What the person sees |
+| --- | --- | --- |
+| Search, images, masters batches (`guardUser`) | **fail closed** | `503 {error:"unavailable"}` with `Retry-After: 2`; nothing is sent to Discogs. A thumbnail stays a placeholder, a screen shows the generic error with Retry (a 503 used to read as "not set up"; the client now treats only `error:"unconfigured"` that way) |
+| Lists writes and export (`gateLists`) | **fail closed** | the same 503; the write is not let through unchecked |
+| Cold-fetch allowance (per IP and per person) | **fail closed** | "not allowed, retry in 2 s": the screen shows its "waiting for Discogs" countdown; no uncounted call spends the shared 60/min budget. Cached answers still work |
+| `/api/csp-report` | **fail open** | 204, the report is dropped (it protects only log volume, and must never affect a page) |
+| Better Auth's limiter on the auth endpoints | not ours, **unchanged** | it retries a lost creation race; a database error fails the request (it never skips the check) |
+
+Tests: `tests/unit/limiter-failure-policy.test.ts` (each row above, plus a source scan that fails if a new caller of `hit()` does not say how it fails).
+
 ## 18. CI and supply chain
 
 Workflows in `.github/workflows/` (all pinned to full commit SHAs with the version in a comment; every workflow declares `permissions:`;
@@ -431,11 +451,48 @@ The first fix worked: in that run the probe printed `probe ok (attempt 1)` and `
 
 **Slow test, fixed at the cause.** `discogs.spec.ts` "Back / reload restores..." sent 76 requests one after another; against the remote DEV branch each is a database round trip (about 0.4 s) and the test hit its 30 s limit. The repeats now go five at a time (the limiter counts requests, not timing), so it no longer depends on network distance.
 
-### 18b. Dated reminder: the picomatch audit exception expires on 2026-12-31
+### 18d. The e2e project graph (2026-11-19): one failing test no longer hides the rest
 
-`npm run audit:prod` passes today only because `.audit-allowlist.json` lists **one** advisory, picomatch GHSA-fc5q-39xc-vjpf (ReDoS in glob matching, range <=4.0.7, no patched release when it was reviewed on 2026-11-18). The entry **stops working on 2026-12-31**, and the `audit` job then fails on purpose. What to check, in order:
+**What happened.** The third CI run of PR #1 reported `101 passed, 1 failed, 419 did not run`. The Playwright projects were a chain (each `dependencies` the previous one), and a project that depends on another is skipped when that one fails: one failing finder test hid 419 tests, among them whole accessibility, keyboard, CSP and attribution projects.
 
-1. `npm view picomatch version` and `npm view picomatch time --json`: is there a release above 4.0.7 that the advisory marks as fixed?
-2. `npm ls picomatch`: which paths still resolve to a vulnerable copy (the production path is `next-intl` > `@parcel/watcher` > `picomatch`; the rest is test tooling).
-3. A fix exists: accept Dependabot's pull request (it waits 14 days by design) or run `npm update picomatch`, run `npm run audit:prod` and the unit tests, then **delete the entry** from `.audit-allowlist.json` in the same commit.
-4. No fix yet: re-read the justification in the entry (extractor not enabled, no visitor-controlled pattern, no copy in the serverless output: `grep -rl picomatch .next/server .next/static` after a build), then move `reviewed` and `expires` forward in one small commit with the reason. Do not widen the entry (one advisory id, no wildcards: the gate refuses anything else).
+**Now.** Only `setup` (the sign-in that creates the shared e2e user and its session) is a dependency; every project that reads that session depends on it and on nothing else, and the signed-out shell projects and `limiter-concurrency` (its own users) depend on nothing. No `maxFailures`, no retries: every project runs to its end. `tests/unit/e2e-db-access.test.ts` fails if a project depends on anything but `setup`, if one that reads the session does not depend on it, if two projects share a client address, or if the worker count or cut-off changes.
+
+```
+setup
+ ├─ desktop, mobile (+ firefox, webkit off CI)        signed-out shell
+ ├─ discogs                                           the Discogs and lists API, signed in
+ ├─ finder-desktop, finder-mobile                     the finder UI
+ ├─ finder-nav-desktop, finder-nav-390                Back links, reload (+ search help)
+ ├─ phone-menus, theme-desktop, theme-390
+ ├─ library-desktop, library-mobile
+ ├─ a11y-light, a11y-dark, a11y-phone, keyboard
+ ├─ auth-modes, csp, attribution, a11y-extra
+ └─ limiter-concurrency                               (no dependency: its own users)
+```
+
+**Why one worker, and what "parallel" would still need.** Without a dependency, projects start together, so the config sets `workers: 1`: they run one after the other in the order they are listed. They share three things that are **not** isolated per project: the mock Discogs server (its "the next 3 API calls answer 429" switch and its request log are global), the Discogs token-bucket row of the mock's origin, and the signed-in e2e user with its list rows (library, keyboard, phone-menus and a11y rewrite them). Every project does have its own client address (`x-forwarded-for` from 203.0.113.0/24, or its own contexts), so the **per-IP limiters never collide**, but that alone does not make side-by-side runs safe. Truly parallel lanes would need a mock instance, an app server (the origin is part of the cache and bucket keys) and a user per lane: not done, because on a 2-vCPU runner it would not be faster either.
+
+**Running one project.** `npx playwright test --project=finder-nav-390` runs `setup` and that project only (before, it dragged its whole chain; the `E2E_NAV_ONLY` switch is gone). The teardown still deletes only what the suite created.
+
+**How long.** Measured: the full suite takes about 30 minutes on a developer machine against the remote DEV branch (every database round trip is about 0.4 s there). On the CI runner (a Postgres container next to the app) the 101 tests that ran in the third run took 2.5 minutes; **the duration of the full run on GitHub is not known yet**. The job's limit is 60 minutes.
+
+### 18e. finder-nav-390 "Show more albums ... survive Back and reload" (CI run 44507266233): a timing-dependent test on inconsistent mock data
+
+**Symptom.** `finder-nav.spec.ts:199`: after opening a release and clicking Back, the address stayed `/en/master/500` instead of `/en/search`; the screenshot shows the pressings page of "Glass Harbor". It passed in `finder-nav-desktop`.
+
+**Evidence (from the CI trace, read-only).** The release page was opened at 10:41:23.948, `GET /api/discogs/releases/7000` answered in **28 ms**, and at 10:41:24.052 (about 100 ms after the navigation) the browser requested `/en/master/500?...`: the click on the Back link. The page's own address carries no master title (`t`), so it came from the albums list.
+
+**Root cause (two parts, both verified).**
+
+1. *Inconsistent test data.* The spec injects two "release without a master" entries (ids 7000 and 7001) into the albums list, but the mock Discogs server answered `GET /releases/7000` with the generic record, whose `master_id` is **500**. Once the record is loaded, the release page correctly derives its Back link from it: "Back to pressings", `/en/master/500`.
+2. *A race in the test.* The Back link is "Back to albums" until the record arrives and "Back to pressings" after. The test clicked "Back to (pressings|albums)" right after the address changed, so it passed when the click came before the record and failed when it came after. On the CI runner the database is next to the app and the record arrives within about 30 ms; against the remote DEV branch (about 0.4 s per round trip) it arrives after more than a second, so the test passed locally every time. **Reproduced locally:** the old test with a 3-second pause before the click, against the old mock, fails with exactly the CI message (`Expected: "/en/search"`, `Received: "/en/master/500"`); a probe on the same page shows the link reading "Back to albums" at +0 ms and "Back to pressings" (to `/en/master/500`) from +100 ms.
+
+**Not the cause (checked).** The link covered by the bottom tab bar or the header at 390 px (the link is at the top of the page, visible in the screenshot); a click before hydration; a prefetch race; our per-IP limiter (each test has its own address; the failing request got a 200).
+
+**A real, small product defect found on the way.** For a card opened from a master's **pressings** page the address carries the master's title but not its id; the id comes with the release record. Until it arrived, the Back link read "Back to albums" and then switched to "Back to pressings" under the finger. It never did nothing, but a tap in between went to the wrong place, most likely on a slow phone connection. Fix (`src/components/finder/ReleaseView.tsx`): while the record loads and the address says it came from a pressings page, the link is an inert "Back to pressings" (not a link, `aria-disabled`, `data-testid="back-pending"`) and becomes the real link when the record arrives; every other case is unchanged (a failed record falls back to the albums link, a card without finder context to "Back to search").
+
+**Changes.** The mock's record for ids 7000 to 7099 is a standalone release (`master_id` 0, "Odd Pressing n"), as the injected list entries say; the test waits for the card ("Odd Pressing 0") and then clicks "Back to albums" exactly; a new test holds the release request, checks that there is no link to tap yet, releases it, and checks the link leads to `/en/master/500` and works (`finder-nav.spec.ts`, desktop and 390).
+
+### 18b. The audit allowlist is empty (the picomatch exception was removed on 2026-11-19)
+
+`.audit-allowlist.json` was `[]` since 2026-11-19: the picomatch advisory GHSA-fc5q-39xc-vjpf that had needed an exception (ReDoS in glob matching, range <=4.0.7, no patched release when it was reviewed on 2026-11-18) is no longer reported by `npm audit --omit=dev`, and the gate itself asked for the entry to be removed. `npm run audit:prod` still fails on any NEW high or critical advisory. **If one appears:** read the advisory and `npm ls <package>`; take the fix if one exists (Dependabot proposes it after its 14-day cooldown); if none exists and it cannot be reached in production, add one entry to `.audit-allowlist.json` (one GHSA id, justification, `reviewed` date, `expires` at most 90 days later) and put the decision in `docs/decisions-needed.md`.

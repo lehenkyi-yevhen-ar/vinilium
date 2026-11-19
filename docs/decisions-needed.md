@@ -68,7 +68,12 @@ warning on an advisory listed in `.audit-allowlist.json`. An entry covers one ad
 and a review date, and **stops working on its expiry date** (this one: 2026-12-31, 43 days), after which the job fails again until someone re-reviews it. An
 invalid allowlist fails the gate. Tests: `tests/unit/audit-gate.test.ts`.
 
-**What you still decide:** whether you accept that one exception (it is yours to veto: delete the entry and the gate goes red again). Re-check it
+**Update 2026-11-19: the entry was removed.** The CI `audit` job printed "the allowlist entry GHSA-fc5q-39xc-vjpf (picomatch) matches no advisory any more: remove it", and a local
+`npm run audit:prod` says the same: `npm audit --omit=dev` now reports only the 4 moderate esbuild findings and no high one (picomatch is still 4.0.7, so the advisory itself
+was changed or withdrawn in the advisory database; I did not find out which). `.audit-allowlist.json` is now `[]`. The gate is unchanged: any **new** high or critical advisory
+fails the job, and an exception can be added again (id, justification, review date, expiry) if this one comes back. The text below is the history of the decision.
+
+**What you still decide (history):** whether you accept that one exception (it is yours to veto: delete the entry and the gate goes red again). Re-check it
 when picomatch publishes a fix (Dependabot will propose it, with its 14-day cooldown), and in any case by 2026-12-31.
 
 ## 6c. gitleaks: 11 older findings in main's history (found 2026-11-18, full-history scan)
@@ -132,6 +137,8 @@ Do this **only if** any value in the first commit's `.env.example` was ever a re
 | 3 | `DISCOGS_CONSUMER_KEY` and `DISCOGS_CONSUMER_SECRET` | the Discogs pair of the first commit was ever the real application key | Discogs > Settings > Developers > your application: generate a new pair, put **both** in Vercel, Redeploy | Until updated, release details show the "not set up" or error state | Open a release card on the live site; the Vercel log shows no `discogs` 401 |
 | 4 | `RESEND_API_KEY` | only if Resend was ever really used (this app sends through Brevo) | Resend > API Keys: delete the key | Nothing (unused) | n/a |
 | 5 | `CRON_SECRET` | only if the value in Vercel equals one of the made-up strings committed in tests (`cron-secret-0123456789`, `SECRET-CRON-0123456789`, `e2e-cron-secret-0123456789`); a random value cannot | Vercel: a new value of 16+ characters | Nothing user-visible; Vercel Cron sends the new value by itself | `curl -H "Authorization: Bearer <value>" ".../api/cron/purge?dryRun=1"` answers 200 (run it in your shell; do not paste the value anywhere) |
+
+**The test session secret (the "low-entropy" warning in the CI log).** Better Auth prints `BETTER_AUTH_SECRET appears low-entropy` during the e2e run because the test server is given a made-up phrase, repeated, as its secret: it is set only in `playwright.config.ts` (the env of the app server under test) and in `tests/e2e/auth-modes.spec.ts` (its two extra servers). No workflow sets it, the CI job has no secrets at all, and unit tests use `FAKE_AUTH_SECRET` (a repeated letter, `tests/helpers/fake-secrets.ts`). It is about 2.5 bits of entropy per character (a repeated phrase), well under gitleaks' threshold, and the pull-request secret scan is green with it. It was never a production value as far as the repository shows, but the repository cannot show what is in Vercel: **compare once, by eye, that the value of `BETTER_AUTH_SECRET` in Vercel (Production) is not that phrase** (it must be a long random value; if it is the phrase, rotate it as in row 1 above). The warning is harmless for a test server and is left as it is.
 
 After any change in Vercel: **Redeploy** (Deployments > the latest > Redeploy; variables are read at deploy time). Then read the Vercel logs for a few minutes for `401`, `403` or `[email]` errors. Brevo (`BREVO_API_KEY`) is not in the first commit, so it is not part of this list.
 

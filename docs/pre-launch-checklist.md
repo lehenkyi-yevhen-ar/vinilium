@@ -64,7 +64,7 @@ Tick each item yourself. "Verified" says what was actually checked and by whom; 
 
 ## Dependencies
 
-- [ ] **picomatch audit exception expires on 2026-12-31** (`.audit-allowlist.json`, advisory GHSA-fc5q-39xc-vjpf). Before that date: `npm view picomatch version` (the exception was granted because 4.0.7 was the latest and had no fix); `npm ls picomatch` (who still pulls a vulnerable one); if a patched release exists, take Dependabot's update (14-day cooldown), re-run `npm run audit:prod`, and **delete the entry** from `.audit-allowlist.json`. If there is still no fix, re-review the justification and move `expires` and `reviewed` forward in one small commit. After the date the `audit` job fails on purpose until one of the two is done.
+- [x] **picomatch audit exception: removed 2026-11-19.** The CI `audit` job reported the entry stale (no advisory matches it any more) and `.audit-allowlist.json` is now `[]`. Nothing to check on 2026-12-31 unless the advisory comes back: then `npm run audit:prod` fails by itself, and `docs/operations.md` section 18b says what to do.
 
 ## Known open items (undecided: kept visible, not decided by the agent)
 

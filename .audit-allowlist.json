@@ -1,9 +1,1 @@
-[
-  {
-    "id": "GHSA-fc5q-39xc-vjpf",
-    "package": "picomatch",
-    "justification": "ReDoS in glob matching (range <=4.0.7); 4.0.7 is the latest release, so there is no patched version to install (checked with npm view on 2026-11-18). In the production tree it is reached only through @parcel/watcher, which next-intl uses in its experimental message extractor (SourceFileWatcher) with a fixed list of ignore globs; this app does not enable the extractor and no pattern ever comes from a visitor. The rest is vitest, vite and tinyglobby (test tooling). picomatch is in no traced serverless file (zero matches in .next/server and .next/static). Re-check when picomatch publishes a fix.",
-    "expires": "2026-12-31",
-    "reviewed": "2026-11-18"
-  }
-]
+[]

@@ -274,3 +274,74 @@ Each code commit was checked out alone in a temporary git worktree (shared node_
 1. CI / e2e passes end to end on the runner (2 vCPU, Postgres 17 behind wsproxy), in particular the `masters` test above and the total duration.
 2. The CodeQL alert closes.
 3. The full-history secret scan stays red until you decide 6c.
+
+---
+
+# Follow-up 3: the third CI run of pull request #1 (run 44507266233, 2026-11-19)
+
+Written for the owner. Nothing was pushed by the agent; production was never touched. Database target of every e2e run and of `scripts/limiter-race.ts`: **the DEV branch via `DEV_DATABASE_URL`** (stated before each run; the guard printed branch id `br-empty-band-b9f6dxji`), writing only the suite's own rows (`e2e-*@example.test`, `app:zzrace:*` counters, mock-origin cache rows, counters of 203.0.113.0/24), all deleted by the suite or the script. The "local CI copy" runs used an empty in-memory Postgres under the host name `postgres` and could not reach Neon. DEV after all runs: 3 users (unchanged), `user_items` 0, `discogs_cache` 0.
+
+## What GitHub showed (read with `gh`, GET only)
+
+`checks`, `CodeQL`, `Secret scan` green. `e2e`: 101 passed, 1 failed, 419 did not run (2.5 min). `audit` green with an annotation: "the allowlist entry GHSA-fc5q-39xc-vjpf (picomatch) matches no advisory any more: remove it".
+
+## 1. The rate-limiter race (production code): a real bug, not a security hole, code-only fix
+
+* **Evidence.** CI server log: `duplicate key value violates unique constraint "rate_limit_pkey"` (23505) on `insert into "rate_limit" (id, key, ...) values (<key>, <key>, ...) on conflict ("key") do update`. The table has two unique indexes (primary key `id` and `key`); `ON CONFLICT (key)` arbitrates only `key`, so two requests creating the same counter at the same instant can collide on `id` instead. Only creation can race; an existing row is updated under its row lock.
+* **Where (a).** The only writer of our counters is `hit()` in `src/server/rate-limit.ts` (callers: `guardUser` for search and images, the per-IP cold allowance, the cold-fetch allowance, `gateLists`, `/api/csp-report`). Better Auth writes the same table through its adapter with generated ids, looks rows up only by `key`, and retries a lost creation race itself (read from its source), so the auth endpoints were never exposed. Other upserts checked and fine: `discogs_bucket` (`id` is the only unique index, `on conflict do nothing`), `discogs_cache` (`key` is the primary key), `user_items` (random default id, conflict on the composite).
+* **Reproduced (b), on a real Postgres.** `scripts/limiter-race.ts`: 10 connections opened beforehand all call `hit()` on the same brand-new key at once. Old code: **2 of 600, 7 of 1000 and 8 of 1000 calls failed with 23505** (about 0.7 %); counts of the others were exact. Fixed code: **0 of 3000**, counts exact. An HTTP burst from a test process did not reproduce it in 4 tests (the window is microseconds), so the decisive test drives the database directly; PGlite has one connection and cannot race, but a deterministic reproduction (a row already holding the id the old code would pick) fails on the old code with the CI message and passes now.
+* **What users experience (c).** Before: `hit()` threw, nothing caught it, Next answered an empty 500. A cover stayed a placeholder (the image component already falls back), a failed search or masters call showed the generic error screen with Retry, a failed list write showed its error; a retry worked. It affected people who create a counter while sending requests in parallel, typically the first page after an idle hour (counters are purged an hour after their window). Never fail-open, never lost counts, never a bypass. Production exposure is real but rare (about 0.7 % of simultaneous first-creations measured from here).
+* **Fix (d).** The row id is a random UUID, not the key. The only possible collision is on `key`, which ON CONFLICT turns into an update; this is also Better Auth's own convention for the table. Rows already stored with id = key keep working (matched by `key`). A remaining 23505 is retried once. **No migration and nothing to run on production: code-only.**
+* **Failure policy, per limiter, documented in `docs/operations.md` 17a and `docs/threat-model.md`.** A database error becomes `LimiterUnavailableError`: search, images, masters and lists **fail closed** with `503 {error:"unavailable"}` + `Retry-After: 2` (nothing sent to Discogs, no write let through); the cold-fetch allowance answers "not allowed, retry in 2 s" (fail closed: protects the shared Discogs budget; cached answers still work); `/api/csp-report` **fails open** (protects only log volume); Better Auth's limiter is not ours and unchanged. The finder client used to read any 503 as "Discogs is not set up"; it now does so only for `error:"unconfigured"`.
+* **Tests (e).** `tests/unit/rate-limit-concurrency.test.ts` (10: id contract, deterministic reproduction, legacy rows, Better Auth rows untouched, 40 simultaneous hits, window reset once, 23505 retried once and persistent, wrapped drizzle errors), `tests/unit/limiter-failure-policy.test.ts` (11: each caller, "never 200 while down", the client mapping, a source scan that every caller of `hit()` states its policy), `scripts/limiter-race.ts` run by `tests/e2e/limiter-concurrency.spec.ts` (also in CI, on the service Postgres).
+
+## 2. finder-nav-390: a test racing inconsistent mock data, plus one real (minor) Back-link defect
+
+* **Evidence (CI trace, artifact downloaded read-only).** Release page opened 10:41:23.948; `GET /api/discogs/releases/7000` answered in 28 ms; 10:41:24.052 the browser requested `/en/master/500?...` (the click on the Back link). The spec injects "releases without a master" 7000 and 7001 into the albums list, but the mock answered `/releases/7000` with `master_id: 500`, so once the record arrived the Back link correctly pointed at that master; the test clicked it at once and passed or failed on timing. On CI the database is next to the app (record in 30 ms); against the remote DEV branch it arrives after more than a second, which is why it always passed locally.
+* **Reproduced.** Old test plus old mock, with the click after the record: `Expected: "/en/search"`, `Received: "/en/master/500"`, the CI message exactly (a 3 s pause, DEV latency). A probe showed the link "Back to albums" at +0 ms and "Back to pressings" (to `/en/master/500`) from +100 ms. Hypotheses checked and **not** the cause: the link covered by the tab bar or header at 390 px (it is at the top, visible in the screenshot), a click before hydration, a prefetch race, our per-IP limiter (200 answers, own address per test). The 2-worker CPU-throttled variant was not needed: the cause is database latency, not CPU; a faithful fast-database run was not possible here (the local PGlite copy loses concurrent queries, see below).
+* **Real defect found.** For a card opened from a pressings page the address carries the master's title but not its id; until the record arrived the link said "Back to albums" and then switched to "Back to pressings". It never did nothing, but a tap in between went to the wrong place. Fixed: the link is inert until the record arrives (`aria-disabled`, no href), then the real link; other cases unchanged. Regression test holds the record request and checks both states.
+* **Changes.** Mock record for ids 7000 to 7099 is a standalone release (`master_id` 0); the test waits for the card and clicks "Back to albums" exactly. `docs/operations.md` 18e.
+
+## 3. 419 tests that "did not run": the project graph
+
+Only `setup` is a dependency now (every project that reads the shared session depends on it and on nothing else; signed-out shell projects and `limiter-concurrency` on nothing); no `maxFailures`, no retries. **They still run one at a time (`workers: 1`, in the listed order)**, because they share state that is not isolated per project: the mock's global throttle switch and request log, the Discogs token-bucket row, and the e2e user with its list rows. Each project does have its own client address, so the per-IP limiters do not collide, but true parallel lanes would need a mock, an app server and a user per lane; not done. `E2E_NAV_ONLY` is gone (`--project=<name>` runs setup and that project). Graph and reasons: `docs/operations.md` 18d; unit-tested. **Duration:** the full suite took 19.0 to 19.5 minutes locally against the remote DEV branch (down from about 30 with the chain); on GitHub it is **unknown until the next run** (the 101 tests that ran there took 2.5 minutes; the job limit is 60).
+
+## Also
+
+* **Audit annotation.** The picomatch advisory is no longer reported (`npm audit --omit=dev`: 4 moderate, 0 high; picomatch still 4.0.7). The allowlist entry was removed (`.audit-allowlist.json` is `[]`); the gate still fails on any new high or critical advisory. I did not find out whether the advisory was withdrawn or reclassified.
+* **WebKit.** One run of the full suite had a failure in `shell.spec.ts` "language switcher" (WebKit only): a click before hydration opened nothing, 6 of 20 runs, 0 of 60 in Chromium and Firefox. The test now waits for the menu (no blind retry: it never clicks again once the menu is visible); 80 of 80 in four browsers afterwards.
+* **`BETTER_AUTH_SECRET` low-entropy warning.** The test value is a repeated phrase, set only in `playwright.config.ts` and `tests/e2e/auth-modes.spec.ts` (the app servers under test); no workflow sets it (the CI job has no secrets), unit tests use `FAKE_AUTH_SECRET` (a repeated letter). About 2.5 bits per character, under gitleaks' threshold; the pull-request scan is green with it. The repository cannot show what is in Vercel: `docs/decisions-needed.md` 6c asks you to compare once by eye that the production value is not that phrase.
+* **A local limit.** My Docker-free copy of the CI database (PGlite behind a websocket bridge) loses concurrent queries: in it the finder search showed 0 cards and a `masters` cache test failed, while the same tests pass on real Postgres. Treat it as a smoke check only, never as a verdict (this also applies to the PGlite result noted in follow-up 2).
+
+## Totals (DEV branch, own rows only)
+
+| Run | Result |
+| --- | --- |
+| typecheck | exit 0 |
+| lint | exit 0 |
+| unit, full | **685 passed, 0 failed, 0 skipped** (53 files; was 663) |
+| e2e full, `CSP_MODE` unset (report-only), includes Firefox and WebKit shell tests | **556 passed, 0 failed, 0 skipped** (19.0 min); an earlier run of the same tree had 555 passed and 1 failed (the WebKit test above, fixed) |
+| e2e full, `CSP_MODE=enforce` | **556 passed, 0 failed, 0 skipped** (19.2 min) |
+| `scripts/limiter-race.ts` (real Postgres, 10 connections) | old code 2/600, 7/1000, 8/1000 failed; fixed code 0/3000 |
+
+The same-site Origin check in `src/server/auth/request-user.ts` (write endpoints) is exercised by the library, keyboard, phone-menus, auth-modes and limiter specs: all passed in both full runs. Skipped tests: none (no `test.skip` fired).
+
+## New commits (`git --no-pager log origin/autonomous/hardening..HEAD --oneline`)
+
+| Hash | Message | Gate on its own tree |
+| --- | --- | --- |
+| 6a1dac2 | Limiter: a random row id instead of id = key (fixes the 23505 race on first creation of a counter), and a deliberate failure policy per caller | typecheck 0, lint 0, unit 684 passed |
+| 26b4aac | finder: the Back link of a release card opened from a pressings page no longer says "albums" and then switches; the mock record of a standalone release agrees with the list that shows it | typecheck 0, lint 0, unit 684 passed |
+| a693362 | e2e: only the sign-in setup is a project dependency (one failing test hid 419 others), one worker in listed order; limiter concurrency check on a real Postgres | typecheck 0, lint 0, unit 685 passed |
+| 0881743 | e2e: the language-switcher test waits for hydration (WebKit: 6 of 20 runs failed; 80 of 80 after) | typecheck 0, lint 0, unit 685 passed |
+| (next) | Docs and audit allowlist: follow-up 3 (limiter policy, finder-nav root cause, project graph, empty audit allowlist, test secret note) | docs and `.audit-allowlist.json` only; the whole tree was verified: typecheck 0, lint 0, unit 685 passed |
+
+Each code commit was checked out alone in a temporary git worktree (shared node_modules) and run through typecheck, lint and the whole unit suite.
+
+**Production migration needed: no.** Code-only. Nothing to run on production or on DEV.
+
+## Still only GitHub can confirm
+
+1. CI / e2e on the runner (2 vCPU, Postgres 17 behind wsproxy), now with every project running whatever the others did: totals and duration; in particular `limiter-concurrency` (the script path through `NEON_WS_PROXY`), the `masters` test and the finder-nav projects at their real speed.
+2. The CodeQL alert stays closed; the audit job has no stale-entry annotation any more.
+3. The full-history secret scan stays red until decision 6c.
