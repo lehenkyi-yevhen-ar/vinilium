@@ -20,6 +20,16 @@ const extraBrowsers = !process.env.CI || process.env.E2E_EXTRA_BROWSERS === "1";
 export default defineConfig({
   testDir: "tests/e2e",
   fullyParallel: true,
+  // PROJECT GRAPH. Only "setup" (the sign-in) is a real dependency: every project that needs the shared session depends on it and on nothing else, so
+  // a failure in one project never hides the tests of another (before, 419 tests "did not run" behind one failing finder test). The signed-out shell
+  // projects and limiter-concurrency (own users) need no dependency at all.
+  // ONE WORKER, deliberately: the projects run one after the other, in the order they are listed below, because they still share state that is not
+  // isolated per project: the mock Discogs server (its throttle switch and request log are global: "the next 3 API calls answer 429"), the Discogs token
+  // bucket row of the mock origin, and the signed-in e2e user with its list rows (library, keyboard, phone-menus and a11y rewrite them). Each project
+  // does have its own client address (x-forwarded-for from 203.0.113.0/24) so the per-IP limiters never collide, but that alone is not enough to run
+  // them side by side. Making them truly parallel needs a mock instance, an app server and a user per lane; not done (see docs/operations.md, 18d).
+  // No maxFailures and no retries: every project runs to its end, whatever the others did.
+  workers: 1,
   // CI keeps an HTML report plus a trace and a screenshot of every failure (uploaded as an artifact by the workflow); no retries, so a
   // flaky test is seen, not hidden.
   reporter: process.env.CI ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }], ["json", { outputFile: "test-results/results.json" }]] : [["list"]],
@@ -51,62 +61,59 @@ export default defineConfig({
       workers: 1,
       use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE },
     },
-    // The finder UI (track -> artist -> album -> pressing -> release card). Runs after the API project and one
-    // after the other, because they share the mock server and the Discogs throttle bucket.
+    // The finder UI (track -> artist -> album -> pressing -> release card).
     {
       name: "finder-desktop",
       testMatch: /finder\.spec\.ts/,
-      dependencies: ["discogs"],
+      dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.201" } },
     },
     {
       name: "finder-mobile",
       testMatch: /finder\.spec\.ts/,
-      dependencies: ["finder-desktop"],
+      dependencies: ["setup"],
       use: { ...devices["Pixel 7"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.202" } },
     },
     // Back links, browser Back and reload through every finder step (state lives in the URL): desktop, then 390 px wide.
     {
       name: "finder-nav-desktop",
       testMatch: /(finder-nav|search-help)\.spec\.ts/,
-      // E2E_NAV_ONLY=1 runs these specs after the sign-in setup only (a quick loop while working on them); CI runs the whole chain.
-      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["finder-mobile"],
+      dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.203" } },
     },
     {
       name: "finder-nav-390",
       testMatch: /(finder-nav|search-help)\.spec\.ts/,
-      dependencies: ["finder-nav-desktop"],
+      dependencies: ["setup"],
       use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 }, storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.204" } },
     },
-    // Phone menus (language switcher, theme switcher, modals): every test builds its own phone-sized contexts. After the finder specs
-    // (shared mock and limiter); E2E_NAV_ONLY=1 runs it right after the sign-in setup.
+    // Phone menus (language switcher, theme switcher, modals): every test builds its own phone-sized contexts.
     {
       name: "phone-menus",
       testMatch: /phone-menus.*\.spec\.ts/,
-      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["finder-nav-390"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
     },
-    // The theme switcher on every screen: desktop, then 390 px wide. Builds its own contexts; E2E_NAV_ONLY=1 runs it after the setup only.
+    // The theme switcher on every screen: desktop, then 390 px wide. Builds its own contexts.
     {
       name: "theme-desktop",
       testMatch: /theme\.spec\.ts/,
-      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["phone-menus"],
+      dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },
     {
       name: "theme-390",
       testMatch: /theme\.spec\.ts/,
-      dependencies: ["theme-desktop"],
+      dependencies: ["setup"],
       use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
     },
     // The Wishlist / Collection screens (milestone 4). After the finder, one after the other: the same mock and Discogs bucket.
     {
       name: "library-desktop",
       testMatch: /library\.spec\.ts/,
-      dependencies: ["theme-390"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.211" } },
@@ -114,7 +121,7 @@ export default defineConfig({
     {
       name: "library-mobile",
       testMatch: /library\.spec\.ts/,
-      dependencies: ["library-desktop"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Pixel 7"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.212" } },
@@ -124,7 +131,7 @@ export default defineConfig({
     {
       name: "a11y-light",
       testMatch: /a11y\.spec\.ts/,
-      dependencies: ["library-mobile"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"], colorScheme: "light", storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.213" } },
@@ -132,7 +139,7 @@ export default defineConfig({
     {
       name: "a11y-dark",
       testMatch: /a11y\.spec\.ts/,
-      dependencies: ["a11y-light"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"], colorScheme: "dark", storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.214" } },
@@ -140,16 +147,25 @@ export default defineConfig({
     {
       name: "a11y-phone",
       testMatch: /a11y\.spec\.ts/,
-      dependencies: ["a11y-dark"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Pixel 7"], colorScheme: "light", storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.215" } },
+    },
+    // Keyboard behaviour (focus order, skip link, dialogs, toggles), desktop.
+    {
+      name: "keyboard",
+      testMatch: /keyboard\.spec\.ts/,
+      dependencies: ["setup"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.216" } },
     },
     // Email + password switches and the invite-only allowlist: this spec starts two extra servers (same build, other env).
     {
       name: "auth-modes",
       testMatch: /auth-modes\.spec\.ts/,
-      dependencies: ["keyboard"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
@@ -159,7 +175,7 @@ export default defineConfig({
     {
       name: "csp",
       testMatch: /csp\.spec\.ts/,
-      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["auth-modes"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
@@ -168,7 +184,7 @@ export default defineConfig({
     {
       name: "attribution",
       testMatch: /attribution\.spec\.ts/,
-      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["csp"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
@@ -177,19 +193,18 @@ export default defineConfig({
     {
       name: "a11y-extra",
       testMatch: /a11y-extra\.spec\.ts/,
-      dependencies: process.env.E2E_NAV_ONLY ? ["setup"] : ["attribution"],
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
     },
-    // Keyboard behaviour (focus order, skip link, dialogs, toggles), desktop.
+    // Our limiter under real concurrency (fresh users and addresses, bursts of parallel requests): see the spec's header.
     {
-      name: "keyboard",
-      testMatch: /keyboard\.spec\.ts/,
-      dependencies: ["a11y-phone"],
+      name: "limiter-concurrency",
+      testMatch: /limiter-concurrency\.spec\.ts/,
       fullyParallel: false,
       workers: 1,
-      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE, extraHTTPHeaders: { "x-forwarded-for": "203.0.113.216" } },
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
   webServer: [

@@ -63,4 +63,28 @@ describe("playwright projects on CI", () => {
     vi.resetModules();
     expect(await projectNames({ CI: "true", E2E_EXTRA_BROWSERS: "1" })).toEqual(expect.arrayContaining(["firefox", "webkit"]));
   });
+
+  it("the project graph: only the sign-in setup is a dependency (one failing project never hides the others), run by one worker, no cut-off", async () => {
+    for (const k of ["CI", "E2E_EXTRA_BROWSERS"]) delete process.env[k];
+    const config = (await import("../../playwright.config")).default;
+    const projects = config.projects ?? [];
+    const names = projects.map((p) => p.name);
+    expect(names[0]).toBe("setup"); // listed first: the order of the list is the order they run in
+    for (const p of projects) {
+      const deps = p.dependencies ?? [];
+      expect(deps.every((d) => d === "setup"), `${p.name} depends on ${JSON.stringify(deps)}`).toBe(true);
+    }
+    // every project that reads the shared session depends on the setup that creates it
+    for (const p of projects) {
+      const uses = JSON.stringify(p.use ?? {});
+      if (uses.includes("tests/.auth/user.json")) expect(p.dependencies, p.name).toContain("setup");
+    }
+    // the projects share the mock's throttle switch and log, the Discogs bucket and the e2e user's list rows, so they run one after the other
+    expect(config.workers).toBe(1);
+    expect(config.maxFailures ?? 0).toBe(0);
+    expect(config.retries).toBe(0);
+    // each project that has a fixed client address has its own (the per-IP limiters never collide)
+    const addresses = projects.map((p) => (p.use?.extraHTTPHeaders as Record<string, string> | undefined)?.["x-forwarded-for"]).filter(Boolean);
+    expect(new Set(addresses).size).toBe(addresses.length);
+  });
 });
