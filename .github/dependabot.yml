@@ -1,24 +1,32 @@
 version: 2
 
-# Weekly update pull requests for npm and for the GitHub Actions in .github/workflows (which are pinned to commit SHAs: Dependabot
-# updates the SHA and the version comment together).
+# Monthly update pull requests for npm and for the GitHub Actions in .github/workflows (which are pinned to commit SHAs: Dependabot
+# updates the SHA and the version comment together). Policy and the reasons: docs/dependency-updates.md.
 #
-# `cooldown` makes Dependabot wait before it proposes a version that has just been published, so a compromised or yanked release is
-# normally noticed before it reaches us. 14 days for every kind of bump. Security updates are NOT delayed by it.
+# * `cooldown` makes Dependabot wait before it proposes a version that has just been published, so a compromised or yanked release is
+#   normally noticed before it reaches us. 14 days for every kind of bump. Security updates are NOT delayed by it.
+# * Minor and patch updates of one ecosystem arrive as ONE pull request (the `minor-and-patch` group). A MAJOR update is deliberately
+#   NOT in any group: Dependabot then opens one pull request per major, with its own CI run and its own decision, so a major can never
+#   ride along with a routine bump and one failing major cannot block the others. (A single "all majors" group would do the opposite.)
+# * At most 3 open pull requests per ecosystem: a backlog of majors is reviewed, not piled up.
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:00"
       timezone: Europe/Oslo
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     cooldown:
       default-days: 14
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # The types follow the Node.js major we run (CI: 22, development: 24), not the newest Node. Moving them is part of an
+      # explicit Node upgrade (CI, README, Vercel setting), reviewed on its own.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     labels: [dependencies]
     commit-message:
       prefix: "deps"
@@ -26,11 +34,10 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:00"
       timezone: Europe/Oslo
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     cooldown:
       default-days: 14
     groups:
