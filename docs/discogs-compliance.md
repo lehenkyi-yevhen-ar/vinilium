@@ -28,11 +28,13 @@ Status legend: **Done** = implemented and tested. **Done, residual risk** = impl
 | 10 | Access can be revoked, charged for or discontinued "at any time and for any reason ... without prior notice"; the API and Content may be modified or discontinued. | API Access and Termination; Modifications | **Owner** (risk) | The app degrades with explicit states (`throttled`, `upstream`, `unconfigured`) instead of failing. Lists store IDs only, so nothing of ours is lost if access ends. Keep the Discogs account email monitored. |
 | 11 | "You must be at least 18 years of age" in the United States to access the API and Content; the developer must "provide accurate identification data". | Preamble; User Account | **Owner** | Applies to the person who owns the Discogs developer account and keys. |
 | 12 | "Combine Your application or website code with Our API in a way (such as using a software license) that is incompatible with the TOU". | API Use and Restrictions | **Owner** | No conflict today. Re-check when a licence for our code is chosen (the design system's own code licence is also still undecided). |
-| 13 | Application name and description must follow Discogs' "Application Name and Description Policy". | Discogs Intellectual Property | **Not verified** | The policy was not provided. "Vinilium" does not contain the Discogs mark; confirm against the policy before launch. |
+| 13 | Application name and description must follow Discogs' "Application Name and Description Policy". | Discogs Intellectual Property | **Done (read 2026-11-23)** | The policy was read from its primary source on 2026-11-23 (https://support.discogs.com/hc/articles/360009207054-Application-Name-and-Description-Policy, effective 2019-12-11, page dated 2024-03-20). It restricts the use of the Discogs mark (and the listed marks NearMint, Crate Diggers, Bookogs, Comicogs, Filmogs, Gearogs, Posterogs, VinylHub) in an application's NAME, and allows accurate descriptions such as "View your Discogs Collection". "Vinilium" contains none of these marks, and no place where the app names itself combines "Discogs" with the name (checked: site name, manifest, page titles and descriptions, footer, `User-Agent`). Every mention of Discogs in the texts is an accurate description of where the data comes from. This is an engineering reading of the policy, not a clearance from Discogs. |
 
-Not in the Terms (earlier assumptions, now known to come from elsewhere or to be unverified): the 60 requests/min figure and
-the requirement to authenticate image requests (the Terms only say Discogs "may apply rate limits"; see "Observed
-behaviour" for what the real API did) and the descriptive `User-Agent` (kept as good practice).
+Not in the Terms (they come from the developer documentation, https://www.discogs.com/developers, read 2026-11-23): "Authenticated requests are
+limited to 60 per minute, and unauthenticated requests are limited to 25 per minute", the headers `X-Discogs-Ratelimit`, `-Used` and `-Remaining`,
+"Your application should take our global limit into account and throttle its requests locally", a unique descriptive `User-Agent` (preferably
+RFC 1945 style with a URL) and "Using the key and secret will get you image URLs. These are unavailable to unauthenticated requests". The same
+page carries the banner "Starting December 1, unauthenticated API usage is going away" (the app authenticates with its own key and secret).
 
 ## Answers to the open questions
 
@@ -89,7 +91,7 @@ d. **Attribution** next to every block of Discogs data, enforced screen by scree
 
 ## Still open
 
-* **Application name policy** (rule 13): not provided, so "Vinilium" is unchecked against it.
+* **Application name policy** (rule 13): read on 2026-11-23, no conflict found (see the table). The registered application name at Discogs should be exactly "Vinilium": **owner check** (developer settings page).
 * **Account email monitoring** (rule 10) and the developer's age/ownership (rule 11).
 * Server-side scripts that hold a valid session can still call the endpoints; the per-user rate limits are the control for that.
 
