@@ -20,7 +20,7 @@ package is `docs/i18n/review-uk-nb.csv` (`npm run i18n:export`).
 **All of this is AI-written in uk and nb (translated from the English by the model) and has not been read by a native speaker.** It is legal wording, so a language
 review does **not** replace a lawyer, and it must keep saying exactly what the English says (a changed meaning would make the text untrue about the service).
 Keys: everything under `legal.privacy.*` and `legal.terms.*` that changed (`updated`, `s1P2`, `s2Account`, `s2AccountGoogleOnly`, `s2Sessions`, `s2Logs`, `s2Emails`,
-the new `s2bTitle` / `s2bP1`, `s3P1`, `s4P1`, `s5P1`, `s5P2`, `s6Google`, `s6P1`, `s7P1`, `s7P2`, `s8Delete`, `s8Export`, `s8P1`, `s9P1`, `s10P1`, `s11P2`, and in the terms
+the new `s2bTitle` / `s2bP1`, and the Google-only variants `s2bP1GoogleOnly`, `s6P1GoogleOnly`, `s7P1GoogleOnly`, `s7P2GoogleOnly` (the page drops the Brevo and password-reset wording when email + password sign-in is off), `s3P1`, `s4P1`, `s5P1`, `s5P2`, `s6Google`, `s6P1`, `s7P1`, `s7P2`, `s8Delete`, `s8Export`, `s8P1`, `s9P1`, `s10P1`, `s11P2`, and in the terms
 `updated`, `s1P2`, the new `s2D`, `s3P2`, `s5P2`, `s7P1`, `s8P2`), `legal.draftBanner`, `legal.openMarksNote`, `contact.topicPrivacy`, `contact.telegramNote`, `footer.fontsCredit` and
 `signUpConsent.consentPrefixGoogle`. Things to look at first: the terms for the legal ideas ("controller", "legitimate interest", "contract", "restriction", "objection",
 "portable format", "Standard Contractual Clauses", "Data Privacy Framework": the proper names stay in English), the names of the authorities (Datatilsynet; the Ukrainian
