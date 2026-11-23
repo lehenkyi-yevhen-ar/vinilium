@@ -126,13 +126,32 @@ describe("no fixture looks like a real key (gitleaks flags high-entropy literals
 describe(".github/dependabot.yml", () => {
   const text = readFileSync(path.join(ROOT, ".github/dependabot.yml"), "utf8");
 
-  it("updates npm and GitHub Actions weekly, grouped, with a cooldown of at least 14 days", () => {
+  it("updates npm and GitHub Actions monthly, grouped, with a cooldown of at least 14 days", () => {
     for (const eco of ["npm", "github-actions"]) expect(text).toContain(`package-ecosystem: ${eco}`);
-    expect([...text.matchAll(/interval:\s*(\w+)/g)].map((m) => m[1])).toEqual(["weekly", "weekly"]);
+    expect([...text.matchAll(/interval:\s*(\w+)/g)].map((m) => m[1])).toEqual(["monthly", "monthly"]);
     const days = [...text.matchAll(/default-days:\s*(\d+)/g)].map((m) => Number(m[1]));
     expect(days).toHaveLength(2);
     for (const d of days) expect(d).toBeGreaterThanOrEqual(14);
     expect([...text.matchAll(/update-types:\s*\[minor, patch\]/g)]).toHaveLength(2);
+  });
+
+  it("keeps a major update out of every group and limits the open pull requests", () => {
+    // A group lists only [minor, patch]: a major is never grouped, so it can never ride along with a routine bump.
+    // (the `ignore` entry for @types/node writes its update-types quoted, "version-update:semver-major": that is not a group.)
+    expect(text).not.toMatch(/update-types:\s*\[[^"\]]*major/);
+    expect([...text.matchAll(/^\s+update-types:\s*\[[^"\]]*\]/gm)]).toHaveLength(2);
+    const limits = [...text.matchAll(/open-pull-requests-limit:\s*(\d+)/g)].map((m) => Number(m[1]));
+    expect(limits).toHaveLength(2);
+    for (const n of limits) expect(n).toBeLessThanOrEqual(3);
+  });
+
+  it("holds @types/node on the Node.js major we run (a major bump of the types is a separate, explained change)", () => {
+    expect(text).toMatch(/dependency-name:\s*"@types\/node"\s+update-types:\s*\["version-update:semver-major"\]/);
+  });
+
+  it("keeps the labels and the commit-message prefixes", () => {
+    expect([...text.matchAll(/prefix:\s*"(\w+)"/g)].map((m) => m[1])).toEqual(["deps", "ci"]);
+    expect([...text.matchAll(/labels:\s*\[(\w+)\]/g)].map((m) => m[1])).toEqual(["dependencies", "dependencies"]);
   });
 });
 

@@ -320,7 +320,7 @@ a unit test, `tests/unit/ci-supply-chain.test.ts`, fails if that erodes):
 | `ci.yml` job `e2e` | same | the whole Playwright suite against a production build, with **no secrets** |
 | `codeql.yml` | push to `main`, pull requests, Mondays | CodeQL for JavaScript/TypeScript (`security-extended`); results in the Security tab |
 | `secret-scan.yml` | push to `main`, pull requests | gitleaks over the whole history. Free for a personal account; a repository moved to an organisation needs a free `GITLEAKS_LICENSE` secret |
-| `.github/dependabot.yml` | weekly (Mondays) | npm and GitHub Actions updates, minor and patch grouped, **14-day cooldown** before a new release is proposed |
+| `.github/dependabot.yml` | monthly | npm and GitHub Actions updates, minor and patch grouped, a major always in its own pull request, at most 3 open per ecosystem, **14-day cooldown** before a new release is proposed (`docs/dependency-updates.md`) |
 
 **How the secret-free e2e job works.** The app uses the Neon serverless driver (WebSockets), so a plain Postgres is reached through
 Neon's open-source `wsproxy`: two service containers, both pinned by digest (`postgres:17-alpine` and `ghcr.io/neondatabase/wsproxy`),
@@ -341,7 +341,9 @@ To handle a new finding: read the advisory, check `npm ls <package>` for how it 
 otherwise add a reviewed, short-lived entry and tell the owner. The current entry and the reasoning: `docs/decisions-needed.md`, 6b. Locally: `npm run audit:prod`.
 
 **Reading a pull request from Dependabot.** Check the changelog, run the checks, merge. A GitHub Action update changes the SHA and the
-`# vX.Y.Z` comment together; if only one changed, something is wrong. Security updates ignore the cooldown on purpose.
+`# vX.Y.Z` comment together; if only one changed, something is wrong. Security updates ignore the cooldown on purpose. What may be merged
+on a green CI and what always needs a manual look (majors, runtime dependencies, Node and `@types/node`, TypeScript, ESLint, workflow
+actions) is in `docs/dependency-updates.md`, together with the review of the first eight pull requests.
 
 **Updating a pinned action by hand.** Get the *commit* SHA of the tag (`git ls-remote --tags https://github.com/<owner>/<action>.git`
 shows the tag object for annotated tags; use `<tag>^{}`), check the tag is at least two weeks old, and replace SHA and comment together.
