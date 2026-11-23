@@ -20,7 +20,8 @@
     "audit:all": "npm audit",
     "i18n:export": "tsx scripts/i18n-export.ts",
     "i18n:import": "tsx scripts/i18n-import.ts",
-    "legal:checklist": "tsx scripts/legal-checklist.ts"
+    "legal:checklist": "tsx scripts/legal-checklist.ts",
+    "smoke:prod": "tsx scripts/smoke-prod.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
