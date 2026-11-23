@@ -41,9 +41,15 @@ export function cacheTtlSeconds(): number {
   return Math.min(serverEnv().DISCOGS_CACHE_TTL_SECONDS ?? DEFAULT_CACHE_TTL_SECONDS, MAX_CONTENT_AGE_SECONDS);
 }
 
-/** `AppName/0.1 (+https://contact)` : descriptive, identifies the app and a way to reach its operator. */
+/** The default of APP_CONTACT (src/lib/env.ts): a placeholder that identifies nobody. */
+const PLACEHOLDER_CONTACT = "https://example.com/contact";
+
+/** `AppName/0.1 (+https://contact)` : descriptive, identifies the app and a way to reach its operator. Discogs asks for a unique,
+ *  descriptive User-Agent so it can get in touch before it blocks an application that misbehaves. When APP_CONTACT is not set (or still
+ *  the placeholder) the contact page of this site is used, so the header never names example.com. */
 export function userAgent(): string {
-  const contact = serverEnv().APP_CONTACT.trim();
+  const configured = serverEnv().APP_CONTACT.trim();
+  const contact = configured === "" || configured === PLACEHOLDER_CONTACT ? `${site.url.replace(/\/+$/, "")}/en/contact` : configured;
   const how = /^https?:\/\//i.test(contact) ? `+${contact}` : `contact: ${contact}`;
   return `${site.name}/0.1 (${how})`;
 }

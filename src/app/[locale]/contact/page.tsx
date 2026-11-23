@@ -64,6 +64,7 @@ export default async function ContactPage({ params }: PageProps<"/[locale]/conta
             ) : (
               <p className="x-note">{t("notConfigured")}</p>
             )}
+            {telegram ? <p className="x-note">{t("telegramNote")}</p> : null}
           </section>
 
           <section className="x-section" aria-labelledby="discogs-h">

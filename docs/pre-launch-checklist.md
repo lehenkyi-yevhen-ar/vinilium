@@ -1,5 +1,7 @@
 # Pre-launch checklist
 
+> **The single, ordered list for the owner is now [LAUNCH.md](LAUNCH.md).** This file stays as the long form with its "Verified" notes; where the two differ, LAUNCH.md and [decisions-needed.md](decisions-needed.md) (section 0, decided 2026-11-23) are current.
+
 Tick each item yourself. "Verified" says what was actually checked and by whom; everything else is open. Last updated 2026-11-19 (PR #1 follow-up,
 `docs/autonomous-run-report.md`). The section "Known open items" at the end lists what is still undecided; none of it was decided by the agent.
 
@@ -71,7 +73,7 @@ Tick each item yourself. "Verified" says what was actually checked and by whom; 
 - [ ] **Sign-in methods and email** (decision 1): keep email + password (mails go to spam, accepted), go invite-only with `AUTH_SIGNUP_ALLOWLIST`, or Google-only with `AUTH_EMAIL_PASSWORD_ENABLED=false`. Whether a password-only account can come back through Google with the same email is untested.
 - [ ] **Google "Testing mode" behaviour is unexplained**: a third account that is not on the test-users list signed in. Find out why before relying on the list as an access control.
 - [ ] **Publishing the Google app**, and whether Google accepts `vercel.app` as an authorized domain: **unverified** (no custom domain is planned).
-- [ ] **14 open `[NEEDS LEGAL REVIEW]` marks** (`npm run legal:checklist`).
+- [ ] **6 open `[NEEDS LEGAL REVIEW]` marks** (`npm run legal:checklist`; down from 15 on 2026-11-23, see [legal-accuracy-review.md](legal-accuracy-review.md): the privacy and terms texts were checked against the code and public sources, which is not a lawyer's review, and the pages say so in a notice at the top).
 - [ ] **Native-speaker review of uk and nb**: `docs/i18n/review-uk-nb.csv` (import with `npm run i18n:import`) and `docs/i18n/doubtful-strings.md`.
 - [ ] **HSTS**: only after HTTPS is confirmed everywhere (decision 3); `HSTS_MAX_AGE_SECONDS` stays unset until then.
 - [ ] **CSP enforce rollout**: report-only first, read `[csp-report]` for about a week, then `CSP_MODE=enforce` (decision 2). `CSP_MODE` stays report-only on the first deploy of PR #1.

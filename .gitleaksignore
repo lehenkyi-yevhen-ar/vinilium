@@ -8,3 +8,30 @@
 # listed here.
 a5a9e2dd65e2be7443243ed00146464db8c05155:tests/unit/retention.test.ts:generic-api-key:17
 b56d329a23504eea784560619f0afef04af09834:tests/unit/health.test.ts:generic-api-key:20
+#
+# ---- Decision 6c (owner, 2026-11-23): the 11 older findings in main's history. One exact fingerprint each; nothing else is ignored. ----
+# Checked on 2026-11-23 with gitleaks 8.24.3 (the version the workflow pins) over `origin/main`: exactly these 11 were reported, and with these lines
+# the same scan reports none. All 11 are `generic-api-key` hits and all 11 commits are ancestors of main (history is not rewritten).
+#
+# Group 1 (7 findings): made-up test fixtures. Strings invented for a test (`0123456789abcdef...`, `test-secret-...`, a cron secret of digits),
+# never a credential, never used anywhere. The current tests build their fake secrets from a repeated character (tests/helpers/fake-secrets.ts).
+# Commit 9f3db890 (email providers and sign-up modes): the fake keys of the Brevo/Resend provider tests and the auth-modes spec.
+9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/e2e/auth-modes.spec.ts:generic-api-key:233
+9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/e2e/auth-modes.spec.ts:generic-api-key:252
+9f3db890ebcb053115c4011a53ff3699032cb6e8:tests/unit/email-providers.test.ts:generic-api-key:139
+# Commit b01c7c9b: the fake session and cron secrets in the Playwright config and the unit-test env helper.
+b01c7c9bcf94f00be1b09f03267909c8ea2b55d8:playwright.config.ts:generic-api-key:53
+b01c7c9bcf94f00be1b09f03267909c8ea2b55d8:tests/helpers/env.ts:generic-api-key:21
+# Commit a6013f44 (the first commit): fake session secrets set inside two unit tests.
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:tests/unit/auth-links.test.ts:generic-api-key:5
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:tests/unit/email.test.ts:generic-api-key:9
+#
+# Group 2 (4 findings): the values in the first commit's `.env.example`. Owner's statement of 2026-11-23 (docs/decisions-needed.md, 6c):
+#   line 12 (BETTER_AUTH_SECRET-shaped): the owner already ROTATED BETTER_AUTH_SECRET in Vercel, so the value in that commit signs nothing today;
+#   line 20 (the Google client secret) and line 45 (the Discogs consumer secret): FAKE placeholders, never used for real;
+#   line 25 (RESEND_API_KEY-shaped): NOT named in the owner's statement. The project sends mail through Brevo and has never used Resend as its sender,
+#   so no Resend key was ever needed; it is listed on that basis and is an open point for the owner to confirm (if it was ever a real key, revoke it in Resend).
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:12
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:20
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:25
+a6013f44ae00ef7fdcd6a46a2d22cdd8288add70:.env.example:generic-api-key:45

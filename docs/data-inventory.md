@@ -10,7 +10,18 @@ address and an email address). "Discogs content" means data that came from Disco
 **Retention at a glance.** Account data is kept until the person deletes the account (immediately, from the Account page) or asks the operator to.
 Sessions end on their expiry date and are purged. Verification rows are single-use and are purged when expired. Rate-limit counters are
 purged when their window is long past. The Discogs cache is purged when it expires (4 h by default, 6 h at most). Backups at Neon age out on
-Neon's schedule (the privacy policy states the period: [NEEDS LEGAL REVIEW]).
+Neon's schedule: the privacy policy (section "How long we keep it") says it depends on the plan, hours on the free plan and up to days on paid plans (Neon's plans page, read 2026-11-23: up to 6 hours on Free, up to 7 days on Launch, up to 30 days on Scale; which plan this project uses is the owner's to confirm).
+
+**Lifetimes the privacy policy states (2026-11-23), and where they come from.** A sign-in lasts 7 days after the last visit (Better Auth's default; no override in `src/server/auth/index.ts`), so a `session` row,
+with its IP address and user agent, can exist for up to about 7 days after the last use plus the day until the daily purge. A password-reset link lasts 1 hour (`resetPasswordTokenExpiresIn`), the state row of a Google sign-in 10 minutes
+(Better Auth); both are `verification` rows removed by the purge after they expire. `rate_limit` rows are removed when their window ended more than an hour ago; Discogs cache rows by their TTL (4 h, 6 h at most).
+
+**Cookies and local storage (what the privacy policy lists).** `better-auth.session_token` (`__Secure-` prefix on https; HttpOnly, Secure, SameSite=Lax, Path=/, 7 days); `NEXT_LOCALE` (the language, 1 year, SameSite=Lax, not HttpOnly,
+set by next-intl when the page language differs from the browser's or when the person uses the language switcher); a short-lived signed `state` cookie (5 minutes) that Better Auth sets only while a Google sign-in is in progress.
+localStorage: `vinilium:search-help` (the "How to search" help was closed) and `vinilium:theme` (dark, light or system); both are read and written only in the browser and never sent to the server.
+
+**Who receives what.** Vercel (hosting): every request incl. the IP address; Neon (database): everything in the tables below; Brevo: the recipient's address and name and the whole message (including the one-time link) of verification and reset emails; Google: only
+when the person chooses it, it learns that they sign in to this site; Discogs: the search words and release numbers sent by the server (no account, no IP address of the visitor); Telegram: only if a visitor writes to the operator there.
 
 **Deletion paths.** (a) *Account deletion*: `delete from "user"` cascades `session`, `account` and `user_items` by foreign key. (b) *The purge*
 (`GET /api/cron/purge`, daily): expired `discogs_cache`, `verification` and `session` rows and old `rate_limit` counters. (c) *The operator's

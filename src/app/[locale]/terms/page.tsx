@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/terms">)
 /** Read per request: the text follows AUTH_EMAIL_PASSWORD_ENABLED (no password or email lines in Google-only mode). */
 export const dynamic = "force-dynamic";
 
-/** Public. A DRAFT: passages marked [NEEDS LEGAL REVIEW] need a lawyer (see docs/legal-review-checklist.md). */
+/** Public. Prepared without professional legal advice (the notice says so); passages marked [NEEDS LEGAL REVIEW] are open questions (docs/legal-review-checklist.md). */
 export default async function TermsPage({ params }: PageProps<"/[locale]/terms">) {
   const locale = await resolveLocale(params);
   const p = await getTranslations({ locale, namespace: "legal.terms" });
@@ -28,7 +28,7 @@ export default async function TermsPage({ params }: PageProps<"/[locale]/terms">
   const withPasswords = emailPasswordEnabled();
   const sections = buildSections(tp, [
     { id: "s1", paragraphs: ["P1", "P2"] },
-    { id: "s2", intro: true, items: withPasswords ? ["A", "B", "C"] : ["AGoogleOnly", "B"] },
+    { id: "s2", intro: true, items: withPasswords ? ["A", "B", "C", "D"] : ["AGoogleOnly", "B", "D"] },
     { id: "s3", paragraphs: ["P1", "P2"] },
     // The Discogs non-affiliation sentence is prescribed by the Discogs API Terms: it is the same message as in the footer, verbatim (English).
     { id: "s4", paragraphs: ["P1"] },
@@ -47,6 +47,7 @@ export default async function TermsPage({ params }: PageProps<"/[locale]/terms">
       updated={p("updated")}
       lead={p("lead")}
       banner={l("draftBanner")}
+      marksNote={l("openMarksNote")}
       sections={sections}
       contactLabel={tl("contactLabel")}
       contactPageLabel={tl("contactPage")}

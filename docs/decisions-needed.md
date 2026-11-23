@@ -3,6 +3,17 @@
 These are product or policy choices that are yours. Nothing here has been implemented except where a row says so. Each has options and a
 recommendation; reply with the number and the choice, or ignore the ones you are happy to leave as they are.
 
+## 0. Decided by the owner on 2026-11-23 (recorded as decided; not reopened)
+
+| Decision | What was decided | Notes |
+| --- | --- | --- |
+| **Sign-in (decision 1)** | Option A stays: **email + password AND Google are enabled for everyone**, no allowlist, no flag changes. | Mails that land in spam are **accepted**; the "nothing arrived? check your spam folder" notes stay. The switches in operations.md section 15 remain available if the situation changes. |
+| **Google "Testing mode" behaviour** | A third account that was **not** on the test-users list could sign in. This is **unexplained and accepted as is**: it works, and the project is a free, non-commercial hobby app. | Kept documented as an *unexplained, accepted observation*. Do **not** rely on the test-users list as an access control. |
+| **DEV database branch** | The owner does not mind it holding **copies of real users** and will **not run `docs/ops/dev-cleanup.sql` now**. | The SQL file stays. Risk, in one line: whoever can read the DEV branch (the owner's machine, a CI job given its address) can read those copies; keep `DEV_DATABASE_URL` out of CI and chats. |
+| **Dependabot** | Delegated to the agent: "the only requirement is that nothing breaks". | Decided and applied in branch `chore/deps`: [dependency-updates.md](dependency-updates.md). |
+| **gitleaks decision 6c** | The owner **already rotated `BETTER_AUTH_SECRET`** in Vercel. The **Google client ID/secret and Discogs values** in the first commit's `.env.example` were **fake placeholders, never used for real**. | All 11 historical findings are in `.gitleaksignore`, one exact fingerprint each (see 6c below). **Not named in the statement:** the Resend-shaped value on line 25 of that file; the project never sent mail through Resend, but the owner should confirm it. |
+| **Owner-verified (by the owner, not the agent)** | Safari works; a real phone works; the design system Lis is the owner's own project (**the licence decision remains theirs**); the KyivType Sans credit is placed correctly. | Recorded with the date in [LAUNCH.md](LAUNCH.md). |
+
 ## 1. Which sign-in methods stay open
 
 | Option | What changes | Cost |
@@ -11,7 +22,7 @@ recommendation; reply with the number and the choice, or ignore the ones you are
 | B. Email + password plus `AUTH_SIGNUP_ALLOWLIST` (invite only) | you list the people | You maintain a list; nobody else can join |
 | C. Google only (`AUTH_EMAIL_PASSWORD_ENABLED=false`) | no email is sent at all; no password to leak | Everyone needs a Google account; password-only accounts cannot sign in (whether they can come back through Google with the same email is **untested**) |
 
-**Recommendation: A for now, with the switches ready.** Watch `[email] ... reason=rate_limited` in the logs for a few weeks. If the quota is ever
+**DECIDED 2026-11-23: A (see section 0).** Original recommendation: A for now, with the switches ready. Watch `[email] ... reason=rate_limited` in the logs for a few weeks. If the quota is ever
 reached, or sign-ups start looking like abuse, flip to B or C in Vercel and redeploy (operations.md, section 15). It needs no code change.
 
 ## 2. When to turn the CSP from report-only to enforcing
@@ -76,7 +87,7 @@ fails the job, and an exception can be added again (id, justification, review da
 **What you still decide (history):** whether you accept that one exception (it is yours to veto: delete the entry and the gate goes red again). Re-check it
 when picomatch publishes a fix (Dependabot will propose it, with its 14-day cooldown), and in any case by 2026-12-31.
 
-## 6c. gitleaks: 11 older findings in main's history (found 2026-11-18, full-history scan)
+## 6c. gitleaks: 11 older findings in main's history (found 2026-11-18, full-history scan). DECIDED and applied 2026-11-23
 
 The new full-history job scans everything reachable from `main` with gitleaks 8.24.3 and `.gitleaks.toml`. It reports **11 findings, all rule `generic-api-key`**
 (redacted; commits are short ids): `a6013f44` (the first commit): `.env.example` lines 12, 20, 25, 45 and the fake session secrets in `tests/unit/auth-links.test.ts:5` and
@@ -92,6 +103,12 @@ until you decide.
   If they were made-up placeholders, nothing to rotate; add their fingerprints to `.gitleaksignore` (lines below) with that reason.
 * **`CRON_SECRET`: rotate only if** the value in Vercel equals one of the strings that were committed (`cron-secret-0123456789`, `SECRET-CRON-0123456789`,
   `e2e-cron-secret-0123456789`). They were made up for tests, so a real random value cannot match; compare once by eye. Rotation has no user-visible effect (section 3 of `operations.md`).
+
+**Update 2026-11-23: decided and applied.** The owner's statement is in section 0. All 11 fingerprints (the seven test fixtures and the four `.env.example`
+lines) are now in `.gitleaksignore`, grouped with their reasons. gitleaks 8.24.3 (the version the workflow pins; the downloaded archive was checked against the
+release's checksum file) was run locally over `origin/main` before and after: **11 findings before, none after**. The "full history" job on GitHub should therefore pass
+once this is merged. (A local run with gitleaks' default `--all` also sees the same 8 lines under old commit ids in the local `backup/pre-history-rewrite` branch; those commits
+are not on `main`, so the CI job does not see them.) The text below is the original analysis, kept for the record.
 
 ### What to do, in this order
 

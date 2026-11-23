@@ -10,6 +10,34 @@ Better Auth, `next-intl` (uk / en / nb), and the **Ліс** design system. Disco
 > decisions are in [docs/decisions-needed.md](docs/decisions-needed.md) and the launch list in [docs/pre-launch-checklist.md](docs/pre-launch-checklist.md).
 > Contributing and security reports: [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md).
 
+## Project status
+
+**What works** (tested in CI on Chromium, desktop and a phone emulation, plus the unit suite; the owner has also checked Safari and a real phone):
+sign-up and sign-in with email + password and with Google; email verification and password reset (through Brevo); the finder (track, artist,
+album, pressing, release card) in Ukrainian, English and Norwegian, in a dark and a light theme; the Wishlist and the Collection with notes and condition,
+export (CSV, JSON, and "download my data") and account deletion; a health route, a daily purge, security headers and a Content-Security-Policy.
+
+**Limited by design:**
+
+* **Discogs terms come first.** Record details are fetched by the server with the service's own credentials, cached for at most 4 hours (never above 6), and
+  **never stored as a copy**: the database holds only Discogs release numbers plus the person's own notes, grades and dates. Searching and looking at record details
+  **needs a sign-in**. The attribution notice and "Data provided by Discogs." are shown as the terms ask ([docs/discogs-compliance.md](docs/discogs-compliance.md)).
+  Discogs can limit or withdraw access at any time; the lists, accounts and export keep working without it.
+* **Free and non-commercial:** no advertising, payments, donations, affiliate links or tracking; two cookies (session, language) and two localStorage keys (a help flag, the theme).
+* **Run by one person**, on free plans (Vercel Hobby, Neon, Brevo's free 300 emails a day). Mail from a free-mail sender often lands in spam: accepted, and the pages say so.
+
+**Known and unverified** (nothing here is hidden; each item is in [docs/LAUNCH.md](docs/LAUNCH.md) with what to do):
+
+* The privacy policy and terms were **prepared by the operator without professional legal advice**; they are checked against the code and public sources
+  ([docs/legal-accuracy-review.md](docs/legal-accuracy-review.md)), which is not a lawyer's review, and some passages still carry a `[NEEDS LEGAL REVIEW]` mark.
+* The Ukrainian and Norwegian texts are AI-written and wait for a native speaker ([docs/i18n/review-uk-nb.csv](docs/i18n/review-uk-nb.csv)).
+* The Content-Security-Policy defaults to **report-only** (which mode the live site runs is for the owner to confirm: the smoke test reports it); HSTS is off by default; the Google sign-in app is in Testing mode (an unexplained,
+  accepted observation about test users is recorded in [docs/decisions-needed.md](docs/decisions-needed.md)).
+* Firefox on desktop and a real Android phone have not been tested by anyone; WebKit and Firefox only run signed-out smoke tests on a developer machine.
+* The GitHub Actions workflows were checked locally and on pull requests; the Vercel, Neon and Brevo dashboards and plans were not inspected by the agent (every
+  dashboard step in the docs says so).
+* `npm run smoke:prod` ([scripts/smoke-prod.ts](scripts/smoke-prod.ts)) is the anonymous, read-only check of the live site; the owner runs it.
+
 ## Placeholders to replace before launch
 
 Everything below is a **placeholder** and is flagged here on purpose:
@@ -22,7 +50,7 @@ Everything below is a **placeholder** and is flagged here on purpose:
 | Public contact email / Telegram (contact page, privacy policy) | `NEXT_PUBLIC_CONTACT_EMAIL`, `NEXT_PUBLIC_CONTACT_TELEGRAM` | `contact@example.com` / `https://t.me/your_handle` (set in `.env.local`, never in the repo) |
 | Email sender | `EMAIL_FROM` | Your validated sender address. With **Brevo** and a free-mail sender, Brevo replaces the From address with its own (`brevosend.com`); replies are steered to `NEXT_PUBLIC_CONTACT_EMAIL` |
 | Translations | `src/messages/{uk,nb}.json` | Written by an AI model; have a native speaker review them |
-| Legal pages (privacy, terms) | `src/messages/*.json` > `legal.*` | **Drafts.** Passages marked `[NEEDS LEGAL REVIEW]` need a lawyer (list: `docs/legal-review-checklist.md`). The operator is shown as a private individual under `NEXT_PUBLIC_OPERATOR_NAME` (a project name or nickname), in `NEXT_PUBLIC_OPERATOR_COUNTRY` |
+| Legal pages (privacy, terms) | `src/messages/*.json` > `legal.*` | Prepared by the operator **without professional legal advice** (a notice on both pages says so), checked against the code and public sources ([docs/legal-accuracy-review.md](docs/legal-accuracy-review.md)). Six open questions are marked `[NEEDS LEGAL REVIEW]` (list: `docs/legal-review-checklist.md`). The operator is shown as a private individual under `NEXT_PUBLIC_OPERATOR_NAME` (a project name or nickname), in `NEXT_PUBLIC_OPERATOR_COUNTRY` |
 
 ## Requirements
 
@@ -139,7 +167,7 @@ reference schema), plus `user.locale` and a database-backed `rate_limit` table.
 `npm run dev | build | start | lint | typecheck | test | test:e2e | discogs:smoke`
 
 Also: `audit:prod` (fails on a high/critical advisory in production dependencies; used by CI), `audit:all`, `i18n:export` /
-`i18n:import` (native-speaker review package), `legal:checklist` (privacy/terms review gate).
+`i18n:import` (native-speaker review package), `legal:checklist` (privacy/terms review gate), `smoke:prod` (anonymous read-only check of the live site; you run it).
 
 ## How it is put together
 

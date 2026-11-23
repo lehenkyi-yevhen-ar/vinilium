@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { StatusMessage } from "@/ds/StatusMessage";
+import { ConsentNote } from "./ConsentNote";
 import { GoogleButton } from "./GoogleButton";
 
 /**
@@ -13,6 +14,7 @@ export function EmailPasswordOff({ googleEnabled, next }: { googleEnabled: boole
     <div className="x-form" data-testid="email-password-off">
       <StatusMessage tone="info">{t("emailPasswordOffText")}</StatusMessage>
       <GoogleButton next={next} />
+      <ConsentNote google />
     </div>
   ) : (
     <div className="x-form" data-testid="email-password-off">

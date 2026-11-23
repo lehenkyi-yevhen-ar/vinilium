@@ -97,8 +97,8 @@ Symptoms: record details show "Details not loaded" or "Waiting", searches fail w
 
 You run these; I never touch production.
 
-Check **how many days of history your Neon plan keeps** (Neon console > Project > Settings > Storage / restore window). That window is
-your safety net for "I deleted the wrong thing"; the dump below is your own copy outside Neon.
+Check **how much history your Neon plan keeps** (Neon console > Project > Settings; **your plan is unverified here**). Neon's plans page (read 2026-11-23) says instant restore reaches back **up to 6 hours on the Free plan, up to 7 days on Launch, up to 30 days on Scale**. That window is
+your safety net for "I deleted the wrong thing"; the dump below (a safer, clipboard-based version is in section 20f) is your own copy outside Neon.
 
 ```powershell
 # PowerShell. Use the DIRECT (non-pooled) connection string of the PRODUCTION branch for pg_dump.
@@ -192,7 +192,7 @@ file but also needs a lawyer: language review does not replace that.
 
 `npm run legal:checklist` regenerates [legal-review-checklist.md](legal-review-checklist.md). `npm run legal:checklist -- --check`
 fails while any `[NEEDS LEGAL REVIEW]` mark remains: run it before launch. Also set `NEXT_PUBLIC_OPERATOR_NAME`,
-`NEXT_PUBLIC_OPERATOR_COUNTRY` and `NEXT_PUBLIC_CONTACT_EMAIL`, and change the "Draft of ..." date lines.
+`NEXT_PUBLIC_OPERATOR_COUNTRY` and `NEXT_PUBLIC_CONTACT_EMAIL`, and change the "Last updated: ..." date lines whenever the text changes. The texts were checked against the code and sources on 2026-11-23 ([legal-accuracy-review.md](legal-accuracy-review.md)); both pages carry a notice that no lawyer has reviewed them: **never write that they were reviewed by a lawyer or that the service is "GDPR compliant"**.
 
 **If analytics, advertising or any new tracking is ever added:** the privacy policy, the cookie wording and (where required) a consent
 notice must be revisited first, and the new tool added to the list of providers. Today the policy says there is none.
@@ -221,7 +221,7 @@ bounce, hard bounce, blocked, spam report). Look here first when one person says
 
 **At the limit (300 a day).** Every sign-up, verification resend and password-reset request sends one email. Past the limit Brevo
 answers 429; the app **keeps working**: the account is still created, the person sees the same "nothing arrived? check your spam
-folder, or contact us" note as everyone else (it must not say "we could not email you": that would reveal whether an address has an
+folder, or contact us" note as everyone else (the mail is **not queued or retried**: it is lost, and they must ask again after the limit resets; section 20d) (it must not say "we could not email you": that would reveal whether an address has an
 account), and you see `reason=rate_limited` in the logs. The limit resets by itself. If you are near it often, switch to Google-only or
 invite-only below, or move to a paid plan. (The 300/day figure is the free-plan limit you told me about; confirm it in your Brevo account.)
 
@@ -496,3 +496,132 @@ setup
 ### 18b. The audit allowlist is empty (the picomatch exception was removed on 2026-11-19)
 
 `.audit-allowlist.json` was `[]` since 2026-11-19: the picomatch advisory GHSA-fc5q-39xc-vjpf that had needed an exception (ReDoS in glob matching, range <=4.0.7, no patched release when it was reviewed on 2026-11-18) is no longer reported by `npm audit --omit=dev`, and the gate itself asked for the entry to be removed. `npm run audit:prod` still fails on any NEW high or critical advisory. **If one appears:** read the advisory and `npm ls <package>`; take the fix if one exists (Dependabot proposes it after its 14-day cooldown); if none exists and it cannot be reached in production, add one entry to `.audit-allowlist.json` (one GHSA id, justification, `reviewed` date, `expires` at most 90 days later) and put the decision in `docs/decisions-needed.md`.
+
+## 20. Running it alone: the one-page map
+
+Everything below links to the section that has the detail; only what was missing is written out here. Statements about Vercel, Neon and
+Brevo say whether they were **read from the provider's own page (with the date)** or are **unverified**. Nothing here is run against
+production by the agent; every production step is yours.
+
+### 20a. Is the site healthy? (two minutes, once a week, or when someone writes)
+
+| Look at | Healthy looks like | When it does not | Detail |
+| --- | --- | --- | --- |
+| `https://vinilium.vercel.app/api/health` | `{"status":"ok","version":"...","db":"up"}` and HTTP 200 | `503` and `"db":"down"`: Neon is unreachable or the connection string is wrong | section 19 |
+| Vercel > project > **Logs**, search `[email]` | nothing, or the odd line | any `FAILED` line: the `reason=` says why; `rate_limited` is the daily limit | sections 2 and 15 |
+| search `[csp-report]` | a handful a day (browser extensions) while the policy is report-only | a steady stream naming the same `blocked-uri` on our own pages = a real gap: do **not** enforce yet | section 10 |
+| search `[metrics]` | one line a minute per busy instance; `cache_hits` above `cache_misses`, `discogs_calls` far below 60 a minute, `throttled=0` | `throttled` above 0 for a long time with few users | sections 5 and 19 |
+| Logs filtered to status `5xx` | none | open one entry: the stack trace names the file | section 2 |
+
+### 20b. A free uptime monitor that needs no code
+
+Any hosted monitor that makes an HTTP request every few minutes and emails you works; nothing in the repository changes. Example (UptimeRobot,
+Better Stack and similar are alike; **what each one's free plan allows (number of monitors, shortest interval) is unverified here**, read its
+pricing page): create an account, **Add new monitor**, type **HTTP(s)**, URL `https://vinilium.vercel.app/api/health`, interval **5 minutes**
+(the free interval may be longer; that is fine), alert contact = your email, and optionally "keyword must contain `ok`". The health route
+never calls Discogs, so a monitor cannot spend the shared Discogs budget; every probe does wake the database (section 19).
+
+### 20c. Discogs throttles, or takes access away
+
+* **Throttles** ("Waiting for Discogs" on screen, `429` in the logs, `throttled` in `[metrics]`): section 5. Do not create extra API keys to get
+  more room: the Discogs API Terms list that as a violation (`docs/discogs-compliance.md`, rule 8).
+* **Revokes, changes the terms, or the key stops working** (record details fail, `/api/discogs/*` answers 502/503, or mail from Discogs): section 6.
+  Accounts, sign-in and lists keep working; search and record details do not. Read the Discogs email and the current API Terms first, and
+  never work around the block. Note it on the home page and keep the export available.
+
+### 20d. The Brevo daily limit (300 a day) is reached
+
+Section 15 has the log reasons and the switches. What actually happens, from the code (`src/server/email/index.ts`): the sign-up **succeeds**,
+the verification mail is **not sent and not queued or retried** (the provider answers 429 and the app logs `[email] ... FAILED reason=rate_limited`);
+the person sees the normal "nothing arrived? check spam or contact us" note. So mail is **lost, not delayed**: once the daily limit resets the person
+must ask again (sign in again, or "Forgot password"). If it happens more than occasionally: switch to Google-only for a while (section 15) or move
+to a paid plan. The 300 a day figure is the free-plan limit you told me about: **unverified** (check Brevo > your plan).
+
+### 20e. Delete a user who asks by email
+
+1. Ask them to write **from the address on the account**; if you doubt it, ask them to do it themselves in Account > "Delete my account" (it is immediate
+   and removes their account, sign-ins and lists). That is the preferred route.
+2. If they cannot sign in: Neon console > **production** branch > SQL Editor (say the branch name out loud before you run anything).
+
+   ```sql
+   begin;
+   select id, email, created_at from "user" where email = '<their email>';   -- exactly one row; copy the id
+   select (select count(*) from session    where user_id = '<id>') as sessions,
+          (select count(*) from account    where user_id = '<id>') as accounts,
+          (select count(*) from user_items where user_id = '<id>') as list_items;
+   delete from "user" where id = '<id>';        -- sessions, accounts and list items go with it (ON DELETE CASCADE, verified in schema.ts)
+   select count(*) from user_items where user_id = '<id>';                    -- 0
+   commit;   -- or: rollback;   if any number surprised you
+   ```
+3. What the delete does **not** reach: unused sign-in/verification rows keyed by the email (`verification`: removed by the daily purge once they expire, section 19),
+   request counters (gone within about a day), Vercel's request logs (they hold IP addresses; Vercel's own retention applies, **unverified** for your plan),
+   Brevo's transactional log of the mails sent to that address (Brevo's own retention applies, **unverified**), Neon's change history (section 7: 6 hours on the Free plan,
+   up to 7 or 30 days on paid plans) and any dump you made yourself (20f). Say this when you answer; do not promise more.
+4. Reply to them when it is done. Keep no copy of their data.
+
+### 20f. Neon backups, and a dump you take yourself
+
+**What Neon keeps (read from Neon's plans page, https://neon.com/docs/introduction/plans, on 2026-11-23):** instant restore (point-in-time) history of
+**up to 6 hours** (and 1 GB of changes) on the Free plan, **up to 7 days** on Launch, **up to 30 days** on Scale. Which plan the project is on and what
+history window is set: **unverified** (Neon console > the project > Settings, and the billing page). Restores go into a branch, never over production
+by accident: Neon console > the production branch > **Restore** (click path unverified; the page is https://neon.com/docs/introduction/branch-restore). Read it before you try it.
+
+**A dump of your own** (a copy outside Neon: use it before anything risky, and keep it short-lived). It needs `pg_dump` of the same major version as the
+server or newer (Neon console shows the Postgres version). **The connection string is read from the clipboard, never typed on a command line or pasted
+into a chat or a file.** PowerShell, in a shell you close afterwards:
+
+```powershell
+# 1. Neon console > production branch > Connect > DIRECT connection (not "pooled") > click Copy. Paste it nowhere.
+$u  = [Uri](Get-Clipboard)
+Set-Clipboard -Value " "                       # the string is out of the clipboard now
+$ui = $u.UserInfo; $i = $ui.IndexOf(":")
+$env:PGUSER     = [Uri]::UnescapeDataString($ui.Substring(0, $i))
+$env:PGPASSWORD = [Uri]::UnescapeDataString($ui.Substring($i + 1))
+$env:PGHOST     = $u.Host
+$env:PGPORT     = $(if ($u.Port -gt 0) { $u.Port } else { 5432 })
+$env:PGDATABASE = $u.AbsolutePath.TrimStart("/")
+$env:PGSSLMODE  = "require"
+# 2. Read the target the way the migration guard does: host and database, never the password.
+"TARGET: host=$($env:PGHOST)  database=$($env:PGDATABASE)   (this is PRODUCTION if you copied the production branch)"
+if ((Read-Host "Type YES to dump this target") -ne "YES") { throw "cancelled" }
+# 3. The dump (custom format, no owner), into a folder that is NOT the repository:
+New-Item -ItemType Directory -Force "$HOMEinilium-dumps" | Out-Null
+pg_dump --format=custom --no-owner --file "$HOME\vinilium-dumps\vinilium-$(Get-Date -Format yyyy-MM-dd).dump"
+# 4. Clear everything.
+Remove-Item Env:PGUSER, Env:PGPASSWORD, Env:PGHOST, Env:PGPORT, Env:PGDATABASE, Env:PGSSLMODE
+```
+
+(The parsing was tested on a made-up string; `pg_dump` itself was **not** run: the agent never touches production.) Rules for the file: it contains
+personal data, so keep it off the repository and off shared drives, on an encrypted disk, and **delete it within a few days** once the risky step
+is done; do not keep a growing pile. Test a restore only into a **new Neon branch** (`pg_restore --no-owner --dbname <new branch string>`; read that string
+from the clipboard the same way), never into production.
+
+### 20g. Rotating each secret (names only; never a value in a chat or a file)
+
+Always: **create the new value, put it in Vercel > Settings > Environment Variables > Production, Redeploy, verify, and only then revoke the old one.** A
+changed variable reaches only new deployments. How to get each new value is in section 3.
+
+| Secret (variable name) | What breaks while you change it | Verify afterwards | Revoke last |
+| --- | --- | --- | --- |
+| `BETTER_AUTH_SECRET` | everyone is signed out (no data lost) | you are signed out; signing in works; `/api/health` 200 | nothing to revoke: the old value is simply gone |
+| `GOOGLE_CLIENT_SECRET` (`GOOGLE_CLIENT_ID` rarely changes) | nothing, if the new secret is added before the old one is deleted | "Continue with Google" completes | delete the old secret in Google Cloud |
+| `BREVO_API_KEY` | mail stops between the old key's deletion and the redeploy | ask "Forgot password" for your own address; the message shows in Brevo > Transactional > Logs | delete the old key in Brevo |
+| `DISCOGS_CONSUMER_KEY` / `DISCOGS_CONSUMER_SECRET` (or `DISCOGS_TOKEN`) | record details show the "not set up"/error states until the redeploy | a search while signed in returns results | regenerate/delete the old one at Discogs |
+| `CRON_SECRET` | the daily purge answers 401 until the redeploy | `curl -H "Authorization: Bearer <value>" "https://vinilium.vercel.app/api/cron/purge?dryRun=1"` answers `{"ok":true,...}` | nothing |
+| `DATABASE_URL` (Neon role password) | brief errors until the redeploy finishes | `/api/health` 200 and a sign-in | the old password stops working when Neon resets it, so reset **after** you have the new string ready |
+
+If a secret may have leaked, rotate it at once and check the provider's activity log. The `NEXT_PUBLIC_*` variables are not secrets (they are in the page code).
+
+### 20h. Roll back a bad deploy
+
+**Vercel Instant Rollback** (read from https://vercel.com/docs/instant-rollback, page last updated 2026-07-07, read 2026-11-23): Vercel dashboard > the project >
+**Overview** > the **Production Deployment** tile > **Instant Rollback** > pick the deployment > **Continue** > check the summary > **Confirm Rollback**. It takes
+effect at once. Points from that page that matter here: on the **Hobby** plan you can roll back **only to the immediately previous deployment** (Pro and Enterprise can pick
+any eligible one; which plan this project is on is **unverified**); environment variables are **not** changed by a rollback, so a bad variable is fixed in Settings and
+redeployed; after a rollback Vercel **turns off auto-assignment of production domains**, so new pushes to `main` do not replace the rolled-back deployment until you promote or
+undo the rollback (the same page, section "Undo a rollback", from the dashboard or the CLI); cron definitions follow the rolled-back deployment.
+
+**The database is not rolled back.** This project has had no migration since the three that are on production; if a future deploy carries one, a code rollback does
+not undo it: write that down in the pull request and decide before merging how you would get back (Neon restore into a branch, section 20f).
+
+After a rollback: `/api/health`, sign in, one search, then fix the problem on a branch.

@@ -89,6 +89,15 @@ describe("discogsGet: request shape", () => {
     const headers = (h.fetchImpl.mock.calls[0] as [URL, RequestInit])[1].headers as Record<string, string>;
     expect(headers["User-Agent"]).toBe("Vinilium/0.1 (contact: me@example.com)");
   });
+
+  it("never names the placeholder contact: an unset (or placeholder) APP_CONTACT falls back to this site's contact page", async () => {
+    setEnv({ APP_CONTACT: "https://example.com/contact", NEXT_PUBLIC_APP_URL: "https://vinilium.example.test/" });
+    const h = await harness([json({})]);
+    await h.discogsGet("/x");
+    const headers = (h.fetchImpl.mock.calls[0] as [URL, RequestInit])[1].headers as Record<string, string>;
+    expect(headers["User-Agent"]).toBe("Vinilium/0.1 (+https://vinilium.example.test/en/contact)");
+    expect(headers["User-Agent"]).not.toContain("example.com");
+  });
 });
 
 describe("discogsGet: rate-limit headers", () => {
