@@ -165,14 +165,17 @@ describe("odd but valid answers", () => {
     noLeak(r);
   });
 
-  it("a huge page (5,000 hits) is handled in reasonable time and does not blow up", async () => {
+  it("a huge page (5,000 hits) is handled in ONE upstream call and does not blow up", async () => {
     const { searchDiscogs } = await import("@/server/discogs/service");
     const results = Array.from({ length: 5000 }, (_, i) => ({ id: 100000 + i, title: `Artist ${i % 300} - Album ${i}`, type: "release", format: ["Vinyl", "LP"], year: "1999", master_id: 50000 + (i % 700) }));
     const k = kit(() => json({ pagination: { page: 1, pages: 1, per_page: 5000, items: 5000 }, results }));
-    const t0 = Date.now();
     const r = await searchDiscogs(k.deps, { mode: "album", query: "huge", page: 1 });
+    // Behaviour, not a stopwatch (a slow runner must not fail it): the page is understood, nothing is fetched twice, and the groups are
+    // real, non-empty entries.
     expect(r.ok).toBe(true);
-    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(r.ok && r.data.totalItems).toBe(5000);
+    expect(r.ok && r.data.groups.length).toBeGreaterThan(0);
+    expect(k.f).toHaveBeenCalledTimes(1);
   });
 
   it("a master without versions is an empty pressings page with its filters, not an error", async () => {

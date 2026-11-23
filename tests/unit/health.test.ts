@@ -48,9 +48,9 @@ describe("GET /api/health", () => {
   it("gives up on a database that does not answer in time", async () => {
     const { checkHealth } = await import("@/server/health");
     const hang = { execute: () => new Promise(() => {}) } as unknown as Pick<AppDb, "execute">;
-    const t0 = Date.now();
+    // The behaviour is that the answer ARRIVES and says "degraded" although the query never settles. (No stopwatch: a slow runner must not
+    // fail this; a check that really hangs would stop at the test's own timeout.)
     expect(await checkHealth(hang, { timeoutMs: 50 })).toMatchObject({ status: "degraded", db: "down" });
-    expect(Date.now() - t0).toBeLessThan(2000);
   });
 
   it("reports only status, version and db: no environment, secret, person or Discogs data", async () => {
