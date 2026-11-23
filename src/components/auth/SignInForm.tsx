@@ -12,6 +12,7 @@ import { Button } from "@/ds/Button";
 import { Field } from "@/ds/Field";
 import { StatusMessage } from "@/ds/StatusMessage";
 import { EmailNotArrived } from "./EmailNotArrived";
+import { ConsentNote } from "./ConsentNote";
 import { GoogleButton } from "./GoogleButton";
 import { PasswordField } from "./PasswordField";
 import { fieldErrors, useAuthError } from "./use-auth-error";
@@ -76,6 +77,7 @@ export function SignInForm({ googleEnabled, next, resetDone }: { googleEnabled: 
             {c("or")}
           </div>
           <GoogleButton next={next} />
+          <ConsentNote google />
         </>
       ) : null}
     </form>

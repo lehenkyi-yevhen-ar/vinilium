@@ -18,14 +18,16 @@ function Text({ children }: { children: string }) {
 }
 
 /**
- * A legal page: title, date, lead, a DRAFT banner while any passage is still marked for legal review, numbered sections, and the
- * contact details. Pure presentation; the text comes from the message files.
+ * A legal page: title, date, ONE notice (always: the text was prepared by the operator without professional legal advice; while any
+ * passage is still marked for legal review the notice also says what the marks are), the lead, numbered sections, and the contact
+ * details. Pure presentation; the text comes from the message files.
  */
 export function LegalDocument({
   title,
   updated,
   lead,
   banner,
+  marksNote,
   sections,
   contactLabel,
   contactPageLabel,
@@ -35,6 +37,8 @@ export function LegalDocument({
   updated: string;
   lead: string;
   banner: string;
+  /** Added to the notice while any passage still carries the legal-review mark. */
+  marksNote: string;
   sections: LegalSection[];
   contactLabel: string;
   contactPageLabel: string;
@@ -47,11 +51,9 @@ export function LegalDocument({
         <article className="x-card x-legal">
           <h1>{title}</h1>
           <p className="x-note">{updated}</p>
-          {draft ? (
-            <p className="x-legal-banner" role="note">
-              <Text>{banner}</Text>
-            </p>
-          ) : null}
+          <p className="x-legal-banner" role="note">
+            <Text>{draft ? `${banner} ${marksNote}` : banner}</Text>
+          </p>
           <p className="x-lead">{lead}</p>
 
           {sections.map((s) => (

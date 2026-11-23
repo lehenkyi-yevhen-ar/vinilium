@@ -15,6 +15,17 @@ package is `docs/i18n/review-uk-nb.csv` (`npm run i18n:export`).
 | `legal.privacy.s7P1` | ... Sign-in sessions expire on their own and are deleted afterwards. Request counters are removed by a daily clean-up, so they are kept for about a day at most. | "clean-up" (uk: "очищення", nb: "opprydding") and "about a day" (nb: "ett døgn") |
 | `legal.privacy.s8Export` | ... gives you your name, email, language, picture address (if you signed in with Google), sign-up date and lists as a file ... | "picture address": uk "адресу зображення", nb "bildeadresse" |
 
+## Written on 2026-11-23 (the legal-accuracy pass): AI-written Ukrainian and Norwegian legal wording
+
+**All of this is AI-written in uk and nb (translated from the English by the model) and has not been read by a native speaker.** It is legal wording, so a language
+review does **not** replace a lawyer, and it must keep saying exactly what the English says (a changed meaning would make the text untrue about the service).
+Keys: everything under `legal.privacy.*` and `legal.terms.*` that changed (`updated`, `s1P2`, `s2Account`, `s2AccountGoogleOnly`, `s2Sessions`, `s2Logs`, `s2Emails`,
+the new `s2bTitle` / `s2bP1`, `s3P1`, `s4P1`, `s5P1`, `s5P2`, `s6Google`, `s6P1`, `s7P1`, `s7P2`, `s8Delete`, `s8Export`, `s8P1`, `s9P1`, `s10P1`, `s11P2`, and in the terms
+`updated`, `s1P2`, the new `s2D`, `s3P2`, `s5P2`, `s7P1`, `s8P2`), `legal.draftBanner`, `legal.openMarksNote`, `contact.topicPrivacy`, `contact.telegramNote`, `footer.fontsCredit` and
+`signUpConsent.consentPrefixGoogle`. Things to look at first: the terms for the legal ideas ("controller", "legitimate interest", "contract", "restriction", "objection",
+"portable format", "Standard Contractual Clauses", "Data Privacy Framework": the proper names stay in English), the names of the authorities (Datatilsynet; the Ukrainian
+Parliament Commissioner for Human Rights), and that `[NEEDS LEGAL REVIEW]` stays untranslated in the marked passages.
+
 ## Terms that are a choice (check against how collectors say it)
 
 | English | uk | nb | Question |
